@@ -201,9 +201,15 @@ Adjust the port to 22 if you didn't need the 22022 workaround. The private key f
 From the repo root:
 
 ```powershell
-pwsh scripts/package.ps1               # produces dist/org.jazwinski.customwebos.home_0.1.0_all.ipk
+pwsh scripts/package.ps1               # produces dist/org.jazwinski.customwebos.home_<version>_all.ipk
 pwsh scripts/install.ps1 -Device tv    # ares-install -d tv dist/*.ipk
 ```
+
+Every script that talks to the TV takes `-WhatIf`, which prints the command and exits without doing anything. Use it the first time.
+
+Heads-up: `ares-cli` 2.4.0 falls over on Node 25 (`TypeError: isDate is not a function` on install). Either run it under a Node 18/20 LTS, or copy the `.ipk` to `/tmp/` on the TV and install it with `ApplicationInstallerUtility` over SSH. On this firmware that needs an explicit `-f /etc/palm/appinstalld/opkg.conf`, or it fails with "no such file or directory".
+
+**The first install needs a reboot** before the tile shows up in the launcher. Upgrades of an already-installed version show up without one.
 
 Confirm the install landed:
 
@@ -211,7 +217,21 @@ Confirm the install landed:
 ssh -i $env:USERPROFILE\.ssh\id_ed25519_lgtv -p 22022 root@<tv-ip> 'ls /media/developer/apps/usr/palm/applications/'
 ```
 
-You should see `org.jazwinski.customwebos.home` in the list. Launching it from the TV's app grid should show a CustomWebOS screen with the installed apps you can launch.
+You should see `org.jazwinski.customwebos.home` in the list. Launching it from the TV's app grid should show a CustomWebOS screen with a list of apps.
+
+### §4.3b Register the home service
+
+The webOS 4.4 bus won't let a dev-mode web app call `applicationManager` itself, so it can't list or launch apps. The `.ipk` bundles a small service, `org.jazwinski.customwebos.home.service`, that does those calls on the app's behalf. The hub only knows about it once it's registered:
+
+```powershell
+pwsh scripts/register-service.ps1 -TvHost <tv-ip> -WhatIf      # see the ssh command
+pwsh scripts/register-service.ps1 -TvHost <tv-ip> -DryRunOnTv  # connect, print what it would write, change nothing
+pwsh scripts/register-service.ps1 -TvHost <tv-ip>              # write the seven files under /var/luna-service2-dev/
+```
+
+Reboot afterwards. Until the service answers, the home screen shows a built-in list of common apps, with a note at the bottom saying the service is unavailable. Once it answers, you get the real installed list.
+
+Rollback: `pwsh scripts/register-service.ps1 -TvHost <tv-ip> -Unregister`, then reboot.
 
 ### §4.4 Autostart hook — pick one
 
@@ -246,6 +266,7 @@ Two options:
 
 - **Soft recovery:** full power cycle. Unplug mains for 60 seconds. Clears most transient weirdness.
 - **Settings reset only:** keeps firmware, wipes config. Rebuild from your §0 screenshots.
+- **Home service rollback:** `pwsh scripts/register-service.ps1 -TvHost <tv-ip> -Unregister`, reboot. Removes the seven luna-service2-dev files; the app itself keeps working off its built-in list.
 - **Autostart hook rollback:** if the Home-button override is the thing misbehaving, telnet in (flip Hbchannel's Telnet toggle back on first if you turned it off), undo whichever autostart candidate you chose per §4.4, reboot. LG's native home comes back.
 - **Reinstall same firmware from USB** using the `.epk` you saved in §0.1. Settings → Support → Software Update → "Install from USB". Takes ~20 minutes. This will remove root cleanly and restore the firmware to a known-good state; you can re-root the same way afterward.
 

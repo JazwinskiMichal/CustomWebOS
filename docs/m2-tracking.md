@@ -27,11 +27,26 @@ These are findings from installing M1 on my LG C8 and running it on 2026-10-24. 
 
 Alternative that **does not work** (confirmed): setting `requiredPermissions` in `appinfo.json` alone. Tried on 0.1.4 (`["application.operation","application.launcher"]`); call still times out. The field controls self-declared ACGs but doesn't grant them on a locked consumer firmware. The service-component path is the only way.
 
+## Repo-side progress (no device access)
+
+Done on 2026-10-24, all covered by `node --test`:
+
+- **Home app talks to the service.** `home/main.js` lists apps via `…home.service/listApps` and launches via `…home.service/launch`. It no longer calls `applicationManager` directly. The fallback list renders immediately and stays up, with a note giving the reason, if the service fails or times out. If the service answers, its list replaces the fallback and focus stays on the same app. The home app hides itself from the list.
+- **Service logic is unit-tested.** Handlers moved to `services/…/handlers.js` (pure, `call` is injected); `service.js` only wires them to `webos-service`.
+- **Tests moved to `test/`**, so they no longer ship in the `.ipk`. A guard test fails if a `*.test.js` reappears under `home/` or `services/`.
+- **The ES5 scan covers every TV-runtime file**: `home/**/*.js` and `services/**/*.js`.
+- **`register-service.sh`** now reads the manifest version from the installed `appinfo.json` instead of hardcoding it. New flags: `--dry-run`, `--unregister` (rollback), and `--system-wrapper` (pick-up step 2 below: `Exec=/usr/bin/run-js-service`).
+- **`scripts/register-service.ps1`** pipes the `.sh` file to the TV over SSH (no scp/sftp needed) and supports `-WhatIf`, `-DryRunOnTv`, `-Unregister`, `-SystemWrapper`.
+- **`.gitattributes`** pins `*.sh` and `run-js-service` to LF; `core.autocrlf=true` would otherwise break them on the TV.
+- **`docs/setup.md` §4** covers the first-install reboot, ares-cli on Node 25, service registration (§4.3b), and service rollback.
+
+Still device-side and needing authorisation: the fork-server hang (pick-up steps 1–3), on-device check of the service-backed list and launch, and the autostart hook.
+
 ## Other things noticed
 
 - **Launcher cache needs a reboot** to pick up a newly-installed developer app the first time. First install → reboot → tile appears. Later upgrades of an existing registration show up without reboot. Worth mentioning in `docs/setup.md` §4 before the install step.
 - **`ares-package` minifies by default.** Confirmed on-TV: the installed `main.js` is one-line minified, variable names mangled. The scan test only runs against the source file, not the packaged file, so ES2015+ output from the minifier would slip past — if it ever used any, which it doesn't (observed output is ES5-safe). A `--no-minify` flag exists if we ever need readable logs on-device.
-- **Test files bundle into the `.ipk`.** `ares-package home/` includes `home/appinfo.test.js` and `home/main.test.js`. Inert on the TV, ~5 KB of waste. Fix: relocate tests outside `home/` or configure ares to exclude them.
+- ~~**Test files bundle into the `.ipk`.**~~ Fixed: tests live in `test/` now.
 - **`ApplicationInstallerUtility` needs an explicit `-f /etc/palm/appinstalld/opkg.conf`** on this firmware, or `opkg_conf_load` fails with "no such file or directory". The ares-cli `ares-install` would handle this automatically if it worked — but see next item.
 - **`ares-cli` 2.4.0 is broken on Node 25.** `TypeError: isDate is not a function` on install. Workaround used tonight: `scp` the `.ipk` to `/tmp/` and run `ApplicationInstallerUtility` over SSH directly. Pin a Node 18/20 LTS for ares-cli use, or wait for an ares-cli release that works with Node 25+.
 - **Both `WebOSServiceBridge` and `PalmServiceBridge` exist** on this firmware; both get the exact same silent-no-response behavior when calling blocked methods. The class name wasn't the problem.
