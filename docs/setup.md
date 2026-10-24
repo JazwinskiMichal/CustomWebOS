@@ -207,7 +207,14 @@ pwsh scripts/install.ps1 -Device tv    # ares-install -d tv dist/*.ipk
 
 Every script that talks to the TV takes `-WhatIf`, which prints the command and exits without doing anything. Use it the first time.
 
-Heads-up: `ares-cli` 2.4.0 falls over on Node 25 (`TypeError: isDate is not a function` on install). Either run it under a Node 18/20 LTS, or copy the `.ipk` to `/tmp/` on the TV and install it with `ApplicationInstallerUtility` over SSH. On this firmware that needs an explicit `-f /etc/palm/appinstalld/opkg.conf`, or it fails with "no such file or directory".
+Heads-up: `ares-cli` 2.4.0 falls over on Node 25 (`TypeError: isDate is not a function` on install). Either run it under a Node 18/20 LTS, or skip ares-install and use the SSH route:
+
+```powershell
+pwsh scripts/install.ps1 -TvHost <tv-ip> -WhatIf   # see the scp + ssh commands
+pwsh scripts/install.ps1 -TvHost <tv-ip>
+```
+
+That copies the `.ipk` to `/tmp/` on the TV, runs `ApplicationInstallerUtility -c install -t developer -p <ipk> -f /etc/palm/appinstalld/opkg.conf`, and restarts the home service so it picks up the new code. **Reboot after every install** (`-Reboot` does it for you): an upgrade resets the hub's runtime permissions for the web app, and until a reboot every call from the app to its service is silently dropped. The app then sits on its fallback list showing "no response … retrying". Both flags matter on this firmware. Without `-f`, it fails with "no such file or directory". Without `-t developer`, it quietly installs a second copy under `/media/cryptofs/apps` as an internal app. Also watch out for `ApplicationInstallerUtility -c remove`: it removes the package from **both** locations.
 
 **The first install needs a reboot** before the tile shows up in the launcher. Upgrades of an already-installed version show up without one.
 
@@ -226,10 +233,12 @@ The webOS 4.4 bus won't let a dev-mode web app call `applicationManager` itself,
 ```powershell
 pwsh scripts/register-service.ps1 -TvHost <tv-ip> -WhatIf      # see the ssh command
 pwsh scripts/register-service.ps1 -TvHost <tv-ip> -DryRunOnTv  # connect, print what it would write, change nothing
-pwsh scripts/register-service.ps1 -TvHost <tv-ip>              # write the seven files under /var/luna-service2-dev/
+pwsh scripts/register-service.ps1 -TvHost <tv-ip>              # write the nine files under /var/luna-service2-dev/
 ```
 
-Reboot afterwards. Until the service answers, the home screen shows a built-in list of common apps, with a note at the bottom saying the service is unavailable. Once it answers, you get the real installed list.
+Reboot afterwards. Nine files get written: seven make the service itself known to the hub, and two (`roles.d/` and `client-permissions.d/` `org.jazwinski.customwebos.home.app.json`) give the web app a bus role so it's allowed to call the service. Without those two, every call from the app fails with -1031 "not privileged".
+
+The whole bus is unresponsive for roughly the first 5 minutes after boot. The app retries on its own, so if you open it straight away it'll fill in once the bus wakes up. Until the service answers, the home screen shows a built-in list of common apps, with a note at the bottom saying the service is unavailable. Once it answers, you get the real installed list.
 
 Rollback: `pwsh scripts/register-service.ps1 -TvHost <tv-ip> -Unregister`, then reboot.
 
@@ -266,7 +275,7 @@ Two options:
 
 - **Soft recovery:** full power cycle. Unplug mains for 60 seconds. Clears most transient weirdness.
 - **Settings reset only:** keeps firmware, wipes config. Rebuild from your §0 screenshots.
-- **Home service rollback:** `pwsh scripts/register-service.ps1 -TvHost <tv-ip> -Unregister`, reboot. Removes the seven luna-service2-dev files; the app itself keeps working off its built-in list.
+- **Home service rollback:** `pwsh scripts/register-service.ps1 -TvHost <tv-ip> -Unregister`, reboot. Removes the nine luna-service2-dev files; the app itself keeps working off its built-in list.
 - **Autostart hook rollback:** if the Home-button override is the thing misbehaving, telnet in (flip Hbchannel's Telnet toggle back on first if you turned it off), undo whichever autostart candidate you chose per §4.4, reboot. LG's native home comes back.
 - **Reinstall same firmware from USB** using the `.epk` you saved in §0.1. Settings → Support → Software Update → "Install from USB". Takes ~20 minutes. This will remove root cleanly and restore the firmware to a known-good state; you can re-root the same way afterward.
 
