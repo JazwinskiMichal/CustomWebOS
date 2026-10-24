@@ -14,8 +14,8 @@ test('parseLaunchPoints returns ok:true with items for a valid response', () => 
   assert.deepEqual(main.parseLaunchPoints(raw), {
     ok: true,
     items: [
-      {id: 'netflix', title: 'Netflix'},
-      {id: 'youtube.leanback.v4', title: 'YouTube'},
+      {id: 'netflix', title: 'Netflix', icon: null},
+      {id: 'youtube.leanback.v4', title: 'YouTube', icon: null},
     ],
   })
 })
@@ -55,7 +55,7 @@ test('buildLaunchParams rejects a stale id', () => {
 
 test('parseLaunchPoints accepts the home service listApps shape (apps)', () => {
   const r = main.parseLaunchPoints({returnValue: true, apps: [{id: 'netflix', title: 'Netflix', icon: 'x.png'}]})
-  assert.deepEqual(r, {ok: true, items: [{id: 'netflix', title: 'Netflix'}]})
+  assert.deepEqual(r, {ok: true, items: [{id: 'netflix', title: 'Netflix', icon: 'x.png'}]})
 })
 
 test('parseLaunchPoints skips entries without an id and hides the home app itself', () => {
@@ -67,7 +67,7 @@ test('parseLaunchPoints skips entries without an id and hides the home app itsel
       {id: 'netflix', title: 'Netflix'},
     ],
   })
-  assert.deepEqual(r.items, [{id: 'netflix', title: 'Netflix'}])
+  assert.deepEqual(r.items, [{id: 'netflix', title: 'Netflix', icon: null}])
 })
 
 test('parseLaunchPoints keeps only the first entry for a repeated id', () => {
@@ -80,8 +80,8 @@ test('parseLaunchPoints keeps only the first entry for a repeated id', () => {
     ],
   })
   assert.deepEqual(r.items, [
-    {id: 'com.webos.app.browser', title: 'Web Browser'},
-    {id: 'netflix', title: 'Netflix'},
+    {id: 'com.webos.app.browser', title: 'Web Browser', icon: null},
+    {id: 'netflix', title: 'Netflix', icon: null},
   ])
 })
 
@@ -202,4 +202,31 @@ test('point and click ignore out-of-range indices', () => {
   const s = navState({focusIdx: 1})
   assert.equal(main.nextState(s, {type: 'point', index: 9}).focusIdx, 1)
   assert.equal(main.nextState(s, {type: 'click', index: -1}).launch, null)
+})
+
+// --- Icons (Task 5) ---
+
+test('parseLaunchPoints keeps icon, preferring icon over largeIcon', () => {
+  const r = main.parseLaunchPoints({returnValue: true, apps: [
+    {id: 'a', title: 'A', icon: '/x/a.png', largeIcon: '/x/a-large.png'},
+    {id: 'b', title: 'B', largeIcon: '/x/b-large.png'},
+    {id: 'c', title: 'C'},
+  ]})
+  assert.deepEqual(r.items.map((i) => i.icon), ['/x/a.png', '/x/b-large.png', null])
+})
+
+test('iconUrl turns TV paths into file URLs and passes preview paths through', () => {
+  assert.equal(main.iconUrl('/media/cryptofs/apps/usr/palm/applications/netflix/icon.png'),
+    'file:///media/cryptofs/apps/usr/palm/applications/netflix/icon.png')
+  assert.equal(main.iconUrl('/__dev/fixtures/icon-netflix.png'), '/__dev/fixtures/icon-netflix.png')
+  assert.equal(main.iconUrl(null), null)
+  assert.equal(main.iconUrl(''), null)
+})
+
+test('appInitials takes the first letters of the first two words', () => {
+  assert.equal(main.appInitials('Prime Video'), 'PV')
+  assert.equal(main.appInitials('Netflix'), 'N')
+  assert.equal(main.appInitials('homebrew channel extra'), 'HC')
+  assert.equal(main.appInitials('  '), '?')
+  assert.equal(main.appInitials(''), '?')
 })

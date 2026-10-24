@@ -127,3 +127,44 @@ test('All apps opens from Home and Back returns to its row', async () => {
     await page.waitForFunction(() => document.querySelector('.app-item.focused').getAttribute('data-id') === '__all__')
   } finally { await close() }
 })
+
+test('rows show the app icon, or initials when it is missing or broken', async () => {
+  const { page, close } = await openPreview()
+  try {
+    await waitForServiceList(page)
+    const netflixImg = page.locator('.app-item[data-id="netflix"] img')
+    await page.waitForFunction(() => {
+      const img = document.querySelector('.app-item[data-id="netflix"] img')
+      return img && img.complete && img.naturalWidth > 0
+    })
+    assert.equal(await netflixImg.count(), 1)
+    // Prime Video's fixture icon 404s: initials replace it, no broken img left.
+    await page.waitForFunction(() => {
+      const row = document.querySelector('.app-item[data-id="amazon"]')
+      return row && !row.querySelector('img') && row.querySelector('.initials')
+    })
+    assert.equal(await page.locator('.app-item[data-id="amazon"] .initials').textContent(), 'PV')
+    // No icon at all: initials straight away.
+    assert.equal(await page.locator('.app-item[data-id="spotify-beehive"] .initials').textContent(), 'S')
+  } finally { await close() }
+})
+
+test('a broken icon stays as initials after re-renders', async () => {
+  const { page, close } = await openPreview()
+  try {
+    await waitForServiceList(page)
+    await page.waitForFunction(() => !document.querySelector('.app-item[data-id="amazon"] img'))
+    // Record any <img> re-inserted into the Prime Video row, however briefly.
+    await page.evaluate(() => {
+      window.__brokenImgReinserted = false
+      new MutationObserver((records) => {
+        for (const r of records) for (const n of r.addedNodes) {
+          const row = n.querySelector && n.querySelector('.app-item[data-id="amazon"]')
+          if (row && row.querySelector('img')) window.__brokenImgReinserted = true
+        }
+      }).observe(document.getElementById('root'), { childList: true, subtree: true })
+    })
+    for (let i = 0; i < 3; i++) await page.keyboard.press('ArrowDown')
+    assert.equal(await page.evaluate(() => window.__brokenImgReinserted), false)
+  } finally { await close() }
+})

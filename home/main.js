@@ -45,10 +45,27 @@ function parseLaunchPoints(raw) {
       var lp = list[i];
       if (!lp || !lp.id || lp.id === SELF_ID || seen.hasOwnProperty(lp.id)) continue;
       seen[lp.id] = true;
-      items.push({ id: lp.id, title: lp.title });
+      items.push({ id: lp.id, title: lp.title, icon: lp.icon || lp.largeIcon || null });
     }
   }
   return { ok: true, items: items };
+}
+
+// Launch points carry absolute TV paths; the web app loads them as file
+// URLs. The browser preview serves its fixture icons under /__dev/.
+function iconUrl(path) {
+  if (!path) return null;
+  if (path.indexOf('/__dev/') === 0) return path;
+  return 'file://' + path;
+}
+
+function appInitials(title) {
+  var words = String(title || '').split(/\s+/);
+  var out = '';
+  for (var i = 0; i < words.length && out.length < 2; i++) {
+    if (words[i]) out += words[i].charAt(0).toUpperCase();
+  }
+  return out || '?';
 }
 
 // Picks what to show from a parseLaunchPoints result. A successful empty
@@ -172,12 +189,46 @@ function mountUI(doc) {
   var state = { status: 'loading', statusText: '', note: '', launchNote: '' };
   var nav = { view: 'home', focusIdx: 0, homeItems: [], allItems: [], launch: null };
   var root = doc.getElementById('root');
+  // Icon URLs that failed to load: render initials for them from then on,
+  // so a broken icon doesn't flash back on every re-render.
+  var brokenIcons = {};
 
   function appendState(className, text) {
     var p = doc.createElement('p');
     p.className = className;
     p.textContent = text;
     root.appendChild(p);
+  }
+
+  function initialsBox(title) {
+    var span = doc.createElement('span');
+    span.className = 'initials';
+    span.textContent = appInitials(title);
+    return span;
+  }
+
+  function iconBox(row) {
+    var box = doc.createElement('span');
+    box.className = 'app-icon';
+    var url = row.id === ALL_APPS_ID ? null : iconUrl(row.icon);
+    if (row.id === ALL_APPS_ID) {
+      var more = doc.createElement('span');
+      more.className = 'initials';
+      more.textContent = '⋯';
+      box.appendChild(more);
+    } else if (!url || brokenIcons[url]) {
+      box.appendChild(initialsBox(row.title || row.id));
+    } else {
+      var img = doc.createElement('img');
+      img.alt = '';
+      img.onerror = function () {
+        brokenIcons[url] = true;
+        if (img.parentNode) box.replaceChild(initialsBox(row.title || row.id), img);
+      };
+      img.src = url;
+      box.appendChild(img);
+    }
+    return box;
   }
 
   function render() {
@@ -205,7 +256,11 @@ function mountUI(doc) {
       li.setAttribute('tabindex', '-1');
       li.setAttribute('data-id', rows[i].id);
       li.setAttribute('data-index', String(i));
-      li.textContent = rows[i].title || rows[i].id;
+      li.appendChild(iconBox(rows[i]));
+      var label = doc.createElement('span');
+      label.className = 'app-title';
+      label.textContent = rows[i].title || rows[i].id;
+      li.appendChild(label);
       ul.appendChild(li);
       if (i === nav.focusIdx) focusedLi = li;
     }
@@ -369,6 +424,8 @@ if (typeof module !== 'undefined' && module.exports) {
     ALL_APPS_ID: ALL_APPS_ID,
     keyAction: keyAction,
     rowsFor: rowsFor,
-    nextState: nextState
+    nextState: nextState,
+    iconUrl: iconUrl,
+    appInitials: appInitials
   };
 }
