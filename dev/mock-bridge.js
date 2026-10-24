@@ -9,7 +9,7 @@
 (function () {
   var mode = (/[?&]mock=(\w+)/.exec(window.location.search) || [])[1] || 'ok'
   var SERVICE = 'luna://org.jazwinski.customwebos.home.service/'
-  window.__mock = { mode: mode, launches: [] }
+  window.__mock = { mode: mode, launches: [], listAppsAnswered: 0 }
 
   function listApps() {
     if (mode === 'error') return Promise.resolve({ returnValue: false, errorText: 'mock error' })
@@ -32,6 +32,7 @@
     var delay = mode === 'slow' ? 12000 : 150
     answer(uri, JSON.parse(payloadJson || '{}')).then(function (msg) {
       setTimeout(function () {
+        if (uri === SERVICE + 'listApps') window.__mock.listAppsAnswered++
         if (self.onservicecallback) self.onservicecallback(JSON.stringify(msg))
       }, delay)
     })

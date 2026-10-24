@@ -36,3 +36,10 @@ test('style.css avoids CSS the webOS 4.4 engine lacks', () => {
   const css = fs.readFileSync(path.join(HOME, 'style.css'), 'utf8').replace(/\/\*[\s\S]*?\*\//g, '')
   assert.doesNotMatch(css, /(^|[\s;{])(row-|column-)?gap\s*:/)
 })
+
+test('index.html loads config.js before main.js', () => {
+  const html = fs.readFileSync(path.join(HOME, 'index.html'), 'utf8')
+  const config = html.indexOf('src="config.js"')
+  assert.ok(config !== -1, 'config.js not loaded')
+  assert.ok(config < html.indexOf('src="main.js"'))
+})

@@ -30,16 +30,38 @@ async function openPreview(mode = 'ok') {
 
 const APP_ROWS = '.app-item:not([data-id="__all__"])'
 
+// Home shows the 9 curated apps both before (fallback) and after the
+// service answers, so wait on the mock's answer counter, then one frame.
 async function waitForServiceList(page) {
-  // The fallback list renders first; the fixture has 38 usable entries.
-  await page.waitForFunction((sel) => document.querySelectorAll(sel).length === 38, APP_ROWS)
+  await page.waitForFunction(() => window.__mock.listAppsAnswered > 0)
+  await page.evaluate(() => new Promise((r) => requestAnimationFrame(() => r())))
 }
 
-test('renders the service list', async () => {
+async function openAllApps(page) {
+  await page.locator('.app-item[data-id="__all__"]').click()
+  await page.waitForFunction(() => document.querySelector('h1').textContent === 'All apps')
+}
+
+const CURATED = ['netflix', 'youtube.leanback.v4', 'amazon', 'com.wbd.stream', 'canalplus',
+  'com.apple.appletv', 'com.webos.app.livetv', 'com.webos.app.hdmi1', 'org.webosbrew.hbchannel']
+
+test('Home shows the curated apps in config order, then All apps', async () => {
   const { page, close } = await openPreview()
   try {
     await waitForServiceList(page)
-    assert.equal(await page.locator(APP_ROWS).count(), 38)
+    const ids = await page.locator('.app-item').evaluateAll((els) => els.map((e) => e.getAttribute('data-id')))
+    assert.deepEqual(ids, CURATED.concat(['__all__']))
+  } finally { await close() }
+})
+
+test('All apps lists every service app alphabetically', async () => {
+  const { page, close } = await openPreview()
+  try {
+    await waitForServiceList(page)
+    await openAllApps(page)
+    const titles = await page.locator('.app-title').evaluateAll((els) => els.map((e) => e.textContent))
+    assert.equal(titles.length, 38)
+    assert.deepEqual(titles, titles.slice().sort((a, b) => a.localeCompare(b)))
   } finally { await close() }
 })
 
@@ -47,6 +69,7 @@ test('focused item stays on screen while scrolling', async () => {
   const { page, close } = await openPreview()
   try {
     await waitForServiceList(page)
+    await openAllApps(page)
     for (let i = 0; i < 25; i++) await page.keyboard.press('ArrowDown')
     const box = await page.locator('.app-item.focused').boundingBox()
     assert.ok(box.y >= 0 && box.y + box.height <= 1080, 'focused row on screen: ' + JSON.stringify(box))
@@ -99,7 +122,7 @@ test('a failed launch keeps the list on screen', async () => {
     await waitForServiceList(page)
     await page.keyboard.press('Enter')
     await page.waitForFunction(() => /launching requires the TV/.test(document.body.textContent))
-    assert.equal(await page.locator(APP_ROWS).count(), 38)
+    assert.equal(await page.locator(APP_ROWS).count(), CURATED.length)
   } finally { await close() }
 })
 
@@ -111,7 +134,7 @@ test('Escape on Home is swallowed; the list stays', async () => {
     const focused = () => page.evaluate(() => document.querySelector('.app-item.focused').getAttribute('data-id'))
     const before = await focused()
     await page.keyboard.press('Escape')
-    assert.equal(await page.locator(APP_ROWS).count(), 38)
+    assert.equal(await page.locator(APP_ROWS).count(), CURATED.length)
     assert.equal(await focused(), before)
     assert.equal(await page.locator('h1').textContent(), 'CustomWebOS')
   } finally { await close() }
@@ -144,7 +167,8 @@ test('rows show the app icon, or initials when it is missing or broken', async (
       return row && !row.querySelector('img') && row.querySelector('.initials')
     })
     assert.equal(await page.locator('.app-item[data-id="amazon"] .initials').textContent(), 'PV')
-    // No icon at all: initials straight away.
+    // No icon at all: initials straight away (Spotify is only in All apps).
+    await openAllApps(page)
     assert.equal(await page.locator('.app-item[data-id="spotify-beehive"] .initials').textContent(), 'S')
   } finally { await close() }
 })

@@ -3,6 +3,8 @@ const assert = require('node:assert/strict')
 
 const main = require('../home/main.js')
 
+const FALLBACK = [{id: 'netflix', title: 'Netflix', icon: null}]
+
 test('parseLaunchPoints returns ok:true with items for a valid response', () => {
   const raw = {
     returnValue: true,
@@ -87,18 +89,18 @@ test('parseLaunchPoints keeps only the first entry for a repeated id', () => {
 
 test('chooseApps uses the service list when it answered', () => {
   const items = [{id: 'netflix', title: 'Netflix'}]
-  assert.deepEqual(main.chooseApps({ok: true, items}, main.FALLBACK_APPS), {items, source: 'service', note: ''})
+  assert.deepEqual(main.chooseApps({ok: true, items}, FALLBACK), {items, source: 'service', note: ''})
 })
 
 test('chooseApps keeps an honest empty service list (shows "No apps found")', () => {
-  const r = main.chooseApps({ok: true, items: []}, main.FALLBACK_APPS)
+  const r = main.chooseApps({ok: true, items: []}, FALLBACK)
   assert.deepEqual(r.items, [])
   assert.equal(r.source, 'service')
 })
 
 test('chooseApps falls back to the built-in list and says why when the service fails', () => {
-  const r = main.chooseApps({ok: false, reason: 'no response'}, main.FALLBACK_APPS)
-  assert.equal(r.items, main.FALLBACK_APPS)
+  const r = main.chooseApps({ok: false, reason: 'no response'}, FALLBACK)
+  assert.equal(r.items, FALLBACK)
   assert.equal(r.source, 'fallback')
   assert.match(r.note, /no response/)
 })
@@ -121,12 +123,6 @@ test('scrollTopFor centres the focused item, clamped to the list bounds', () => 
   assert.equal(main.scrollTopFor(2000, 100, 800, 4000), 1650)  // middle: centred
   assert.equal(main.scrollTopFor(3900, 100, 800, 4000), 3200)  // last item: bottom-aligned, no overscroll
   assert.equal(main.scrollTopFor(100, 100, 800, 500), 0)       // list shorter than viewport
-})
-
-test('FALLBACK_APPS has unique ids and always includes Netflix', () => {
-  const ids = main.FALLBACK_APPS.map((a) => a.id)
-  assert.equal(new Set(ids).size, ids.length)
-  assert.ok(ids.includes('netflix'))
 })
 
 test('service URIs point at the bundled home service', () => {
@@ -229,4 +225,36 @@ test('appInitials takes the first letters of the first two words', () => {
   assert.equal(main.appInitials('homebrew channel extra'), 'HC')
   assert.equal(main.appInitials('  '), '?')
   assert.equal(main.appInitials(''), '?')
+})
+
+// --- Curation (Task 6) ---
+
+const app = (id, title) => ({id, title, icon: null})
+const INSTALLED = [app('yt', 'YouTube'), app('nf', 'Netflix'), app('ap', 'Apple TV'), app('zz', 'Zattoo')]
+
+test('splitHomeApps keeps curated order', () => {
+  const r = main.splitHomeApps(INSTALLED, [{id: 'yt', title: 'YouTube'}, {id: 'nf', title: 'Netflix'}])
+  assert.deepEqual(r.home.map((a) => a.id), ['yt', 'nf'])
+})
+
+test('splitHomeApps skips curated ids that are not installed', () => {
+  const r = main.splitHomeApps(INSTALLED, [{id: 'gone', title: 'Gone'}, {id: 'nf', title: 'Netflix'}])
+  assert.deepEqual(r.home.map((a) => a.id), ['nf'])
+})
+
+test('splitHomeApps falls back to the first 9 of all when no curated id is installed', () => {
+  const many = []
+  for (let i = 0; i < 12; i++) many.push(app('id' + i, 'App ' + String(i).padStart(2, '0')))
+  const r = main.splitHomeApps(many, [{id: 'gone', title: 'Gone'}])
+  assert.equal(r.home.length, 9)
+  assert.deepEqual(r.home, r.all.slice(0, 9))
+})
+
+test('splitHomeApps: all is alphabetical by title and includes curated apps', () => {
+  const r = main.splitHomeApps(INSTALLED, [{id: 'nf', title: 'Netflix'}])
+  assert.deepEqual(r.all.map((a) => a.title), ['Apple TV', 'Netflix', 'YouTube', 'Zattoo'])
+})
+
+test('splitHomeApps returns empty lists when nothing is installed', () => {
+  assert.deepEqual(main.splitHomeApps([], [{id: 'nf', title: 'Netflix'}]), {home: [], all: []})
 })

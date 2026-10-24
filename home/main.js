@@ -8,19 +8,19 @@ var SELF_ID = 'org.jazwinski.customwebos.home';
 // and launching go through the bundled service component instead.
 var SERVICE_URI = 'luna://org.jazwinski.customwebos.home.service';
 
+// Home apps and the fallback list come from config.js (global HOME_APPS).
+function homeApps() {
+  return typeof HOME_APPS !== 'undefined' ? HOME_APPS : [];
+}
+
 // Shown immediately on boot, and kept when the service can't be reached, so
 // the screen is never empty while the service is down or still spawning.
-var FALLBACK_APPS = [
-  { id: 'netflix',             title: 'Netflix' },
-  { id: 'youtube.leanback.v4', title: 'YouTube' },
-  { id: 'amazon',              title: 'Prime Video' },
-  { id: 'spotify-beehive',     title: 'Spotify' },
-  { id: 'com.disney.disneyplus-prod', title: 'Disney+' },
-  { id: 'com.apple.appletv',   title: 'Apple TV' },
-  { id: 'com.webos.app.hdmi1', title: 'HDMI 1' },
-  { id: 'com.webos.app.hdmi2', title: 'HDMI 2' },
-  { id: 'org.webosbrew.hbchannel', title: 'Homebrew Channel' }
-];
+function fallbackItems() {
+  var out = [];
+  var apps = homeApps();
+  for (var i = 0; i < apps.length; i++) out.push({ id: apps[i].id, title: apps[i].title, icon: null });
+  return out;
+}
 
 // Returns a tagged result so the caller can distinguish between:
 //   - a successful response with zero apps installed  (ok:true,  items:[])
@@ -95,6 +95,24 @@ function scrollTopFor(itemTop, itemHeight, viewHeight, contentHeight) {
   if (top > max) top = max;
   if (top < 0) top = 0;
   return Math.round(top);
+}
+
+// Splits the installed apps into the Home view (curated ids, in config
+// order, skipping anything not installed) and All apps (everything,
+// alphabetical). If no curated app is installed, Home shows the first 9.
+function splitHomeApps(installed, curated) {
+  var byId = {};
+  var i;
+  for (i = 0; i < installed.length; i++) byId[installed[i].id] = installed[i];
+  var home = [];
+  for (i = 0; i < curated.length; i++) {
+    if (byId.hasOwnProperty(curated[i].id)) home.push(byId[curated[i].id]);
+  }
+  var all = installed.slice().sort(function (a, b) {
+    return String(a.title || a.id).localeCompare(String(b.title || b.id));
+  });
+  if (!home.length) home = all.slice(0, 9);
+  return { home: home, all: all };
 }
 
 function focusIndexFor(items, id) {
@@ -362,7 +380,8 @@ function mountUI(doc) {
     // were on screen; before the first list the only row is All apps.
     var hadApps = nav.homeItems.length > 0 || nav.allItems.length > 0;
     var focusedId = hadApps ? rowsFor(nav)[nav.focusIdx].id : null;
-    nav = { view: nav.view, focusIdx: 0, homeItems: choice.items, allItems: choice.items, launch: null };
+    var split = splitHomeApps(choice.items, homeApps());
+    nav = { view: nav.view, focusIdx: 0, homeItems: split.home, allItems: split.all, launch: null };
     nav.focusIdx = focusIndexFor(rowsFor(nav), focusedId);
     state.note = choice.note;
     state.status = 'ready';
@@ -371,7 +390,7 @@ function mountUI(doc) {
 
   function requestApps(attempt) {
     function retry(reason) {
-      var choice = chooseApps({ ok: false, reason: reason }, FALLBACK_APPS);
+      var choice = chooseApps({ ok: false, reason: reason }, fallbackItems());
       choice.note += ' — retrying';
       showApps(choice);
       setTimeout(function () { requestApps(attempt + 1); }, retryDelayMs(attempt));
@@ -381,7 +400,7 @@ function mountUI(doc) {
       {},
       function (msg) {
         var parsed = parseLaunchPoints(msg);
-        if (parsed.ok) showApps(chooseApps(parsed, FALLBACK_APPS));
+        if (parsed.ok) showApps(chooseApps(parsed, fallbackItems()));
         else retry(parsed.reason);
       },
       function (err) { retry((err && err.errorText) || 'listApps failed'); }
@@ -389,7 +408,7 @@ function mountUI(doc) {
   }
 
   function fetchLaunchPoints() {
-    showApps({ items: FALLBACK_APPS, note: '' });
+    showApps({ items: fallbackItems(), note: '' });
     requestApps(0);
   }
 
@@ -414,7 +433,6 @@ if (typeof module !== 'undefined' && module.exports) {
   module.exports = {
     SELF_ID: SELF_ID,
     SERVICE_URI: SERVICE_URI,
-    FALLBACK_APPS: FALLBACK_APPS,
     parseLaunchPoints: parseLaunchPoints,
     chooseApps: chooseApps,
     focusIndexFor: focusIndexFor,
@@ -426,6 +444,7 @@ if (typeof module !== 'undefined' && module.exports) {
     rowsFor: rowsFor,
     nextState: nextState,
     iconUrl: iconUrl,
-    appInitials: appInitials
+    appInitials: appInitials,
+    splitHomeApps: splitHomeApps
   };
 }
