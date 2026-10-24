@@ -1,0 +1,8 @@
+{
+  "name": "customwebos",
+  "private": true,
+  "description": "Dev-machine tooling only. Nothing here ships to the TV.",
+  "scripts": {
+    "test": "node --test"
+  }
+}

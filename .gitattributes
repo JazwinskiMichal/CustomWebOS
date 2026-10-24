@@ -1,0 +1,5 @@
+* text=auto
+# Executed by /bin/sh on the TV; CRLF breaks them.
+*.sh text eol=lf
+services/*/run-js-service text eol=lf
+*.png binary
