@@ -54,6 +54,45 @@ test('install.ps1 -WhatIf names ares-install, the device and the newest .ipk', {
   }
 })
 
+test('install.ps1 -TvHost -WhatIf installs as a developer app over ssh', { skip: !PS && 'no PowerShell' }, () => {
+  const createdDist = !fs.existsSync(DIST)
+  fs.mkdirSync(DIST, { recursive: true })
+  const stub = path.join(DIST, 'org.jazwinski.customwebos.home_9.9.9-test_all.ipk')
+  fs.writeFileSync(stub, 'stub')
+  try {
+    const r = ps('install.ps1', ['-TvHost', '192.0.2.1', '-WhatIf'])
+    assert.equal(r.status, 0, r.stderr)
+    assert.match(r.stdout, /scp -P 22022 .*root@192\.0\.2\.1:\/tmp\/org\.jazwinski\.customwebos\.home_9\.9\.9-test_all\.ipk/)
+    const ssh = r.stdout.split(/\r?\n/).find((l) => l.startsWith('would run: ssh'))
+    // -t developer: without it the app installs to /media/cryptofs (seen on-device).
+    assert.match(ssh, /ApplicationInstallerUtility -c install -t developer -p \/tmp\/\S+\.ipk -f \/etc\/palm\/appinstalld\/opkg\.conf/)
+    // Windows PowerShell strips embedded double quotes from native args.
+    const remote = ssh.slice(ssh.indexOf('root@192.0.2.1 "') + 'root@192.0.2.1 "'.length, ssh.lastIndexOf('"'))
+    assert.ok(remote.startsWith('ApplicationInstallerUtility'))
+    assert.ok(!remote.includes('"'), 'remote command must not contain double quotes')
+  } finally {
+    fs.rmSync(stub)
+    if (createdDist) fs.rmSync(DIST, { recursive: true })
+  }
+})
+
+test('install.ps1 -TvHost -Reboot reboots only after a successful install', { skip: !PS && 'no PowerShell' }, () => {
+  const createdDist = !fs.existsSync(DIST)
+  fs.mkdirSync(DIST, { recursive: true })
+  const stub = path.join(DIST, 'org.jazwinski.customwebos.home_9.9.9-test_all.ipk')
+  fs.writeFileSync(stub, 'stub')
+  try {
+    const withReboot = ps('install.ps1', ['-TvHost', '192.0.2.1', '-Reboot', '-WhatIf'])
+    assert.equal(withReboot.status, 0, withReboot.stderr)
+    assert.match(withReboot.stdout, /\[ \$rc -eq 0 \] && reboot; exit \$rc/)
+    const without = ps('install.ps1', ['-TvHost', '192.0.2.1', '-WhatIf'])
+    assert.doesNotMatch(without.stdout, /reboot/)
+  } finally {
+    fs.rmSync(stub)
+    if (createdDist) fs.rmSync(DIST, { recursive: true })
+  }
+})
+
 test('register-service.ps1 -WhatIf prints the ssh command without connecting', { skip: !PS && 'no PowerShell' }, () => {
   const r = ps('register-service.ps1', ['-TvHost', '192.0.2.1', '-WhatIf'])
   assert.equal(r.status, 0, r.stderr)
@@ -71,31 +110,33 @@ test('register-service.ps1 -WhatIf forwards -Unregister and -SystemWrapper as fl
 })
 
 const SVC = 'org.jazwinski.customwebos.home.service'
-const SEVEN = [
+const NINE = [
   `/var/luna-service2-dev/services.d/${SVC}.service`,
   `/var/luna-service2-dev/roles.d/${SVC}.service.json`,
   `/var/luna-service2-dev/api-permissions.d/${SVC}.api.json`,
   `/var/luna-service2-dev/api-permissions.d/${SVC}.api.public.json`,
   `/var/luna-service2-dev/client-permissions.d/${SVC}.root.json`,
   `/var/luna-service2-dev/client-permissions.d/${SVC}.service.json`,
+  '/var/luna-service2-dev/roles.d/org.jazwinski.customwebos.home.app.json',
+  '/var/luna-service2-dev/client-permissions.d/org.jazwinski.customwebos.home.app.json',
   '/var/luna-service2-dev/manifests.d/org.jazwinski.customwebos.home.json',
 ]
 
-test('register-service.sh --dry-run lists all seven files and writes nothing', { skip: !SH && 'no sh' }, () => {
+test('register-service.sh --dry-run lists all nine files and writes nothing', { skip: !SH && 'no sh' }, () => {
   const r = sh(['--dry-run'])
   assert.equal(r.status, 0, r.stderr)
-  for (const f of SEVEN) assert.ok(r.stdout.includes('would write ' + f + ':'), 'missing ' + f)
+  for (const f of NINE) assert.ok(r.stdout.includes('would write ' + f + ':'), 'missing ' + f)
   assert.match(r.stdout, new RegExp('Exec=/media/developer/apps/usr/palm/services/' + SVC.replace(/\./g, '\\.') + '/run-js-service -n '))
   assert.match(r.stdout, /would run: pkill -SIGHUP ls-hubd/)
   assert.match(r.stdout, /dry run: nothing written/)
 })
 
-test('register-service.sh manifest enumerates the other six files', { skip: !SH && 'no sh' }, () => {
+test('register-service.sh manifest enumerates the other eight files', { skip: !SH && 'no sh' }, () => {
   const r = sh(['--dry-run'])
   const line = r.stdout.split('\n').find((l) => l.startsWith('{"id":"org.jazwinski.customwebos.home"'))
   const manifest = JSON.parse(line)
   const listed = [...manifest.serviceFiles, ...manifest.roleFiles, ...manifest.apiPermissionFiles, ...manifest.clientPermissionFiles]
-  assert.deepEqual(listed.sort(), SEVEN.slice(0, 6).sort())
+  assert.deepEqual(listed.sort(), NINE.slice(0, 8).sort())
   assert.ok(manifest.version, 'manifest has a version')
 })
 
@@ -105,11 +146,24 @@ test('register-service.sh --system-wrapper points Exec at the stock run-js-servi
   assert.match(r.stdout, /Exec=\/usr\/bin\/run-js-service -n /)
 })
 
-test('register-service.sh --unregister --dry-run would remove all seven files', { skip: !SH && 'no sh' }, () => {
+test('register-service.sh --unregister --dry-run would remove all nine files', { skip: !SH && 'no sh' }, () => {
   const r = sh(['--unregister', '--dry-run'])
   assert.equal(r.status, 0, r.stderr)
-  for (const f of SEVEN) assert.ok(r.stdout.includes('would remove ' + f), 'missing ' + f)
+  for (const f of NINE) assert.ok(r.stdout.includes('would remove ' + f), 'missing ' + f)
   assert.doesNotMatch(r.stdout, /would write/)
+})
+
+test('register-service.sh grants the webapp (<appId>-*) public + the service group', { skip: !SH && 'no sh' }, () => {
+  // Without these the webapp's calls fail with -1031 "not privileged" (seen on-device).
+  const r = sh(['--dry-run'])
+  const written = (f) => JSON.parse(r.stdout.split('would write ' + f + ':\n')[1].split('\n')[0])
+  const role = written('/var/luna-service2-dev/roles.d/org.jazwinski.customwebos.home.app.json')
+  assert.equal(role.appId, 'org.jazwinski.customwebos.home')
+  assert.deepEqual(role.allowedNames, ['org.jazwinski.customwebos.home-*'])
+  const client = written('/var/luna-service2-dev/client-permissions.d/org.jazwinski.customwebos.home.app.json')
+  assert.deepEqual(client, {'org.jazwinski.customwebos.home-*': ['public', SVC + '.group']})
+  const api = written(`/var/luna-service2-dev/api-permissions.d/${SVC}.api.json`)
+  assert.ok(api[SVC + '.group'], 'the group granted to the webapp must exist')
 })
 
 test('register-service.sh rejects unknown arguments', { skip: !SH && 'no sh' }, () => {

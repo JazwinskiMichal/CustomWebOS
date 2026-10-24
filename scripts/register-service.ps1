@@ -84,7 +84,9 @@ if (-not (Test-Path -LiteralPath $KeyPath)) {
 # /bin/sh on the TV chokes on CRLF; normalise whatever the checkout gave us.
 # Windows PowerShell pipes to native commands in $OutputEncoding (ASCII by
 # default), so force UTF-8 without BOM.
-$body = (Get-Content -LiteralPath $shScript -Raw) -replace "`r`n", "`n"
+# PowerShell also appends CRLF after piped input; the trailing exit stops sh
+# before it reads the stray CR as a command (exit 127).
+$body = ((Get-Content -LiteralPath $shScript -Raw) -replace "`r`n", "`n").TrimEnd() + "`nexit `$?`n"
 $OutputEncoding = New-Object System.Text.UTF8Encoding $false
 
 Write-Output "running: $cmd"
