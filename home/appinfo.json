@@ -6,6 +6,7 @@
     "vendor":  "Michał Jaźwiński",
     "version":  "0.2.3",
     "icon":  "icon.png",
+    "disableBackHistoryAPI":  true,
     "requiredPermissions": [
         "application.operation",
         "application.launcher"

@@ -185,6 +185,11 @@
   - pointer hover and click
   - the clock
   - remembered app after relaunch
+- [ ] **Added by the Part A final review:**
+  - **Back on Home** (`disableBackHistoryAPI: true` is now set): confirm it stays on CustomWebOS and doesn't close or background it.
+  - **OK with the pointer visible:** check whether it sends both keydown 13 and `click`, which would launch twice.
+  - **The `⋯` glyph** on the All apps row: confirm it renders; if not, use `…`.
+  - **Resume:** does `visibilitychange` fire when returning to the already-running app?
 - [ ] **Icons:** confirm whether `file:///media/cryptofs/...` icons load inside the web app. If they don't, record it in `docs/m2-tracking.md` and choose a follow-up: either the service returns the icon as a data URL, or initials stay.
 - [ ] Record the results in `docs/m2-tracking.md`; commit `docs: 0.3.0 on-device results`.
 

@@ -43,3 +43,8 @@ test('index.html loads config.js before main.js', () => {
   assert.ok(config !== -1, 'config.js not loaded')
   assert.ok(config < html.indexOf('src="main.js"'))
 })
+
+test('appinfo disables the Back history API so the app handles Back itself', () => {
+  // Without it webOS handles Back via history and can close the Home app.
+  assert.equal(appinfo.disableBackHistoryAPI, true)
+})

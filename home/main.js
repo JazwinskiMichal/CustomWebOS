@@ -288,7 +288,12 @@ function mountUI(doc) {
     return box;
   }
 
-  function render() {
+  // keepScroll: a pointer action. Keep the list where it is; recentring would
+  // slide another row under the stationary pointer, whose synthetic
+  // mouseover would steal focus again and run away down the list.
+  function render(keepScroll) {
+    var oldList = root.querySelector('.app-list');
+    var oldScroll = oldList ? oldList.scrollTop : 0;
     while (root.firstChild) root.removeChild(root.firstChild);
     var header = doc.createElement('header');
     var h = doc.createElement('h1');
@@ -304,8 +309,8 @@ function mountUI(doc) {
     if (state.status === 'error') { appendState('state error', 'Error: ' + state.statusText); return; }
     if (!nav.homeItems.length && !nav.allItems.length) { appendState('state', 'No apps found.'); return; }
 
-    var note = state.launchNote || state.note;
-    if (note) appendState('state note', note);
+    if (state.note) appendState('state note', state.note);
+    if (state.launchNote) appendState('state note', state.launchNote);
 
     // The list is its own clipped viewport filling the rest of the screen;
     // keep the focused item centred in it as focus moves.
@@ -328,7 +333,9 @@ function mountUI(doc) {
       if (i === nav.focusIdx) focusedLi = li;
     }
     root.appendChild(ul);
-    if (focusedLi) {
+    if (keepScroll) {
+      ul.scrollTop = oldScroll;
+    } else if (focusedLi) {
       ul.scrollTop = scrollTopFor(focusedLi.offsetTop, focusedLi.offsetHeight, ul.clientHeight, ul.scrollHeight);
     }
   }
@@ -381,6 +388,9 @@ function mountUI(doc) {
       { id: id },
       function () {},
       function (err) {
+        // Failing while we're hidden means the launch most likely worked and
+        // only its reply was late (slow bus); don't greet the user with it.
+        if (doc.visibilityState === 'hidden') return;
         // A note, not the error screen: the list stays usable.
         state.launchNote = 'Could not open ' + id + ': ' + ((err && err.errorText) || 'launch failed');
         render();
@@ -393,7 +403,8 @@ function mountUI(doc) {
     var before = nav;
     nav = nextState(nav, action);
     if (nav.launch) launch(nav.launch);
-    if (nav !== before) render();
+    var pointer = typeof action === 'object' && nav.view === before.view;
+    if (nav !== before) render(pointer);
   }
 
   function onKey(e) {
@@ -437,12 +448,17 @@ function mountUI(doc) {
 
   var retryTimer = null;
   var listInFlight = false;
+  var haveServiceList = false;
 
   function requestApps(attempt) {
     function retry(reason) {
-      var choice = chooseApps({ ok: false, reason: reason }, fallbackItems());
-      choice.note += ' — retrying';
-      showApps(choice);
+      // Once the service has answered, a failed refresh (slow bus after
+      // boot, see m2-tracking) keeps the list on screen and retries quietly.
+      if (!haveServiceList) {
+        var choice = chooseApps({ ok: false, reason: reason }, fallbackItems());
+        choice.note += ' — retrying';
+        showApps(choice);
+      }
       retryTimer = setTimeout(function () { retryTimer = null; requestApps(attempt + 1); }, retryDelayMs(attempt));
     }
     listInFlight = true;
@@ -452,8 +468,12 @@ function mountUI(doc) {
       function (msg) {
         listInFlight = false;
         var parsed = parseLaunchPoints(msg);
-        if (parsed.ok) showApps(chooseApps(parsed, fallbackItems()));
-        else retry(parsed.reason);
+        if (parsed.ok) {
+          haveServiceList = true;
+          showApps(chooseApps(parsed, fallbackItems()));
+        } else {
+          retry(parsed.reason);
+        }
       },
       function (err) {
         listInFlight = false;
@@ -481,7 +501,13 @@ function mountUI(doc) {
   // Coming back from another app: catch up the clock and refresh the list
   // (apps may have been installed). A pending retry already covers it.
   function onVisibility() {
-    if (doc.visibilityState !== 'visible') return;
+    if (doc.visibilityState !== 'visible') {
+      // Leaving (usually into the launched app): a stale launch error must
+      // not greet the user on return.
+      state.launchNote = '';
+      return;
+    }
+    render();
     tickClock();
     if (!retryTimer && !listInFlight) requestApps(0);
   }

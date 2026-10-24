@@ -6,6 +6,7 @@
 // ?mock=slow   answers after 12 s, past main.js's 10 s timeout
 // ?mock=error  {returnValue:false, errorText:'mock error'}
 // ?mock=empty  {returnValue:true, apps:[]}
+// ?mock=flaky  first listApps answers normally, later ones fail
 (function () {
   var mode = (/[?&]mock=(\w+)/.exec(window.location.search) || [])[1] || 'ok'
   var SERVICE = 'luna://org.jazwinski.customwebos.home.service/'
@@ -14,6 +15,9 @@
   function listApps() {
     if (mode === 'error') return Promise.resolve({ returnValue: false, errorText: 'mock error' })
     if (mode === 'empty') return Promise.resolve({ returnValue: true, apps: [] })
+    if (mode === 'flaky' && window.__mock.listAppsAnswered > 0) {
+      return Promise.resolve({ returnValue: false, errorText: 'mock flaky' })
+    }
     return fetch('/__dev/fixtures/listApps.json').then(function (r) { return r.json() })
   }
 

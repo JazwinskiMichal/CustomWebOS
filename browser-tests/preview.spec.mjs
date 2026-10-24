@@ -229,3 +229,89 @@ test('returning to the page refreshes the app list', async () => {
     await page.waitForFunction((n) => window.__mock.listAppsAnswered > n, before)
   } finally { await close() }
 })
+
+// --- Final-review fixes ---
+
+async function hideAndShow(page) {
+  await page.evaluate(() => {
+    Object.defineProperty(document, 'visibilityState', { configurable: true, get: () => 'hidden' })
+    document.dispatchEvent(new Event('visibilitychange'))
+    Object.defineProperty(document, 'visibilityState', { configurable: true, get: () => 'visible' })
+    document.dispatchEvent(new Event('visibilitychange'))
+  })
+}
+
+test('pointing at a lower row focuses that row and a click launches it, not another', async () => {
+  const { page, close } = await openPreview()
+  try {
+    await waitForServiceList(page)
+    await openAllApps(page)
+    // Pick the visible row nearest the bottom of the list viewport.
+    const target = await page.evaluate(() => {
+      const ul = document.querySelector('.app-list').getBoundingClientRect()
+      const rows = Array.from(document.querySelectorAll('.app-item'))
+      const visible = rows.filter((r) => { const b = r.getBoundingClientRect(); return b.top >= ul.top && b.bottom <= ul.bottom })
+      const row = visible[visible.length - 1]
+      const b = row.getBoundingClientRect()
+      return { id: row.getAttribute('data-id'), x: b.left + 40, y: b.top + b.height / 2 }
+    })
+    await page.mouse.move(target.x, target.y)
+    await page.waitForTimeout(300)
+    assert.equal(await page.locator('.app-item.focused').getAttribute('data-id'), target.id)
+    await page.mouse.click(target.x, target.y)
+    await page.waitForTimeout(300)
+    assert.deepEqual(await page.evaluate(() => window.__mock.launches), [target.id])
+  } finally { await close() }
+})
+
+test('a failed refresh keeps the service list instead of falling back', async () => {
+  const { page, close } = await openPreview('flaky')
+  try {
+    await waitForServiceList(page)
+    await openAllApps(page)
+    await hideAndShow(page)
+    await page.waitForFunction(() => window.__mock.listAppsAnswered >= 2)
+    await page.waitForTimeout(100)
+    assert.equal(await page.locator('.app-item').count(), 38)
+    assert.equal(await page.locator('.state.note').count(), 0)
+  } finally { await close() }
+})
+
+test('a launch-failure note clears when the user comes back', async () => {
+  const { page, close } = await openPreview()
+  try {
+    await waitForServiceList(page)
+    await page.keyboard.press('Enter')
+    await page.waitForFunction(() => /launching requires the TV/.test(document.body.textContent))
+    await hideAndShow(page)
+    await page.waitForFunction(() => !/launching requires the TV/.test(document.body.textContent))
+  } finally { await close() }
+})
+
+test('the launch note does not hide the service note', async () => {
+  const { page, close } = await openPreview('error')
+  try {
+    await page.waitForSelector('.state.note')
+    await page.keyboard.press('Enter')
+    await page.waitForFunction(() => /launching requires the TV/.test(document.body.textContent))
+    assert.match(await page.locator('body').textContent(), /mock error/)
+  } finally { await close() }
+})
+
+test('a launch timeout that fires while the launched app is open leaves no note', async () => {
+  const { page, close } = await openPreview('slow')
+  try {
+    // slow mode: every answer takes 12 s, past the 10 s timeout.
+    await page.keyboard.press('Enter')
+    await page.evaluate(() => {
+      Object.defineProperty(document, 'visibilityState', { configurable: true, get: () => 'hidden' })
+      document.dispatchEvent(new Event('visibilitychange'))
+    })
+    await page.waitForTimeout(10600)
+    await page.evaluate(() => {
+      Object.defineProperty(document, 'visibilityState', { configurable: true, get: () => 'visible' })
+      document.dispatchEvent(new Event('visibilitychange'))
+    })
+    assert.doesNotMatch(await page.locator('body').textContent(), /Could not open/)
+  } finally { await close() }
+})
