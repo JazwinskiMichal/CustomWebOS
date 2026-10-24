@@ -192,3 +192,11 @@ test('a broken icon stays as initials after re-renders', async () => {
     assert.equal(await page.evaluate(() => window.__brokenImgReinserted), false)
   } finally { await close() }
 })
+
+test('the header shows a 24h clock', async () => {
+  const { page, close } = await openPreview()
+  try {
+    await page.waitForSelector('.clock')
+    assert.match(await page.locator('.clock').textContent(), /^\d{2}:\d{2}$/)
+  } finally { await close() }
+})

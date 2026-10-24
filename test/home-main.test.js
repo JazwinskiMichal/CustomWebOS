@@ -258,3 +258,18 @@ test('splitHomeApps: all is alphabetical by title and includes curated apps', ()
 test('splitHomeApps returns empty lists when nothing is installed', () => {
   assert.deepEqual(main.splitHomeApps([], [{id: 'nf', title: 'Netflix'}]), {home: [], all: []})
 })
+
+// --- Clock (Task 7) ---
+
+test('formatClock is 24-hour HH:MM in local time', () => {
+  assert.equal(main.formatClock(new Date(2026, 9, 25, 7, 5)), '07:05')
+  assert.equal(main.formatClock(new Date(2026, 9, 25, 23, 59, 59)), '23:59')
+  assert.equal(main.formatClock(new Date(2026, 9, 25, 0, 0)), '00:00')
+  assert.equal(main.formatClock(new Date(2026, 9, 25, 13, 30)), '13:30')
+})
+
+test('msToNextMinute counts to the next minute boundary', () => {
+  assert.equal(main.msToNextMinute(new Date(2026, 9, 25, 7, 5, 30, 250)), 29750)
+  assert.equal(main.msToNextMinute(new Date(2026, 9, 25, 7, 5, 0, 0)), 60000)
+  assert.equal(main.msToNextMinute(new Date(2026, 9, 25, 7, 5, 59, 999)), 1)
+})

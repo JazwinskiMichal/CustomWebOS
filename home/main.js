@@ -115,6 +115,17 @@ function splitHomeApps(installed, curated) {
   return { home: home, all: all };
 }
 
+function pad2(n) { return n < 10 ? '0' + n : String(n); }
+
+// 24-hour local time, HH:MM.
+function formatClock(date) {
+  return pad2(date.getHours()) + ':' + pad2(date.getMinutes());
+}
+
+function msToNextMinute(date) {
+  return 60000 - (date.getSeconds() * 1000 + date.getMilliseconds());
+}
+
 function focusIndexFor(items, id) {
   for (var i = 0; i < items.length; i++) {
     if (items[i].id === id) return i;
@@ -251,9 +262,15 @@ function mountUI(doc) {
 
   function render() {
     while (root.firstChild) root.removeChild(root.firstChild);
+    var header = doc.createElement('header');
     var h = doc.createElement('h1');
     h.textContent = nav.view === 'all' ? 'All apps' : 'CustomWebOS';
-    root.appendChild(h);
+    header.appendChild(h);
+    var clock = doc.createElement('span');
+    clock.className = 'clock';
+    clock.textContent = formatClock(new Date());
+    header.appendChild(clock);
+    root.appendChild(header);
 
     if (state.status === 'loading') { appendState('state', 'Loading installed apps…'); return; }
     if (state.status === 'error') { appendState('state error', 'Error: ' + state.statusText); return; }
@@ -412,10 +429,22 @@ function mountUI(doc) {
     requestApps(0);
   }
 
+  // Updates the clock text in place at each minute boundary; a setTimeout
+  // chain rather than setInterval so it re-aligns after the TV sleeps.
+  var clockTimer = null;
+  function tickClock() {
+    var el = root.querySelector('.clock');
+    var now = new Date();
+    if (el) el.textContent = formatClock(now);
+    clearTimeout(clockTimer);
+    clockTimer = setTimeout(tickClock, msToNextMinute(now));
+  }
+
   doc.addEventListener('keydown', onKey);
   root.addEventListener('mouseover', onPointer('point'));
   root.addEventListener('click', onPointer('click'));
   render();
+  tickClock();
   fetchLaunchPoints();
 }
 
@@ -445,6 +474,8 @@ if (typeof module !== 'undefined' && module.exports) {
     nextState: nextState,
     iconUrl: iconUrl,
     appInitials: appInitials,
-    splitHomeApps: splitHomeApps
+    splitHomeApps: splitHomeApps,
+    formatClock: formatClock,
+    msToNextMinute: msToNextMinute
   };
 }

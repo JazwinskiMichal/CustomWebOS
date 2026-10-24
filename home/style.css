@@ -28,14 +28,32 @@ html, body {
   padding: 96px 128px;
 }
 
+/* Title left, clock right. */
+header {
+  display: -webkit-flex;
+  display: flex;
+  -webkit-justify-content: space-between;
+  justify-content: space-between;
+  -webkit-align-items: baseline;
+  align-items: baseline;
+  -webkit-flex-shrink: 0;
+  flex-shrink: 0;
+  max-width: 1664px;
+  margin: 0 0 48px 0;
+}
+
+.clock {
+  font-size: 48px;
+  font-weight: 300;
+  color: #c7c7c2;
+}
+
 h1 {
   font-size: 48px;
   font-weight: 400;
   letter-spacing: -0.01em;
-  margin: 0 0 48px 0;
+  margin: 0;
   color: #f2f2f0;
-  -webkit-flex-shrink: 0;
-  flex-shrink: 0;
 }
 
 .app-list {
