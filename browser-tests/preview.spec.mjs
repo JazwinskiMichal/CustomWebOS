@@ -369,3 +369,46 @@ test('a last app outside Home is remembered via the All apps row', async () => {
     assert.equal(await page.locator('.app-item.focused').getAttribute('data-id'), 'pl.cda')
   } finally { await close() }
 })
+
+test('Home still fits with a long service note and a launch note', async () => {
+  const { page, close } = await openPreview('errorlong')
+  try {
+    await page.waitForSelector('.state.note')
+    await page.keyboard.press('Enter')
+    await page.waitForFunction(() => /launching requires the TV/.test(document.body.textContent))
+    const fit = await page.evaluate(() => {
+      const ul = document.querySelector('.app-list')
+      const last = document.querySelector('.app-item[data-id="__all__"]').getBoundingClientRect()
+      return { overflow: ul.scrollHeight - ul.clientHeight, lastBottom: last.bottom }
+    })
+    assert.ok(fit.overflow <= 1, 'Home list overflows by ' + fit.overflow + 'px')
+    assert.ok(fit.lastBottom <= 1080, 'All apps row off-screen at ' + fit.lastBottom)
+  } finally { await close() }
+})
+
+test('arrow keys keep focus while the pointer rests over the list', async () => {
+  const { page, close } = await openPreview()
+  try {
+    await waitForServiceList(page)
+    await openAllApps(page)
+    const box = await page.locator('.app-item').nth(3).boundingBox()
+    await page.mouse.move(box.x + 40, box.y + box.height / 2)
+    await page.waitForTimeout(100)
+    const start = await page.evaluate(() => Array.from(document.querySelectorAll('.app-item')).findIndex((l) => l.classList.contains('focused')))
+    for (let i = 0; i < 15; i++) await page.keyboard.press('ArrowDown')
+    await page.waitForTimeout(150)
+    const end = await page.evaluate(() => Array.from(document.querySelectorAll('.app-item')).findIndex((l) => l.classList.contains('focused')))
+    assert.equal(end, start + 15)
+  } finally { await close() }
+})
+
+test('after a failed launch, OK can retry straight away', async () => {
+  const { page, close } = await openPreview()
+  try {
+    await waitForServiceList(page)
+    await page.keyboard.press('Enter')
+    await page.waitForFunction(() => window.__mock.launches.length === 1 && /launching requires the TV/.test(document.body.textContent))
+    await page.keyboard.press('Enter')
+    await page.waitForFunction(() => window.__mock.launches.length === 2)
+  } finally { await close() }
+})

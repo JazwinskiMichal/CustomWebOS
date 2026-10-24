@@ -245,12 +245,23 @@ function bootFocusIndex(state, lastAppId) {
   return 0;
 }
 
-// One launch per app per LAUNCH_GUARD_MS: a held OK auto-repeats, and with
-// the Magic Remote pointer visible OK can arrive as both keydown and click.
+// One launch of any app per LAUNCH_GUARD_MS: a held OK auto-repeats, and
+// with the Magic Remote pointer visible OK can arrive as both keydown (the
+// focused row) and click (the row under the pointer, possibly another app).
+// A negative delta (wall clock moved back) allows the launch.
 var LAUNCH_GUARD_MS = 1000;
 
 function shouldLaunch(last, id, now) {
-  return !last || last.id !== id || now - last.at >= LAUNCH_GUARD_MS;
+  if (!last) return true;
+  var elapsed = now - last.at;
+  return elapsed < 0 || elapsed >= LAUNCH_GUARD_MS;
+}
+
+// Monotonic where available (Chrome 24+), so NTP corrections after boot
+// don't skew the launch guard.
+function nowMs() {
+  if (typeof performance !== 'undefined' && performance.now) return performance.now();
+  return new Date().getTime();
 }
 
 // --- Browser runtime (guarded; does not execute when required from Node) ---
@@ -309,9 +320,9 @@ function mountUI(doc) {
     return box;
   }
 
-  // keepScroll: a pointer action. Keep the list where it is; recentring would
-  // slide another row under the stationary pointer, whose synthetic
-  // mouseover would steal focus again and run away down the list.
+  // keepScroll: a pointer action. Keep the list where it is; recentring
+  // would slide another row under the pointer. (Synthetic mousemoves at an
+  // unchanged position are also filtered in onPointer.)
   function render(keepScroll) {
     var oldList = root.querySelector('.app-list');
     var oldScroll = oldList ? oldList.scrollTop : 0;
@@ -329,8 +340,12 @@ function mountUI(doc) {
     if (state.status === 'loading') { appendState('state', 'Loading installed apps…'); return; }
     if (!nav.homeItems.length && !nav.allItems.length) { appendState('state', 'No apps found.'); return; }
 
-    if (state.note) appendState('state note', state.note);
-    if (state.launchNote) appendState('state note', state.launchNote);
+    // One single-line note (see .state.note), launch result first, so Home
+    // keeps its fixed height whatever the messages say.
+    var notes = [];
+    if (state.launchNote) notes.push(state.launchNote);
+    if (state.note) notes.push(state.note);
+    if (notes.length) appendState('state note', notes.join(' · '));
 
     // The list is its own clipped viewport filling the rest of the screen;
     // keep the focused item centred in it as focus moves.
@@ -410,6 +425,7 @@ function mountUI(doc) {
       function (err) {
         // Failing while we're hidden means the launch most likely worked and
         // only its reply was late (slow bus); don't greet the user with it.
+        lastLaunch = null; // let OK retry straight away
         if (doc.visibilityState === 'hidden') return;
         // A note, not the error screen: the list stays usable.
         state.launchNote = 'Could not open ' + id + ': ' + ((err && err.errorText) || 'launch failed');
@@ -424,7 +440,7 @@ function mountUI(doc) {
     userMoved = true;
     nav = nextState(nav, action);
     if (nav.launch) {
-      var now = new Date().getTime();
+      var now = nowMs();
       if (shouldLaunch(lastLaunch, nav.launch, now)) {
         lastLaunch = { id: nav.launch, at: now };
         launch(nav.launch);

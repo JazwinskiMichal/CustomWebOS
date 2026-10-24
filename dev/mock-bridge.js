@@ -7,6 +7,7 @@
 // ?mock=error  {returnValue:false, errorText:'mock error'}
 // ?mock=empty  {returnValue:true, apps:[]}
 // ?mock=flaky  first listApps answers normally, later ones fail
+// ?mock=errorlong  like error, with the real 10 s-timeout reason text
 (function () {
   var mode = (/[?&]mock=(\w+)/.exec(window.location.search) || [])[1] || 'ok'
   var SERVICE = 'luna://org.jazwinski.customwebos.home.service/'
@@ -14,6 +15,9 @@
 
   function listApps() {
     if (mode === 'error') return Promise.resolve({ returnValue: false, errorText: 'mock error' })
+    if (mode === 'errorlong') {
+      return Promise.resolve({ returnValue: false, errorText: 'no response from luna://org.jazwinski.customwebos.home.service/listApps within 10s (webOS 4 bus permission?)' })
+    }
     if (mode === 'empty') return Promise.resolve({ returnValue: true, apps: [] })
     if (mode === 'flaky' && window.__mock.listAppsAnswered > 0) {
       return Promise.resolve({ returnValue: false, errorText: 'mock flaky' })

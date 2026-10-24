@@ -298,12 +298,17 @@ test('loadPrefs and savePrefs never throw', () => {
 
 // --- Deferred minors ---
 
-test('shouldLaunch suppresses the same app within LAUNCH_GUARD_MS', () => {
+test('shouldLaunch allows one launch of any app per LAUNCH_GUARD_MS', () => {
   assert.equal(main.LAUNCH_GUARD_MS, 1000)
   assert.equal(main.shouldLaunch(null, 'a', 5000), true)
   assert.equal(main.shouldLaunch({id: 'a', at: 5000}, 'a', 5500), false)
   assert.equal(main.shouldLaunch({id: 'a', at: 5000}, 'a', 6000), true)
-  assert.equal(main.shouldLaunch({id: 'a', at: 5000}, 'b', 5100), true)
+  // keydown on the focused row + click on the row under the pointer
+  assert.equal(main.shouldLaunch({id: 'a', at: 5000}, 'b', 5100), false)
+})
+
+test('shouldLaunch allows a launch when the clock went backwards', () => {
+  assert.equal(main.shouldLaunch({id: 'a', at: 5000}, 'a', 4000), true)
 })
 
 test('opening All apps focuses the last launched app when it is there', () => {

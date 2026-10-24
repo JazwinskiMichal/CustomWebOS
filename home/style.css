@@ -141,4 +141,15 @@ h1 {
 }
 
 
-.state.note { font-size: 22px; padding: 0 0 24px 0; margin: 0; -webkit-flex-shrink: 0; flex-shrink: 0; }
+.state.note {
+  font-size: 22px;
+  padding: 0 0 24px 0;
+  margin: 0;
+  max-width: 1664px;
+  -webkit-flex-shrink: 0;
+  flex-shrink: 0;
+  /* Always one line, so Home's rows never get pushed off the stage. */
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
