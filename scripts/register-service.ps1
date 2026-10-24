@@ -41,14 +41,14 @@
   powershell -NoProfile -File scripts/register-service.ps1 -TvHost 192.168.1.50
   powershell -NoProfile -File scripts/register-service.ps1 -TvHost 192.168.1.50 -Unregister
 #>
+[CmdletBinding(SupportsShouldProcess)]
 param(
     [Parameter(Mandatory=$true)][string]$TvHost,
     [int]$Port = 22022,
     [string]$KeyPath = (Join-Path $env:USERPROFILE '.ssh\id_ed25519_lgtv'),
     [switch]$Unregister,
     [switch]$SystemWrapper,
-    [switch]$DryRunOnTv,
-    [switch]$WhatIf
+    [switch]$DryRunOnTv
 )
 
 $ErrorActionPreference = 'Stop'
@@ -69,7 +69,7 @@ $remote  = ('sh -s -- ' + ($flags -join ' ')).Trim()
 $sshArgs = @('-p', "$Port", '-i', $KeyPath, "root@$TvHost", $remote)
 $cmd     = "ssh -p $Port -i `"$KeyPath`" root@$TvHost `"$remote`" < `"$shScript`""
 
-if ($WhatIf) {
+if (-not $PSCmdlet.ShouldProcess("root@$TvHost", 'run register-service.sh')) {
     Write-Output "would run: $cmd"
     Write-Output "host: $TvHost"
     Write-Output "port: $Port"

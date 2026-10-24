@@ -176,3 +176,12 @@ test('shell files that run on the TV are LF-only', () => {
     assert.ok(!fs.readFileSync(path.join(ROOT, f), 'utf8').includes('\r'), f + ' has CRLF')
   }
 })
+
+test('PowerShell scripts get -WhatIf from SupportsShouldProcess, not a hand-rolled switch', () => {
+  for (const f of ['package.ps1', 'install.ps1', 'register-service.ps1']) {
+    const src = fs.readFileSync(path.join(SCRIPTS, f), 'utf8')
+    assert.match(src, /\[CmdletBinding\([^)]*SupportsShouldProcess/, f)
+    assert.doesNotMatch(src, /\[switch\]\$WhatIf/, f)
+    assert.match(src, /\$PSCmdlet\.ShouldProcess\(/, f)
+  }
+})

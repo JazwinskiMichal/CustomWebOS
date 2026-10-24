@@ -48,14 +48,13 @@
   powershell -NoProfile -File scripts/install.ps1 -Device tv
   powershell -NoProfile -File scripts/install.ps1 -TvHost 192.168.1.50 -WhatIf
 #>
-[CmdletBinding(DefaultParameterSetName='Ares')]
+[CmdletBinding(DefaultParameterSetName='Ares', SupportsShouldProcess)]
 param(
     [Parameter(Mandatory=$true, ParameterSetName='Ares')][string]$Device,
     [Parameter(Mandatory=$true, ParameterSetName='Ssh')][string]$TvHost,
     [Parameter(ParameterSetName='Ssh')][int]$Port = 22022,
     [Parameter(ParameterSetName='Ssh')][string]$KeyPath = (Join-Path $env:USERPROFILE '.ssh\id_ed25519_lgtv'),
-    [Parameter(ParameterSetName='Ssh')][switch]$Reboot,
-    [switch]$WhatIf
+    [Parameter(ParameterSetName='Ssh')][switch]$Reboot
 )
 
 $ErrorActionPreference = 'Stop'
@@ -78,7 +77,7 @@ if (-not $ipk) {
 if ($PSCmdlet.ParameterSetName -eq 'Ares') {
     $cmd = "ares-install -d $Device `"$($ipk.FullName)`""
 
-    if ($WhatIf) {
+    if (-not $PSCmdlet.ShouldProcess($Device, 'ares-install')) {
         Write-Output "would run: $cmd"
         Write-Output "device: $Device"
         Write-Output "ipk: $($ipk.FullName)"
@@ -108,7 +107,7 @@ $sshArgs   = @('-p', "$Port", '-i', $KeyPath, "root@$TvHost", $remote)
 $scpCmd    = "scp -P $Port -i `"$KeyPath`" `"$($ipk.FullName)`" root@${TvHost}:$remoteIpk"
 $sshCmd    = "ssh -p $Port -i `"$KeyPath`" root@$TvHost `"$remote`""
 
-if ($WhatIf) {
+if (-not $PSCmdlet.ShouldProcess("root@$TvHost", 'install over ssh')) {
     Write-Output "would run: $scpCmd"
     Write-Output "would run: $sshCmd"
     Write-Output "host: $TvHost"

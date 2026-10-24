@@ -15,9 +15,8 @@
   powershell -NoProfile -File scripts/package.ps1 -WhatIf
   powershell -NoProfile -File scripts/package.ps1
 #>
-param(
-    [switch]$WhatIf
-)
+[CmdletBinding(SupportsShouldProcess)]
+param()
 
 $ErrorActionPreference = 'Stop'
 
@@ -46,7 +45,7 @@ if (Test-Path -LiteralPath $serviceDir) {
 
 $cmd = "ares-package " + (($sources | ForEach-Object { '"' + $_ + '"' }) -join ' ') + " -o `"$distDir`""
 
-if ($WhatIf) {
+if (-not $PSCmdlet.ShouldProcess($distDir, 'ares-package')) {
     Write-Output "would run: $cmd"
     foreach ($s in $sources) { Write-Output "source: $s" }
     Write-Output "output: $distDir"
