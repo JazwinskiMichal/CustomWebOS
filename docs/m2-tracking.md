@@ -11,25 +11,21 @@ These are findings from installing M1 on my LG C8 and running it on 2026-10-24. 
 
 **Impact.** CustomWebOS Home's hardcoded list renders fine, the remote navigates it, but pressing OK on any app does not launch it. Enumeration was already blocked; launch is blocked for the same underlying reason.
 
-**Fix (first M2 task).** Bundle a service component — the Hbchannel pattern. Rough shape:
+**Fix (first M2 task).** Bundle a service component — the Hbchannel pattern. **Partially shipped in this repo as of 0.2.0** at `services/org.jazwinski.customwebos.home.service/`. State on 2026-10-24:
 
-```
-services/org.jazwinski.customwebos.home.service/
-  package.json             # Node service metadata
-  services.json            # luna manifest — declares service id and public methods
-  <permissions files>      # declares applications.operation / applications.launcher ACGs
-  service.js               # Node code — subscribes to luna, exposes:
-                           #   luna://org.jazwinski.customwebos.home.service/listApps
-                           #   luna://org.jazwinski.customwebos.home.service/launch
-                           # Internally calls com.webos.applicationManager under
-                           # the privileged service context.
-```
+- `services.json`, `package.json`, `service.js` (ES5 for Node 0.12 on the TV), `run-js-service` wrapper (copied verbatim from Hbchannel's `thirdparty_jail=off` sed trick) — all committed.
+- `scripts/package.ps1` passes both `home/` and `services/org.jazwinski.customwebos.home.service/` to `ares-package`. Produced `.ipk` installs cleanly via `ApplicationInstallerUtility`.
+- `scripts/register-service.sh` writes the seven files the luna hub needs (`services.d/`, `roles.d/`, two in `api-permissions.d/`, two in `client-permissions.d/`, one in **`manifests.d/`** — the top-level manifest JSON that enumerates the rest). Ships to the TV and runs over SSH after install.
+- After reboot: `ls-monitor -i org.jazwinski.customwebos.home.service` lists `listApps`, `launch`, `info`, `quit` all with `"public"` in their provides. **The hub knows about the service.**
 
-Then update `scripts/package.ps1` to pass both `home/` and `services/` to `ares-package`, which bundles them into a single `.ipk`. The webapp's `main.js` replaces its luna URIs with the service's own public endpoints.
+**Where it currently gets stuck.** First `luna-send-pub` to any of our methods — including the built-in `info` — hangs indefinitely. `ps -ef` shows the hub (ls-hubd, pid 1404) spawned `/bin/sh ... run-js-service -n ...` as our service, but the actual Node process never comes up — our shell wrapper is sitting in the fork-server handoff that `/usr/bin/run-js-service` does when `/var/run/node/fork` exists (lines ~160 of the system wrapper: `printf "$request" | nc 127.0.0.1 9000`). Either the fork server isn't accepting our request, or our `thirdparty_jail=off` sed modification subtly breaks the request shape. The devmode-check sed modification in the same wrapper is irrelevant (only affects whether `-d` keeps the debugger on).
 
-Hbchannel's own `services.json` and the methods it exposes (`spawn`, `install`, `exec`, …, all with `provides: ["…","all","public","ares.webos.cli"]`) are the reference. Introspection output I captured during the test is in [the chat log](https://github.com/JazwinskiMichal/CustomWebOS/issues?q=webOS+4) — grep for `ls-monitor -i org.webosbrew.hbchannel.service`.
+**Where to pick up next session.**
+1. On the TV: `cat /var/run/node/fork` (confirm fork server is enabled) and `nc 127.0.0.1 9000` (manually try a fork request). Compare Hbchannel's working case against ours by watching the fork server socket while invoking each.
+2. Try shipping our service **without** the Hbchannel `run-js-service` wrapper — directly point the services.d `Exec=` at `/usr/bin/run-js-service` with the right flags. Risk: `thirdparty_jail=individual` kicks in; our service may run jailed. May still work for our use case since we're only calling applicationManager, which is public.
+3. If none of that works: inspect Hbchannel's actual spawn via `strace -p 1404 -f -e trace=execve` on the TV while opening Hbchannel; compare to our spawn.
 
-Alternative that **does not work**: setting `requiredPermissions` in `appinfo.json` alone. Tried on 0.1.4 (`["application.operation","application.launcher"]`); call still times out. The field controls self-declared ACGs but doesn't grant them on a locked consumer firmware.
+Alternative that **does not work** (confirmed): setting `requiredPermissions` in `appinfo.json` alone. Tried on 0.1.4 (`["application.operation","application.launcher"]`); call still times out. The field controls self-declared ACGs but doesn't grant them on a locked consumer firmware. The service-component path is the only way.
 
 ## Other things noticed
 

@@ -1,0 +1,8 @@
+#!/bin/sh
+# Replace the system run-js-service to turn off thirdparty_jail and the
+# devmode_enabled gate, so this service can run outside the dev jail with
+# the permissions elevateService grants it. Pattern copied verbatim from
+# webosbrew's Homebrew Channel — known to work on this firmware.
+eval "$(sed -e '/^thirdparty_jail=/s/=.*/=off/' \
+            -e '\@/var/luna/preferences/devmode_enabled@s/if /&false \&\& /' \
+            '/usr/bin/run-js-service')"

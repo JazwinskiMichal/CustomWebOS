@@ -1,0 +1,6 @@
+{
+    "name": "org.jazwinski.customwebos.home.service",
+    "version": "0.1.0",
+    "description": "Privileged luna proxy for the CustomWebOS home webapp.",
+    "main": "service.js"
+}

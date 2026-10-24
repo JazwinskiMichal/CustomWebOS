@@ -1,0 +1,9 @@
+{
+    "id": "org.jazwinski.customwebos.home.service",
+    "description": "CustomWebOS Home service — privileged luna proxy for the home webapp",
+    "services": [
+        {
+            "name": "org.jazwinski.customwebos.home.service"
+        }
+    ]
+}

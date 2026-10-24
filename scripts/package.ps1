@@ -23,11 +23,12 @@ $ErrorActionPreference = 'Stop'
 
 # Resolve repo root from the script's own location so the script works
 # regardless of the shell's current directory.
-$scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
-$repoRoot  = Split-Path -Parent $scriptDir
-$homeDir   = Join-Path $repoRoot 'home'
-$distDir   = Join-Path $repoRoot 'dist'
-$appinfo   = Join-Path $homeDir 'appinfo.json'
+$scriptDir  = Split-Path -Parent $MyInvocation.MyCommand.Path
+$repoRoot   = Split-Path -Parent $scriptDir
+$homeDir    = Join-Path $repoRoot 'home'
+$serviceDir = Join-Path $repoRoot 'services/org.jazwinski.customwebos.home.service'
+$distDir    = Join-Path $repoRoot 'dist'
+$appinfo    = Join-Path $homeDir 'appinfo.json'
 
 if (-not (Test-Path -LiteralPath $appinfo)) {
     throw "home/appinfo.json not found at: $appinfo"
@@ -38,11 +39,16 @@ try {
     throw "home/appinfo.json is not valid JSON: $($_.Exception.Message)"
 }
 
-$cmd = "ares-package `"$homeDir`" -o `"$distDir`""
+$sources = @($homeDir)
+if (Test-Path -LiteralPath $serviceDir) {
+    $sources += $serviceDir
+}
+
+$cmd = "ares-package " + (($sources | ForEach-Object { '"' + $_ + '"' }) -join ' ') + " -o `"$distDir`""
 
 if ($WhatIf) {
     Write-Output "would run: $cmd"
-    Write-Output "source: $homeDir"
+    foreach ($s in $sources) { Write-Output "source: $s" }
     Write-Output "output: $distDir"
     exit 0
 }
@@ -52,7 +58,7 @@ if (-not (Test-Path -LiteralPath $distDir)) {
 }
 
 Write-Output "running: $cmd"
-& ares-package $homeDir -o $distDir
+& ares-package @sources -o $distDir
 if ($LASTEXITCODE -ne 0) {
     throw "ares-package exited with code $LASTEXITCODE"
 }
