@@ -1,0 +1,9 @@
+{
+  "id": "org.jazwinski.customwebos.home",
+  "title": "CustomWebOS Home",
+  "type": "web",
+  "main": "index.html",
+  "vendor": "Michał Jaźwiński",
+  "version": "0.1.0",
+  "icon": "icon.png"
+}
