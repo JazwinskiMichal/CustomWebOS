@@ -3,7 +3,7 @@
 //
 // Methods exposed:
 //   luna://org.jazwinski.customwebos.home.service/listApps
-//     -> {returnValue: true, apps: Array<{id, title, ...launchPoint fields}>}
+//     -> {returnValue: true, apps: Array<launchPoint> (id, title, icon, etc.)}
 //   luna://org.jazwinski.customwebos.home.service/launch
 //     payload: {id: string}
 //     -> whatever applicationManager/launch returned
@@ -23,38 +23,9 @@ var service = new Service(pkg.name);
 // dynamic-service dispatch, we don't need to self-exit on quiet.
 service.activityManager.exitOnTimeout = false;
 
-var APP_MANAGER = 'luna://com.webos.applicationManager';
-
-function proxyRespond(message, response) {
-    message.respond(response.payload || { returnValue: false, errorText: 'empty response' });
-}
-
-service.register('listApps', function (message) {
-    service.call(APP_MANAGER + '/listLaunchPoints', {}, function (response) {
-        var payload = response && response.payload;
-        if (payload && payload.returnValue === true) {
-            message.respond({
-                returnValue: true,
-                apps: payload.launchPoints || []
-            });
-        } else {
-            message.respond({
-                returnValue: false,
-                errorText: (payload && payload.errorText) || 'listLaunchPoints failed'
-            });
-        }
-    });
+var handlers = require('./handlers.js').createHandlers(function (uri, params, callback) {
+    service.call(uri, params, callback);
 });
 
-service.register('launch', function (message) {
-    var id = message.payload && message.payload.id;
-    if (!id) {
-        message.respond({ returnValue: false, errorText: 'id required' });
-        return;
-    }
-    var params = { id: id };
-    if (message.payload.params) params.params = message.payload.params;
-    service.call(APP_MANAGER + '/launch', params, function (response) {
-        proxyRespond(message, response);
-    });
-});
+service.register('listApps', handlers.listApps);
+service.register('launch', handlers.launch);
