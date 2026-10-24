@@ -4,6 +4,10 @@
     "type":  "web",
     "main":  "index.html",
     "vendor":  "Michał Jaźwiński",
-    "version":  "0.1.2",
-    "icon":  "icon.png"
+    "version":  "0.1.5",
+    "icon":  "icon.png",
+    "requiredPermissions": [
+        "application.operation",
+        "application.launcher"
+    ]
 }

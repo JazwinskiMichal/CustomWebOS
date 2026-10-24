@@ -53,7 +53,7 @@ function mountUI(doc) {
     if (state.status === 'error') {
       var pe = doc.createElement('p');
       pe.className = 'state error';
-      pe.textContent = 'Could not list installed apps: ' + state.statusText;
+      pe.textContent = 'Error: ' + state.statusText;
       root.appendChild(pe);
       return;
     }
@@ -87,20 +87,23 @@ function mountUI(doc) {
     render();
   }
 
-  // On webOS 4.x the raw PalmServiceBridge from an unprivileged webapp
-  // silently gets no response for calls like applicationManager/listLaunchPoints
-  // (service drops the call because the caller lacks a required permission).
-  // Proper fix is to either ship webOSTV.js from the LG SDK (handles the
-  // bus plumbing) or bundle a service component with the right manifest.
-  // Both are M2 work; for M1 we at least surface a timeout instead of
-  // hanging forever on "Loading…".
+  // LG's own OSE bootplate uses WebOSServiceBridge; PalmServiceBridge is a
+  // Palm-era alias that may be present but silently drops responses on
+  // webOS 4.x. Prefer the canonical class, fall back if only the alias is
+  // defined. The 10 s timeout surfaces a dead call either way.
+  function newBridge() {
+    if (typeof WebOSServiceBridge !== 'undefined') return new WebOSServiceBridge();
+    if (typeof PalmServiceBridge !== 'undefined')  return new PalmServiceBridge();
+    return null;
+  }
+
   function lunaCall(uri, payload, onSuccess, onFailure) {
-    if (typeof PalmServiceBridge === 'undefined') {
-      onFailure({ errorText: 'PalmServiceBridge unavailable (not running on TV?)' });
+    var bridge = newBridge();
+    if (!bridge) {
+      onFailure({ errorText: 'no service bridge available (not running on TV?)' });
       return;
     }
     var done = false;
-    var bridge = new PalmServiceBridge();
     bridge.onservicecallback = function (msgText) {
       if (done) return;
       done = true;
@@ -154,29 +157,31 @@ function mountUI(doc) {
     if (code === 13) { activateFocused(); e.preventDefault(); return; }
   }
 
+  // On consumer webOS 4.4, applicationManager/listLaunchPoints is NOT
+  // exposed on the public bus (confirmed via ls-monitor -i: provides
+  // list contains private/configurator.callbacks/all/applications.internal,
+  // no "public"). Unprivileged webapps cannot enumerate installed apps.
+  // Proper enumeration arrives in M2 via a bundled service component
+  // (the Hbchannel pattern); until then, ship a hand-curated list of
+  // likely-installed apps. applicationManager/launch IS public, so
+  // launching from this list works.
+  var FALLBACK_APPS = [
+    { id: 'netflix',             title: 'Netflix' },
+    { id: 'youtube.leanback.v4', title: 'YouTube' },
+    { id: 'amazon',              title: 'Prime Video' },
+    { id: 'spotify-beehive',     title: 'Spotify' },
+    { id: 'com.disney.disneyplus-prod', title: 'Disney+' },
+    { id: 'com.apple.appletv',   title: 'Apple TV' },
+    { id: 'com.webos.app.hdmi1', title: 'HDMI 1' },
+    { id: 'com.webos.app.hdmi2', title: 'HDMI 2' },
+    { id: 'org.webosbrew.hbchannel', title: 'Homebrew Channel' }
+  ];
+
   function fetchLaunchPoints() {
-    lunaCall(
-      'luna://com.webos.applicationManager/listLaunchPoints',
-      {},
-      function (raw) {
-        var r = parseLaunchPoints(raw);
-        if (!r.ok) {
-          state.status = 'error';
-          state.statusText = r.reason;
-          render();
-          return;
-        }
-        state.items = r.items;
-        state.status = 'ready';
-        state.focusIdx = 0;
-        render();
-      },
-      function (err) {
-        state.status = 'error';
-        state.statusText = (err && err.errorText) || 'listLaunchPoints failed';
-        render();
-      }
-    );
+    state.items = FALLBACK_APPS;
+    state.status = 'ready';
+    state.focusIdx = 0;
+    render();
   }
 
   doc.addEventListener('keydown', onKey);
