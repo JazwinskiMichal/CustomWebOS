@@ -112,7 +112,9 @@ test('pointer hover moves focus and click launches', async () => {
     await third.hover()
     await page.waitForFunction((i) => document.querySelector('.app-item.focused').getAttribute('data-id') === i, id)
     await page.locator('.app-item').nth(2).click()
-    await page.waitForFunction((i) => window.__mock.launches.indexOf(i) !== -1, id)
+    await page.waitForFunction(() => window.__mock.launches.length > 0)
+    await page.waitForTimeout(200)
+    assert.deepEqual(await page.evaluate(() => window.__mock.launches), [id])
   } finally { await close() }
 })
 
@@ -313,5 +315,57 @@ test('a launch timeout that fires while the launched app is open leaves no note'
       document.dispatchEvent(new Event('visibilitychange'))
     })
     assert.doesNotMatch(await page.locator('body').textContent(), /Could not open/)
+  } finally { await close() }
+})
+
+test('pressing OK twice quickly launches once', async () => {
+  const { page, close } = await openPreview()
+  try {
+    await waitForServiceList(page)
+    await page.keyboard.press('Enter')
+    await page.keyboard.press('Enter')
+    await page.waitForTimeout(300)
+    assert.equal(await page.evaluate(() => window.__mock.launches.length), 1)
+  } finally { await close() }
+})
+
+test('the All apps row shows an ellipsis glyph', async () => {
+  const { page, close } = await openPreview()
+  try {
+    await waitForServiceList(page)
+    assert.equal(await page.locator('.app-item[data-id="__all__"] .initials').textContent(), '…')
+  } finally { await close() }
+})
+
+for (const mode of ['ok', 'error']) {
+  test('Home fits on screen without scrolling (' + mode + ')', async () => {
+    const { page, close } = await openPreview(mode)
+    try {
+      if (mode === 'ok') await waitForServiceList(page)
+      else await page.waitForSelector('.state.note')
+      const fit = await page.evaluate(() => {
+        const ul = document.querySelector('.app-list')
+        const last = document.querySelector('.app-item[data-id="__all__"]').getBoundingClientRect()
+        return { overflow: ul.scrollHeight - ul.clientHeight, lastBottom: last.bottom }
+      })
+      assert.ok(fit.overflow <= 1, 'Home list overflows by ' + fit.overflow + 'px')
+      assert.ok(fit.lastBottom <= 1080, 'All apps row off-screen at ' + fit.lastBottom)
+    } finally { await close() }
+  })
+}
+
+test('a last app outside Home is remembered via the All apps row', async () => {
+  const { page, close } = await openPreview()
+  try {
+    await waitForServiceList(page)
+    await openAllApps(page)
+    await page.locator('.app-item[data-id="pl.cda"]').click()
+    await page.waitForFunction(() => window.__mock.launches.indexOf('pl.cda') !== -1)
+    await page.reload()
+    await waitForServiceList(page)
+    assert.equal(await page.locator('.app-item.focused').getAttribute('data-id'), '__all__')
+    await page.keyboard.press('Enter')
+    await page.waitForFunction(() => document.querySelector('h1').textContent === 'All apps')
+    assert.equal(await page.locator('.app-item.focused').getAttribute('data-id'), 'pl.cda')
   } finally { await close() }
 })

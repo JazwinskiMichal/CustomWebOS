@@ -43,18 +43,6 @@ test('parseLaunchPoints returns ok:true with empty items on a successful empty-l
   })
 })
 
-test('buildLaunchParams accepts an id in the available list', () => {
-  const r = main.buildLaunchParams('netflix', ['netflix', 'youtube.leanback.v4'])
-  assert.equal(r.ok, true)
-  assert.deepEqual(r.params, {id: 'netflix'})
-})
-
-test('buildLaunchParams rejects a stale id', () => {
-  const r = main.buildLaunchParams('netflix', ['youtube.leanback.v4'])
-  assert.equal(r.ok, false)
-  assert.equal(r.reason, 'stale-id')
-})
-
 test('parseLaunchPoints accepts the home service listApps shape (apps)', () => {
   const r = main.parseLaunchPoints({returnValue: true, apps: [{id: 'netflix', title: 'Netflix', icon: 'x.png'}]})
   assert.deepEqual(r, {ok: true, items: [{id: 'netflix', title: 'Netflix', icon: 'x.png'}]})
@@ -306,4 +294,33 @@ test('loadPrefs and savePrefs never throw', () => {
   assert.equal(main.savePrefs(throwing, {lastAppId: 'x'}), false)
   assert.deepEqual(main.loadPrefs(null), {lastAppId: null})
   assert.equal(main.savePrefs(null, {lastAppId: 'x'}), false)
+})
+
+// --- Deferred minors ---
+
+test('shouldLaunch suppresses the same app within LAUNCH_GUARD_MS', () => {
+  assert.equal(main.LAUNCH_GUARD_MS, 1000)
+  assert.equal(main.shouldLaunch(null, 'a', 5000), true)
+  assert.equal(main.shouldLaunch({id: 'a', at: 5000}, 'a', 5500), false)
+  assert.equal(main.shouldLaunch({id: 'a', at: 5000}, 'a', 6000), true)
+  assert.equal(main.shouldLaunch({id: 'a', at: 5000}, 'b', 5100), true)
+})
+
+test('opening All apps focuses the last launched app when it is there', () => {
+  const s = main.nextState(navState({focusIdx: 2, lastAppId: 'c'}), 'ok')
+  assert.equal(s.view, 'all')
+  assert.equal(main.rowsFor(s)[s.focusIdx].id, 'c')
+  assert.equal(main.nextState(navState({focusIdx: 2, lastAppId: 'zzz'}), 'ok').focusIdx, 0)
+})
+
+test('launching records lastAppId in the state', () => {
+  assert.equal(main.nextState(navState({focusIdx: 1}), 'ok').lastAppId, 'b')
+})
+
+test('bootFocusIndex: a curated last app, a non-curated one (the All apps row), or the first row', () => {
+  const s = navState()
+  assert.equal(main.bootFocusIndex(s, 'b'), 1)
+  assert.equal(main.rowsFor(s)[main.bootFocusIndex(s, 'c')].id, main.ALL_APPS_ID)
+  assert.equal(main.bootFocusIndex(s, 'unknown'), 0)
+  assert.equal(main.bootFocusIndex(s, null), 0)
 })

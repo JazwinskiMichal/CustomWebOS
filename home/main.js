@@ -158,15 +158,6 @@ function focusIndexFor(items, id) {
   return 0;
 }
 
-function buildLaunchParams(id, availableIds) {
-  for (var i = 0; i < availableIds.length; i++) {
-    if (availableIds[i] === id) {
-      return { ok: true, params: { id: id } };
-    }
-  }
-  return { ok: false, reason: 'stale-id' };
-}
-
 // --- Navigation: one pure reducer for keys and the Magic Remote pointer ---
 
 // Sentinel row at the end of the Home view that opens the All apps view.
@@ -200,7 +191,7 @@ function withChanges(state, changes) {
   return next;
 }
 
-// state: { view: 'home'|'all', focusIdx, homeItems, allItems, launch }
+// state: { view: 'home'|'all', focusIdx, homeItems, allItems, launch, lastAppId }
 // action: a keyAction() value, or { type: 'point'|'click', index }.
 // Returns a new state; launch is the id to open, set only by the action
 // that asked for it. Back on Home is swallowed: as the Home app there is
@@ -213,8 +204,10 @@ function nextState(state, action) {
   function activate(i) {
     var row = rows[i];
     if (!row) return withChanges(state, { launch: null });
-    if (row.id === ALL_APPS_ID) return withChanges(state, { view: 'all', focusIdx: 0, launch: null });
-    return withChanges(state, { focusIdx: i, launch: row.id });
+    if (row.id === ALL_APPS_ID) {
+      return withChanges(state, { view: 'all', focusIdx: focusIndexFor(state.allItems, state.lastAppId), launch: null });
+    }
+    return withChanges(state, { focusIdx: i, launch: row.id, lastAppId: row.id });
   }
 
   if (action && typeof action === 'object') {
@@ -236,12 +229,40 @@ function nextState(state, action) {
   return withChanges(state, { launch: null });
 }
 
+// Where focus starts on boot: the last launched app if it's on Home; the
+// All apps row if it's only in All apps (opening it then lands on the
+// app); otherwise the first row.
+function bootFocusIndex(state, lastAppId) {
+  var rows = rowsFor(state);
+  for (var i = 0; i < rows.length; i++) {
+    if (rows[i].id === lastAppId && rows[i].id !== ALL_APPS_ID) return i;
+  }
+  if (state.view === 'home') {
+    for (var j = 0; j < state.allItems.length; j++) {
+      if (state.allItems[j].id === lastAppId) return rows.length - 1;
+    }
+  }
+  return 0;
+}
+
+// One launch per app per LAUNCH_GUARD_MS: a held OK auto-repeats, and with
+// the Magic Remote pointer visible OK can arrive as both keydown and click.
+var LAUNCH_GUARD_MS = 1000;
+
+function shouldLaunch(last, id, now) {
+  return !last || last.id !== id || now - last.at >= LAUNCH_GUARD_MS;
+}
+
 // --- Browser runtime (guarded; does not execute when required from Node) ---
 
 function mountUI(doc) {
   // status/note describe the service; nav is the reducer's state.
-  var state = { status: 'loading', statusText: '', note: '', launchNote: '' };
-  var nav = { view: 'home', focusIdx: 0, homeItems: [], allItems: [], launch: null };
+  var state = { status: 'loading', note: '', launchNote: '' };
+  var nav = { view: 'home', focusIdx: 0, homeItems: [], allItems: [], launch: null, lastAppId: null };
+  var lastLaunch = null;
+  // Until the user does anything, each new list re-derives the boot focus
+  // (the fallback list may not contain the remembered app).
+  var userMoved = false;
   var root = doc.getElementById('root');
   var storage = null;
   try { storage = window.localStorage; } catch (e) { /* unavailable */ }
@@ -271,7 +292,7 @@ function mountUI(doc) {
     if (row.id === ALL_APPS_ID) {
       var more = doc.createElement('span');
       more.className = 'initials';
-      more.textContent = '⋯';
+      more.textContent = '…';
       box.appendChild(more);
     } else if (!url || brokenIcons[url]) {
       box.appendChild(initialsBox(row.title || row.id));
@@ -306,7 +327,6 @@ function mountUI(doc) {
     root.appendChild(header);
 
     if (state.status === 'loading') { appendState('state', 'Loading installed apps…'); return; }
-    if (state.status === 'error') { appendState('state error', 'Error: ' + state.statusText); return; }
     if (!nav.homeItems.length && !nav.allItems.length) { appendState('state', 'No apps found.'); return; }
 
     if (state.note) appendState('state note', state.note);
@@ -401,8 +421,15 @@ function mountUI(doc) {
   function dispatch(action) {
     if (state.status !== 'ready') return;
     var before = nav;
+    userMoved = true;
     nav = nextState(nav, action);
-    if (nav.launch) launch(nav.launch);
+    if (nav.launch) {
+      var now = new Date().getTime();
+      if (shouldLaunch(lastLaunch, nav.launch, now)) {
+        lastLaunch = { id: nav.launch, at: now };
+        launch(nav.launch);
+      }
+    }
     var pointer = typeof action === 'object' && nav.view === before.view;
     if (nav !== before) render(pointer);
   }
@@ -411,6 +438,7 @@ function mountUI(doc) {
     var action = keyAction(e.keyCode);
     if (!action) return;
     e.preventDefault();
+    if (e.repeat && action === 'ok') return; // held OK: launch once
     dispatch(action);
   }
 
@@ -425,8 +453,17 @@ function mountUI(doc) {
     return -1;
   }
 
+  // Hover counts only when the pointer really moved. After the list scrolls
+  // (key navigation recentres it), Blink sends a synthetic mousemove/over at
+  // the unchanged position, which would otherwise steal focus from the keys.
+  var lastPointer = { x: -1, y: -1 };
+
   function onPointer(type) {
     return function (e) {
+      if (type === 'point') {
+        if (e.clientX === lastPointer.x && e.clientY === lastPointer.y) return;
+        lastPointer = { x: e.clientX, y: e.clientY };
+      }
       var index = rowIndex(e.target);
       if (index < 0 || (type === 'point' && index === nav.focusIdx)) return;
       dispatch({ type: type, index: index });
@@ -437,10 +474,10 @@ function mountUI(doc) {
     // Keep focus on the same row across a list swap, but only if real apps
     // were on screen; before the first list the only row is All apps.
     var hadApps = nav.homeItems.length > 0 || nav.allItems.length > 0;
-    var focusedId = hadApps ? rowsFor(nav)[nav.focusIdx].id : prefs.lastAppId;
+    var focusedId = hadApps ? rowsFor(nav)[nav.focusIdx].id : null;
     var split = splitHomeApps(choice.items, homeApps());
-    nav = { view: nav.view, focusIdx: 0, homeItems: split.home, allItems: split.all, launch: null };
-    nav.focusIdx = focusIndexFor(rowsFor(nav), focusedId);
+    nav = { view: nav.view, focusIdx: 0, homeItems: split.home, allItems: split.all, launch: null, lastAppId: prefs.lastAppId };
+    nav.focusIdx = hadApps && userMoved ? focusIndexFor(rowsFor(nav), focusedId) : bootFocusIndex(nav, prefs.lastAppId);
     state.note = choice.note;
     state.status = 'ready';
     render();
@@ -514,7 +551,7 @@ function mountUI(doc) {
 
   doc.addEventListener('keydown', onKey);
   doc.addEventListener('visibilitychange', onVisibility);
-  root.addEventListener('mouseover', onPointer('point'));
+  root.addEventListener('mousemove', onPointer('point'));
   root.addEventListener('click', onPointer('click'));
   render();
   tickClock();
@@ -540,7 +577,6 @@ if (typeof module !== 'undefined' && module.exports) {
     focusIndexFor: focusIndexFor,
     retryDelayMs: retryDelayMs,
     scrollTopFor: scrollTopFor,
-    buildLaunchParams: buildLaunchParams,
     ALL_APPS_ID: ALL_APPS_ID,
     keyAction: keyAction,
     rowsFor: rowsFor,
@@ -548,6 +584,9 @@ if (typeof module !== 'undefined' && module.exports) {
     iconUrl: iconUrl,
     appInitials: appInitials,
     splitHomeApps: splitHomeApps,
+    bootFocusIndex: bootFocusIndex,
+    LAUNCH_GUARD_MS: LAUNCH_GUARD_MS,
+    shouldLaunch: shouldLaunch,
     formatClock: formatClock,
     msToNextMinute: msToNextMinute,
     PREFS_KEY: PREFS_KEY,
