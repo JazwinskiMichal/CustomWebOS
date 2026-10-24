@@ -3,7 +3,9 @@ const assert = require('node:assert/strict')
 const fs = require('node:fs')
 const path = require('node:path')
 
-const appinfo = JSON.parse(fs.readFileSync(path.join(__dirname, 'appinfo.json'), 'utf8'))
+const HOME = path.join(__dirname, '..', 'home')
+
+const appinfo = JSON.parse(fs.readFileSync(path.join(HOME, 'appinfo.json'), 'utf8'))
 
 test('appinfo.id matches namespace and is the home app', () => {
   assert.match(appinfo.id, /^org\.jazwinski\.customwebos\.[a-z]+$/)
@@ -19,12 +21,12 @@ test('appinfo has required webOS fields', () => {
 })
 
 test('index.html references style.css and main.js', () => {
-  const html = fs.readFileSync(path.join(__dirname, 'index.html'), 'utf8')
+  const html = fs.readFileSync(path.join(HOME, 'index.html'), 'utf8')
   assert.match(html, /href=["']style\.css["']/)
   assert.match(html, /src=["']main\.js["']/)
 })
 
 test('icon.png exists and is a PNG', () => {
-  const buf = fs.readFileSync(path.join(__dirname, 'icon.png'))
+  const buf = fs.readFileSync(path.join(HOME, 'icon.png'))
   assert.deepEqual(buf.subarray(0, 8), Buffer.from([0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A]))
 })

@@ -1,5 +1,26 @@
-// CustomWebOS Home — M1 launcher. ES5 only; the webOS 4.4 web engine does
+// CustomWebOS Home — launcher. ES5 only; the webOS 4.4 web engine does
 // not reliably accept newer syntax.
+
+var SELF_ID = 'org.jazwinski.customwebos.home';
+
+// Dev-mode webapps on consumer webOS 4.4 can't call applicationManager
+// directly (LSCallFromApplication is gated on caller privilege), so listing
+// and launching go through the bundled service component instead.
+var SERVICE_URI = 'luna://org.jazwinski.customwebos.home.service';
+
+// Shown immediately on boot, and kept when the service can't be reached, so
+// the screen is never empty while the service is down or still spawning.
+var FALLBACK_APPS = [
+  { id: 'netflix',             title: 'Netflix' },
+  { id: 'youtube.leanback.v4', title: 'YouTube' },
+  { id: 'amazon',              title: 'Prime Video' },
+  { id: 'spotify-beehive',     title: 'Spotify' },
+  { id: 'com.disney.disneyplus-prod', title: 'Disney+' },
+  { id: 'com.apple.appletv',   title: 'Apple TV' },
+  { id: 'com.webos.app.hdmi1', title: 'HDMI 1' },
+  { id: 'com.webos.app.hdmi2', title: 'HDMI 2' },
+  { id: 'org.webosbrew.hbchannel', title: 'Homebrew Channel' }
+];
 
 // Returns a tagged result so the caller can distinguish between:
 //   - a successful response with zero apps installed  (ok:true,  items:[])
@@ -7,19 +28,42 @@
 // webOS luna services sometimes route errors through onSuccess with
 // returnValue:false, so collapsing both cases to [] would show "no apps"
 // when we should show an error.
+// Accepts both applicationManager's shape (launchPoints) and the home
+// service's listApps shape (apps). Entries without an id and the home app
+// itself are dropped.
 function parseLaunchPoints(raw) {
   if (!raw) return { ok: false, reason: 'empty-response' };
   if (raw.returnValue !== true) {
     return { ok: false, reason: raw.errorText || 'service-error' };
   }
+  var list = raw.apps || raw.launchPoints;
   var items = [];
-  if (raw.launchPoints && raw.launchPoints.length) {
-    for (var i = 0; i < raw.launchPoints.length; i++) {
-      var lp = raw.launchPoints[i];
+  if (list && list.length) {
+    for (var i = 0; i < list.length; i++) {
+      var lp = list[i];
+      if (!lp || !lp.id || lp.id === SELF_ID) continue;
       items.push({ id: lp.id, title: lp.title });
     }
   }
   return { ok: true, items: items };
+}
+
+// Picks what to show from a parseLaunchPoints result. A successful empty
+// list is shown as-is ("No apps found"); only a failure falls back.
+function chooseApps(parsed, fallback) {
+  if (parsed.ok) return { items: parsed.items, source: 'service', note: '' };
+  return {
+    items: fallback,
+    source: 'fallback',
+    note: 'Built-in list (home service unavailable: ' + parsed.reason + ')'
+  };
+}
+
+function focusIndexFor(items, id) {
+  for (var i = 0; i < items.length; i++) {
+    if (items[i].id === id) return i;
+  }
+  return 0;
 }
 
 function buildLaunchParams(id, availableIds) {
@@ -34,7 +78,7 @@ function buildLaunchParams(id, availableIds) {
 // --- Browser runtime (guarded; does not execute when required from Node) ---
 
 function mountUI(doc) {
-  var state = { items: [], focusIdx: 0, status: 'loading', statusText: '' };
+  var state = { items: [], focusIdx: 0, status: 'loading', statusText: '', note: '' };
   var root = doc.getElementById('root');
 
   function render() {
@@ -76,6 +120,13 @@ function mountUI(doc) {
       ul.appendChild(li);
     }
     root.appendChild(ul);
+
+    if (state.note) {
+      var pnote = doc.createElement('p');
+      pnote.className = 'state note';
+      pnote.textContent = state.note;
+      root.appendChild(pnote);
+    }
   }
 
   function moveFocus(delta) {
@@ -139,7 +190,7 @@ function mountUI(doc) {
       return;
     }
     lunaCall(
-      'luna://com.webos.applicationManager/launch',
+      SERVICE_URI + '/launch',
       r.params,
       function () {},
       function (err) {
@@ -157,31 +208,26 @@ function mountUI(doc) {
     if (code === 13) { activateFocused(); e.preventDefault(); return; }
   }
 
-  // On consumer webOS 4.4, applicationManager/listLaunchPoints is NOT
-  // exposed on the public bus (confirmed via ls-monitor -i: provides
-  // list contains private/configurator.callbacks/all/applications.internal,
-  // no "public"). Unprivileged webapps cannot enumerate installed apps.
-  // Proper enumeration arrives in M2 via a bundled service component
-  // (the Hbchannel pattern); until then, ship a hand-curated list of
-  // likely-installed apps. applicationManager/launch IS public, so
-  // launching from this list works.
-  var FALLBACK_APPS = [
-    { id: 'netflix',             title: 'Netflix' },
-    { id: 'youtube.leanback.v4', title: 'YouTube' },
-    { id: 'amazon',              title: 'Prime Video' },
-    { id: 'spotify-beehive',     title: 'Spotify' },
-    { id: 'com.disney.disneyplus-prod', title: 'Disney+' },
-    { id: 'com.apple.appletv',   title: 'Apple TV' },
-    { id: 'com.webos.app.hdmi1', title: 'HDMI 1' },
-    { id: 'com.webos.app.hdmi2', title: 'HDMI 2' },
-    { id: 'org.webosbrew.hbchannel', title: 'Homebrew Channel' }
-  ];
+  function showApps(choice) {
+    var focusedId = state.items.length ? state.items[state.focusIdx].id : null;
+    state.items = choice.items;
+    state.note = choice.note;
+    state.status = 'ready';
+    state.focusIdx = focusIndexFor(state.items, focusedId);
+    render();
+  }
 
   function fetchLaunchPoints() {
-    state.items = FALLBACK_APPS;
-    state.status = 'ready';
-    state.focusIdx = 0;
-    render();
+    showApps({ items: FALLBACK_APPS, note: '' });
+    lunaCall(
+      SERVICE_URI + '/listApps',
+      {},
+      function (msg) { showApps(chooseApps(parseLaunchPoints(msg), FALLBACK_APPS)); },
+      function (err) {
+        var reason = (err && err.errorText) || 'listApps failed';
+        showApps(chooseApps({ ok: false, reason: reason }, FALLBACK_APPS));
+      }
+    );
   }
 
   doc.addEventListener('keydown', onKey);
@@ -201,7 +247,12 @@ if (typeof window !== 'undefined' && window.document) {
 
 if (typeof module !== 'undefined' && module.exports) {
   module.exports = {
+    SELF_ID: SELF_ID,
+    SERVICE_URI: SERVICE_URI,
+    FALLBACK_APPS: FALLBACK_APPS,
     parseLaunchPoints: parseLaunchPoints,
+    chooseApps: chooseApps,
+    focusIndexFor: focusIndexFor,
     buildLaunchParams: buildLaunchParams
   };
 }
