@@ -1,0 +1,9 @@
+/.local/
+/dist/
+/node_modules/
+.DS_Store
+*.ipk
+.vs/
+.idea/
+__pycache__/
+*.pyc
