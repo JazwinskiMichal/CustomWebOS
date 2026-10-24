@@ -3,6 +3,7 @@
   "private": true,
   "description": "Dev-machine tooling only. Nothing here ships to the TV.",
   "scripts": {
-    "test": "node --test"
+    "test": "node --test",
+    "dev": "node scripts/dev-server.mjs"
   }
 }

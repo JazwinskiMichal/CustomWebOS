@@ -1,0 +1,205 @@
+{
+  "returnValue": true,
+  "apps": [
+    {
+      "id": "com.appgeneration.app.radiobymytuner",
+      "title": "Radio Internetowe",
+      "icon": null
+    },
+    {
+      "id": "netflix",
+      "title": "Netflix",
+      "icon": "/__dev/fixtures/icon-netflix.png"
+    },
+    {
+      "id": "spotify-beehive",
+      "title": "Spotify",
+      "icon": null
+    },
+    {
+      "id": "com.wbd.stream",
+      "title": "Max",
+      "icon": null
+    },
+    {
+      "id": "amazon",
+      "title": "Prime Video",
+      "icon": "/__dev/fixtures/missing.png"
+    },
+    {
+      "id": "canalplus",
+      "title": "CANAL+",
+      "icon": null
+    },
+    {
+      "id": "youtube.leanback.v4",
+      "title": "YouTube",
+      "icon": null
+    },
+    {
+      "id": "org.jazwinski.customwebos.home",
+      "title": "CustomWebOS Home",
+      "icon": null
+    },
+    {
+      "id": "org.webosbrew.hbchannel",
+      "title": "Homebrew Channel",
+      "icon": null
+    },
+    {
+      "id": "pl.tvp.vod.smarttv",
+      "title": "TVP VOD",
+      "icon": null
+    },
+    {
+      "id": "com.webos.app.browser",
+      "title": "Web Browser",
+      "icon": null
+    },
+    {
+      "id": "ipla",
+      "title": "Polsat Box Go",
+      "icon": null
+    },
+    {
+      "id": "pl.cda",
+      "title": "CDA",
+      "icon": null
+    },
+    {
+      "id": "com.webos.app.browser",
+      "title": "Web Browser",
+      "icon": null
+    },
+    {
+      "id": "com.apple.appletv",
+      "title": "Apple TV",
+      "icon": null
+    },
+    {
+      "id": "com.webos.app.hdmi1",
+      "title": "HDMI 1",
+      "icon": null
+    },
+    {
+      "id": "com.webos.app.hdmi2",
+      "title": "HDMI 2",
+      "icon": null
+    },
+    {
+      "id": "com.webos.app.livetv",
+      "title": "Live TV",
+      "icon": null
+    },
+    {
+      "id": "dev.filler.01",
+      "title": "Filler 01",
+      "icon": null
+    },
+    {
+      "id": "dev.filler.02",
+      "title": "Filler 02",
+      "icon": null
+    },
+    {
+      "id": "dev.filler.03",
+      "title": "Filler 03",
+      "icon": null
+    },
+    {
+      "id": "dev.filler.04",
+      "title": "Filler 04",
+      "icon": null
+    },
+    {
+      "id": "dev.filler.05",
+      "title": "Filler 05",
+      "icon": null
+    },
+    {
+      "id": "dev.filler.06",
+      "title": "Filler 06",
+      "icon": null
+    },
+    {
+      "id": "dev.filler.07",
+      "title": "Filler 07",
+      "icon": null
+    },
+    {
+      "id": "dev.filler.08",
+      "title": "Filler 08",
+      "icon": null
+    },
+    {
+      "id": "dev.filler.09",
+      "title": "Filler 09",
+      "icon": null
+    },
+    {
+      "id": "dev.filler.10",
+      "title": "Filler 10",
+      "icon": null
+    },
+    {
+      "id": "dev.filler.11",
+      "title": "Filler 11",
+      "icon": null
+    },
+    {
+      "id": "dev.filler.12",
+      "title": "Filler 12",
+      "icon": null
+    },
+    {
+      "id": "dev.filler.13",
+      "title": "Filler 13",
+      "icon": null
+    },
+    {
+      "id": "dev.filler.14",
+      "title": "Filler 14",
+      "icon": null
+    },
+    {
+      "id": "dev.filler.15",
+      "title": "Filler 15",
+      "icon": null
+    },
+    {
+      "id": "dev.filler.16",
+      "title": "Filler 16",
+      "icon": null
+    },
+    {
+      "id": "dev.filler.17",
+      "title": "Filler 17",
+      "icon": null
+    },
+    {
+      "id": "dev.filler.18",
+      "title": "Filler 18",
+      "icon": null
+    },
+    {
+      "id": "dev.filler.19",
+      "title": "Filler 19",
+      "icon": null
+    },
+    {
+      "id": "dev.filler.20",
+      "title": "Filler 20",
+      "icon": null
+    },
+    {
+      "id": "dev.filler.21",
+      "title": "Filler 21",
+      "icon": null
+    },
+    {
+      "id": "dev.filler.22",
+      "title": "Filler 22",
+      "icon": null
+    }
+  ]
+}
