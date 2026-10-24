@@ -1,64 +1,135 @@
 #!/bin/sh
 # Register the CustomWebOS home service with the luna-service2 hub on the TV.
-# Writes the six manifest files Hbchannel-style, then triggers a hub reload.
-# Idempotent — safe to re-run.
+# Writes the seven files the hub needs Hbchannel-style (services.d, roles.d,
+# two api-permissions.d, two client-permissions.d, and the manifests.d entry
+# that enumerates the rest), then nudges the hub. Idempotent — safe to re-run.
 #
-# Runs on the TV side, over SSH, as root. Not part of the dev-machine build.
+# Runs on the TV side, over SSH, as root. Not part of the dev-machine build;
+# scripts/register-service.ps1 ships it over and runs it.
+#
+# Usage: register-service.sh [--dry-run] [--unregister] [--system-wrapper]
+#   --dry-run         print what would be written/removed, touch nothing
+#   --unregister      remove the seven files (rollback), then nudge the hub
+#   --system-wrapper  Exec= the stock /usr/bin/run-js-service instead of the
+#                     bundled thirdparty_jail=off wrapper (runs jailed)
 set -e
 
-SVC=org.jazwinski.customwebos.home.service
+DRY=0
+UNREGISTER=0
+SYSTEM_WRAPPER=0
+for arg in "$@"; do
+    case "$arg" in
+        --dry-run)        DRY=1 ;;
+        --unregister)     UNREGISTER=1 ;;
+        --system-wrapper) SYSTEM_WRAPPER=1 ;;
+        *) echo "unknown argument: $arg" >&2; exit 2 ;;
+    esac
+done
+
+APP_ID=org.jazwinski.customwebos.home
+SVC=$APP_ID.service
 BASE=/var/luna-service2-dev
 APP=/media/developer/apps/usr/palm/services/$SVC
+APPINFO=/media/developer/apps/usr/palm/applications/$APP_ID/appinfo.json
 
-if [ ! -d "$APP" ]; then
+SERVICE_FILE="$BASE/services.d/$SVC.service"
+ROLE_FILE="$BASE/roles.d/$SVC.service.json"
+API_FILE="$BASE/api-permissions.d/$SVC.api.json"
+API_PUBLIC_FILE="$BASE/api-permissions.d/$SVC.api.public.json"
+CLIENT_ROOT_FILE="$BASE/client-permissions.d/$SVC.root.json"
+CLIENT_SERVICE_FILE="$BASE/client-permissions.d/$SVC.service.json"
+MANIFEST_FILE="$BASE/manifests.d/$APP_ID.json"
+ALL_FILES="$SERVICE_FILE $ROLE_FILE $API_FILE $API_PUBLIC_FILE $CLIENT_ROOT_FILE $CLIENT_SERVICE_FILE $MANIFEST_FILE"
+
+nudge_hub() {
+    if [ "$DRY" = 1 ]; then
+        echo "would run: pkill -SIGHUP ls-hubd"
+    else
+        pkill -SIGHUP ls-hubd 2>/dev/null || true
+    fi
+}
+
+# write PATH  — content on stdin
+write() {
+    if [ "$DRY" = 1 ]; then
+        echo "would write $1:"
+        cat
+        echo
+    else
+        cat > "$1"
+    fi
+}
+
+if [ "$UNREGISTER" = 1 ]; then
+    for f in $ALL_FILES; do
+        if [ "$DRY" = 1 ]; then echo "would remove $f"; else rm -f "$f"; fi
+    done
+    nudge_hub
+    echo "unregistered $SVC (reboot to be sure the hub forgets it)"
+    exit 0
+fi
+
+if [ "$DRY" = 0 ] && [ ! -d "$APP" ]; then
     echo "service bundle not found at $APP — install the .ipk first" >&2
     exit 1
 fi
 
-mkdir -p "$BASE/services.d" "$BASE/roles.d" "$BASE/api-permissions.d" "$BASE/client-permissions.d"
+# The manifest version tracks the installed app, so it can't drift from
+# appinfo.json between releases.
+VERSION=$(sed -n 's/.*"version"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' "$APPINFO" 2>/dev/null | head -n 1)
+[ -n "$VERSION" ] || VERSION=0.0.0
 
-cat > "$BASE/services.d/$SVC.service" <<EOF
+if [ "$SYSTEM_WRAPPER" = 1 ]; then
+    EXEC="/usr/bin/run-js-service -n $APP"
+else
+    EXEC="$APP/run-js-service -n $APP"
+fi
+
+if [ "$DRY" = 0 ]; then
+    mkdir -p "$BASE/services.d" "$BASE/roles.d" "$BASE/api-permissions.d" \
+             "$BASE/client-permissions.d" "$BASE/manifests.d"
+fi
+
+write "$SERVICE_FILE" <<EOF
 [D-BUS Service]
 Name=$SVC
-Exec=$APP/run-js-service -n $APP
+Exec=$EXEC
 Type=dynamic
 EOF
 
-cat > "$BASE/roles.d/$SVC.service.json" <<EOF
+write "$ROLE_FILE" <<EOF
 {"appId":"$SVC","type":"regular","allowedNames":["$SVC","*"],"permissions":[{"service":"$SVC","outbound":["*"]},{"service":"*","inbound":["*"],"outbound":["*"]}]}
 EOF
 
-cat > "$BASE/api-permissions.d/$SVC.api.json" <<EOF
+write "$API_FILE" <<EOF
 {"$SVC.group":["$SVC/*"]}
 EOF
 
-cat > "$BASE/api-permissions.d/$SVC.api.public.json" <<EOF
+write "$API_PUBLIC_FILE" <<EOF
 {"public":["$SVC/*"]}
 EOF
 
-cat > "$BASE/client-permissions.d/$SVC.root.json" <<EOF
+write "$CLIENT_ROOT_FILE" <<EOF
 {"$SVC*":["all"]}
 EOF
 
-cat > "$BASE/client-permissions.d/$SVC.service.json" <<EOF
+write "$CLIENT_SERVICE_FILE" <<EOF
 {"$SVC*":["public"]}
 EOF
 
 # The hub reads one manifest JSON per app from manifests.d/ which enumerates
 # every file above. Without this, the individual services.d/ etc entries
 # are not loaded.
-mkdir -p "$BASE/manifests.d"
-cat > "$BASE/manifests.d/org.jazwinski.customwebos.home.json" <<EOF
-{"id":"org.jazwinski.customwebos.home","version":"0.2.0","serviceFiles":["$BASE/services.d/$SVC.service"],"roleFiles":["$BASE/roles.d/$SVC.service.json"],"apiPermissionFiles":["$BASE/api-permissions.d/$SVC.api.json","$BASE/api-permissions.d/$SVC.api.public.json"],"clientPermissionFiles":["$BASE/client-permissions.d/$SVC.root.json","$BASE/client-permissions.d/$SVC.service.json"]}
+write "$MANIFEST_FILE" <<EOF
+{"id":"$APP_ID","version":"$VERSION","serviceFiles":["$SERVICE_FILE"],"roleFiles":["$ROLE_FILE"],"apiPermissionFiles":["$API_FILE","$API_PUBLIC_FILE"],"clientPermissionFiles":["$CLIENT_ROOT_FILE","$CLIENT_SERVICE_FILE"]}
 EOF
 
-# Nudge the hub so it rereads the manifests directory.
-pkill -SIGHUP ls-hubd 2>/dev/null || true
+nudge_hub
 
-echo "manifests written for $SVC"
-ls -la "$BASE/services.d/$SVC.service" \
-       "$BASE/roles.d/$SVC.service.json" \
-       "$BASE/api-permissions.d/$SVC.api.json" \
-       "$BASE/api-permissions.d/$SVC.api.public.json" \
-       "$BASE/client-permissions.d/$SVC.root.json" \
-       "$BASE/client-permissions.d/$SVC.service.json"
+if [ "$DRY" = 1 ]; then
+    echo "dry run: nothing written for $SVC"
+else
+    echo "manifests written for $SVC (version $VERSION)"
+    # shellcheck disable=SC2086
+    ls -la $ALL_FILES
+fi
