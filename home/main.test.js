@@ -5,7 +5,7 @@ const path = require('node:path')
 
 const main = require('./main.js')
 
-test('parseLaunchPoints returns id/title for a valid response', () => {
+test('parseLaunchPoints returns ok:true with items for a valid response', () => {
   const raw = {
     returnValue: true,
     launchPoints: [
@@ -13,18 +13,34 @@ test('parseLaunchPoints returns id/title for a valid response', () => {
       {id: 'youtube.leanback.v4', title: 'YouTube'},
     ],
   }
-  assert.deepEqual(main.parseLaunchPoints(raw), [
-    {id: 'netflix', title: 'Netflix'},
-    {id: 'youtube.leanback.v4', title: 'YouTube'},
-  ])
+  assert.deepEqual(main.parseLaunchPoints(raw), {
+    ok: true,
+    items: [
+      {id: 'netflix', title: 'Netflix'},
+      {id: 'youtube.leanback.v4', title: 'YouTube'},
+    ],
+  })
 })
 
-test('parseLaunchPoints returns [] on error-shaped response', () => {
-  assert.deepEqual(main.parseLaunchPoints({returnValue: false, errorText: 'denied'}), [])
+test('parseLaunchPoints returns ok:false with the service errorText on returnValue:false', () => {
+  // webOS luna services sometimes route error payloads through onSuccess with
+  // returnValue:false. The UI must show an error, not "no apps".
+  const r = main.parseLaunchPoints({returnValue: false, errorText: 'denied'})
+  assert.equal(r.ok, false)
+  assert.equal(r.reason, 'denied')
 })
 
-test('parseLaunchPoints returns [] on empty launchpoints array', () => {
-  assert.deepEqual(main.parseLaunchPoints({returnValue: true, launchPoints: []}), [])
+test('parseLaunchPoints returns ok:false when the response is missing or malformed', () => {
+  assert.equal(main.parseLaunchPoints(null).ok, false)
+  assert.equal(main.parseLaunchPoints(undefined).ok, false)
+  assert.equal(main.parseLaunchPoints({}).ok, false)
+})
+
+test('parseLaunchPoints returns ok:true with empty items on a successful empty-list response', () => {
+  assert.deepEqual(main.parseLaunchPoints({returnValue: true, launchPoints: []}), {
+    ok: true,
+    items: [],
+  })
 })
 
 test('buildLaunchParams accepts an id in the available list', () => {

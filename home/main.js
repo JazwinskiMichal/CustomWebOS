@@ -1,15 +1,25 @@
 // CustomWebOS Home — M1 launcher. ES5 only; the webOS 4.4 web engine does
 // not reliably accept newer syntax.
 
+// Returns a tagged result so the caller can distinguish between:
+//   - a successful response with zero apps installed  (ok:true,  items:[])
+//   - a service-level error delivered via onSuccess   (ok:false, reason: string)
+// webOS luna services sometimes route errors through onSuccess with
+// returnValue:false, so collapsing both cases to [] would show "no apps"
+// when we should show an error.
 function parseLaunchPoints(raw) {
-  if (!raw || raw.returnValue !== true) return [];
-  if (!raw.launchPoints || !raw.launchPoints.length) return [];
-  var out = [];
-  for (var i = 0; i < raw.launchPoints.length; i++) {
-    var lp = raw.launchPoints[i];
-    out.push({ id: lp.id, title: lp.title });
+  if (!raw) return { ok: false, reason: 'empty-response' };
+  if (raw.returnValue !== true) {
+    return { ok: false, reason: raw.errorText || 'service-error' };
   }
-  return out;
+  var items = [];
+  if (raw.launchPoints && raw.launchPoints.length) {
+    for (var i = 0; i < raw.launchPoints.length; i++) {
+      var lp = raw.launchPoints[i];
+      items.push({ id: lp.id, title: lp.title });
+    }
+  }
+  return { ok: true, items: items };
 }
 
 function buildLaunchParams(id, availableIds) {
@@ -125,7 +135,14 @@ function mountUI(doc) {
       method: 'listLaunchPoints',
       parameters: {},
       onSuccess: function (raw) {
-        state.items = parseLaunchPoints(raw);
+        var r = parseLaunchPoints(raw);
+        if (!r.ok) {
+          state.status = 'error';
+          state.statusText = r.reason;
+          render();
+          return;
+        }
+        state.items = r.items;
         state.status = 'ready';
         state.focusIdx = 0;
         render();
