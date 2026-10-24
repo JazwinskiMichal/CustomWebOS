@@ -273,3 +273,37 @@ test('msToNextMinute counts to the next minute boundary', () => {
   assert.equal(main.msToNextMinute(new Date(2026, 9, 25, 7, 5, 0, 0)), 60000)
   assert.equal(main.msToNextMinute(new Date(2026, 9, 25, 7, 5, 59, 999)), 1)
 })
+
+// --- Preferences (Task 8) ---
+
+function fakeStorage(initial) {
+  const data = Object.assign({}, initial)
+  return {
+    data,
+    getItem: (k) => (Object.prototype.hasOwnProperty.call(data, k) ? data[k] : null),
+    setItem: (k, v) => { data[k] = String(v) },
+  }
+}
+
+test('prefs round-trip under customwebos.home.v1', () => {
+  const st = fakeStorage()
+  assert.equal(main.savePrefs(st, {lastAppId: 'netflix'}), true)
+  assert.ok(st.data['customwebos.home.v1'])
+  assert.equal(main.PREFS_KEY, 'customwebos.home.v1')
+  assert.deepEqual(main.loadPrefs(st), {lastAppId: 'netflix'})
+})
+
+test('loadPrefs returns defaults for missing, corrupt or odd values', () => {
+  assert.deepEqual(main.loadPrefs(fakeStorage()), {lastAppId: null})
+  assert.deepEqual(main.loadPrefs(fakeStorage({'customwebos.home.v1': '{not json'})), {lastAppId: null})
+  assert.deepEqual(main.loadPrefs(fakeStorage({'customwebos.home.v1': '42'})), {lastAppId: null})
+  assert.deepEqual(main.loadPrefs(fakeStorage({'customwebos.home.v1': '{"lastAppId":7}'})), {lastAppId: null})
+})
+
+test('loadPrefs and savePrefs never throw', () => {
+  const throwing = {getItem: () => { throw new Error('denied') }, setItem: () => { throw new Error('quota') }}
+  assert.deepEqual(main.loadPrefs(throwing), {lastAppId: null})
+  assert.equal(main.savePrefs(throwing, {lastAppId: 'x'}), false)
+  assert.deepEqual(main.loadPrefs(null), {lastAppId: null})
+  assert.equal(main.savePrefs(null, {lastAppId: 'x'}), false)
+})

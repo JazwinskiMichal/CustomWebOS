@@ -200,3 +200,32 @@ test('the header shows a 24h clock', async () => {
     assert.match(await page.locator('.clock').textContent(), /^\d{2}:\d{2}$/)
   } finally { await close() }
 })
+
+test('the last launched app is focused again after a reload', async () => {
+  const { page, close } = await openPreview()
+  try {
+    await waitForServiceList(page)
+    const third = page.locator('.app-item').nth(2)
+    const id = await third.getAttribute('data-id')
+    await third.click()
+    await page.waitForFunction((i) => window.__mock.launches.indexOf(i) !== -1, id)
+    await page.reload()
+    await waitForServiceList(page)
+    assert.equal(await page.locator('.app-item.focused').getAttribute('data-id'), id)
+  } finally { await close() }
+})
+
+test('returning to the page refreshes the app list', async () => {
+  const { page, close } = await openPreview()
+  try {
+    await waitForServiceList(page)
+    const before = await page.evaluate(() => window.__mock.listAppsAnswered)
+    await page.evaluate(() => {
+      Object.defineProperty(document, 'visibilityState', { configurable: true, get: () => 'hidden' })
+      document.dispatchEvent(new Event('visibilitychange'))
+      Object.defineProperty(document, 'visibilityState', { configurable: true, get: () => 'visible' })
+      document.dispatchEvent(new Event('visibilitychange'))
+    })
+    await page.waitForFunction((n) => window.__mock.listAppsAnswered > n, before)
+  } finally { await close() }
+})

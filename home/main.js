@@ -115,6 +115,31 @@ function splitHomeApps(installed, curated) {
   return { home: home, all: all };
 }
 
+// --- Preferences (localStorage). Never throws: a missing, denied or
+// corrupt store just means defaults. ---
+
+var PREFS_KEY = 'customwebos.home.v1';
+
+function loadPrefs(storage) {
+  var prefs = { lastAppId: null };
+  try {
+    var raw = storage && storage.getItem(PREFS_KEY);
+    var saved = raw ? JSON.parse(raw) : null;
+    if (saved && typeof saved.lastAppId === 'string') prefs.lastAppId = saved.lastAppId;
+  } catch (e) { /* defaults */ }
+  return prefs;
+}
+
+function savePrefs(storage, prefs) {
+  try {
+    if (!storage) return false;
+    storage.setItem(PREFS_KEY, JSON.stringify({ lastAppId: prefs.lastAppId }));
+    return true;
+  } catch (e) {
+    return false;
+  }
+}
+
 function pad2(n) { return n < 10 ? '0' + n : String(n); }
 
 // 24-hour local time, HH:MM.
@@ -218,6 +243,9 @@ function mountUI(doc) {
   var state = { status: 'loading', statusText: '', note: '', launchNote: '' };
   var nav = { view: 'home', focusIdx: 0, homeItems: [], allItems: [], launch: null };
   var root = doc.getElementById('root');
+  var storage = null;
+  try { storage = window.localStorage; } catch (e) { /* unavailable */ }
+  var prefs = loadPrefs(storage);
   // Icon URLs that failed to load: render initials for them from then on,
   // so a broken icon doesn't flash back on every re-render.
   var brokenIcons = {};
@@ -346,6 +374,8 @@ function mountUI(doc) {
 
   function launch(id) {
     state.launchNote = '';
+    prefs.lastAppId = id;
+    savePrefs(storage, prefs);
     lunaCall(
       SERVICE_URI + '/launch',
       { id: id },
@@ -396,7 +426,7 @@ function mountUI(doc) {
     // Keep focus on the same row across a list swap, but only if real apps
     // were on screen; before the first list the only row is All apps.
     var hadApps = nav.homeItems.length > 0 || nav.allItems.length > 0;
-    var focusedId = hadApps ? rowsFor(nav)[nav.focusIdx].id : null;
+    var focusedId = hadApps ? rowsFor(nav)[nav.focusIdx].id : prefs.lastAppId;
     var split = splitHomeApps(choice.items, homeApps());
     nav = { view: nav.view, focusIdx: 0, homeItems: split.home, allItems: split.all, launch: null };
     nav.focusIdx = focusIndexFor(rowsFor(nav), focusedId);
@@ -405,22 +435,30 @@ function mountUI(doc) {
     render();
   }
 
+  var retryTimer = null;
+  var listInFlight = false;
+
   function requestApps(attempt) {
     function retry(reason) {
       var choice = chooseApps({ ok: false, reason: reason }, fallbackItems());
       choice.note += ' — retrying';
       showApps(choice);
-      setTimeout(function () { requestApps(attempt + 1); }, retryDelayMs(attempt));
+      retryTimer = setTimeout(function () { retryTimer = null; requestApps(attempt + 1); }, retryDelayMs(attempt));
     }
+    listInFlight = true;
     lunaCall(
       SERVICE_URI + '/listApps',
       {},
       function (msg) {
+        listInFlight = false;
         var parsed = parseLaunchPoints(msg);
         if (parsed.ok) showApps(chooseApps(parsed, fallbackItems()));
         else retry(parsed.reason);
       },
-      function (err) { retry((err && err.errorText) || 'listApps failed'); }
+      function (err) {
+        listInFlight = false;
+        retry((err && err.errorText) || 'listApps failed');
+      }
     );
   }
 
@@ -440,7 +478,16 @@ function mountUI(doc) {
     clockTimer = setTimeout(tickClock, msToNextMinute(now));
   }
 
+  // Coming back from another app: catch up the clock and refresh the list
+  // (apps may have been installed). A pending retry already covers it.
+  function onVisibility() {
+    if (doc.visibilityState !== 'visible') return;
+    tickClock();
+    if (!retryTimer && !listInFlight) requestApps(0);
+  }
+
   doc.addEventListener('keydown', onKey);
+  doc.addEventListener('visibilitychange', onVisibility);
   root.addEventListener('mouseover', onPointer('point'));
   root.addEventListener('click', onPointer('click'));
   render();
@@ -476,6 +523,9 @@ if (typeof module !== 'undefined' && module.exports) {
     appInitials: appInitials,
     splitHomeApps: splitHomeApps,
     formatClock: formatClock,
-    msToNextMinute: msToNextMinute
+    msToNextMinute: msToNextMinute,
+    PREFS_KEY: PREFS_KEY,
+    loadPrefs: loadPrefs,
+    savePrefs: savePrefs
   };
 }
