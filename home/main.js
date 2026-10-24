@@ -87,6 +87,42 @@ function mountUI(doc) {
     render();
   }
 
+  // On webOS 4.x the raw PalmServiceBridge from an unprivileged webapp
+  // silently gets no response for calls like applicationManager/listLaunchPoints
+  // (service drops the call because the caller lacks a required permission).
+  // Proper fix is to either ship webOSTV.js from the LG SDK (handles the
+  // bus plumbing) or bundle a service component with the right manifest.
+  // Both are M2 work; for M1 we at least surface a timeout instead of
+  // hanging forever on "Loading…".
+  function lunaCall(uri, payload, onSuccess, onFailure) {
+    if (typeof PalmServiceBridge === 'undefined') {
+      onFailure({ errorText: 'PalmServiceBridge unavailable (not running on TV?)' });
+      return;
+    }
+    var done = false;
+    var bridge = new PalmServiceBridge();
+    bridge.onservicecallback = function (msgText) {
+      if (done) return;
+      done = true;
+      var msg;
+      try { msg = JSON.parse(msgText); } catch (e) {
+        onFailure({ errorText: 'bad JSON from ' + uri });
+        return;
+      }
+      if (msg && msg.returnValue === false) {
+        onFailure(msg);
+      } else {
+        onSuccess(msg);
+      }
+    };
+    setTimeout(function () {
+      if (done) return;
+      done = true;
+      onFailure({ errorText: 'no response from ' + uri + ' within 10s (webOS 4 bus permission?)' });
+    }, 10000);
+    bridge.call(uri, JSON.stringify(payload));
+  }
+
   function activateFocused() {
     if (state.status !== 'ready' || !state.items.length) return;
     var pick = state.items[state.focusIdx];
@@ -99,22 +135,16 @@ function mountUI(doc) {
       render();
       return;
     }
-    if (!window.webOS || !window.webOS.service) {
-      state.status = 'error';
-      state.statusText = 'webOS bridge unavailable';
-      render();
-      return;
-    }
-    window.webOS.service.request('luna://com.webos.applicationManager', {
-      method: 'launch',
-      parameters: r.params,
-      onSuccess: function () {},
-      onFailure: function (err) {
+    lunaCall(
+      'luna://com.webos.applicationManager/launch',
+      r.params,
+      function () {},
+      function (err) {
         state.status = 'error';
         state.statusText = (err && err.errorText) || 'launch failed';
         render();
       }
-    });
+    );
   }
 
   function onKey(e) {
@@ -125,16 +155,10 @@ function mountUI(doc) {
   }
 
   function fetchLaunchPoints() {
-    if (!window.webOS || !window.webOS.service) {
-      state.status = 'error';
-      state.statusText = 'webOS bridge unavailable (not running on TV?)';
-      render();
-      return;
-    }
-    window.webOS.service.request('luna://com.webos.applicationManager', {
-      method: 'listLaunchPoints',
-      parameters: {},
-      onSuccess: function (raw) {
+    lunaCall(
+      'luna://com.webos.applicationManager/listLaunchPoints',
+      {},
+      function (raw) {
         var r = parseLaunchPoints(raw);
         if (!r.ok) {
           state.status = 'error';
@@ -147,12 +171,12 @@ function mountUI(doc) {
         state.focusIdx = 0;
         render();
       },
-      onFailure: function (err) {
+      function (err) {
         state.status = 'error';
         state.statusText = (err && err.errorText) || 'listLaunchPoints failed';
         render();
       }
-    });
+    );
   }
 
   doc.addEventListener('keydown', onKey);
