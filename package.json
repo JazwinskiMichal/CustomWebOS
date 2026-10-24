@@ -8,6 +8,7 @@
     "check:browser": "node --test \"browser-tests/*.spec.mjs\""
   },
   "devDependencies": {
+    "acorn": "8.19.0",
     "playwright": "1.63.0"
   }
 }
