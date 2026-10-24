@@ -132,3 +132,74 @@ test('FALLBACK_APPS has unique ids and always includes Netflix', () => {
 test('service URIs point at the bundled home service', () => {
   assert.equal(main.SERVICE_URI, 'luna://org.jazwinski.customwebos.home.service')
 })
+
+// --- Navigation (Task 4) ---
+
+const item = (id) => ({id, title: id.toUpperCase(), icon: null})
+function navState(over) {
+  return Object.assign({view: 'home', focusIdx: 0, homeItems: [item('a'), item('b')], allItems: [item('a'), item('b'), item('c')], launch: null}, over)
+}
+
+test('keyAction maps webOS and browser keys', () => {
+  assert.deepEqual([38, 40, 37, 39, 13, 461, 27, 8, 65].map(main.keyAction),
+    ['up', 'down', 'left', 'right', 'ok', 'back', 'back', 'back', null])
+})
+
+test('rowsFor appends the All apps row to the home view only', () => {
+  assert.deepEqual(main.rowsFor(navState()).map((r) => r.id), ['a', 'b', main.ALL_APPS_ID])
+  assert.deepEqual(main.rowsFor(navState({view: 'all'})).map((r) => r.id), ['a', 'b', 'c'])
+})
+
+test('down/up clamp without wrapping', () => {
+  assert.equal(main.nextState(navState({focusIdx: 2}), 'down').focusIdx, 2)
+  assert.equal(main.nextState(navState({focusIdx: 0}), 'up').focusIdx, 0)
+  assert.equal(main.nextState(navState({focusIdx: 0}), 'down').focusIdx, 1)
+})
+
+test('ok on an app sets launch to its id', () => {
+  const s = main.nextState(navState({focusIdx: 1}), 'ok')
+  assert.equal(s.launch, 'b')
+  assert.equal(s.view, 'home')
+})
+
+test('ok on the All apps row switches to the all view without launching', () => {
+  const s = main.nextState(navState({focusIdx: 2}), 'ok')
+  assert.equal(s.view, 'all')
+  assert.equal(s.focusIdx, 0)
+  assert.equal(s.launch, null)
+})
+
+test('back from all returns to home focused on the All apps row', () => {
+  const s = main.nextState(navState({view: 'all', focusIdx: 2}), 'back')
+  assert.equal(s.view, 'home')
+  assert.equal(main.rowsFor(s)[s.focusIdx].id, main.ALL_APPS_ID)
+})
+
+test('back on home is swallowed', () => {
+  const before = navState({focusIdx: 1})
+  assert.deepEqual(main.nextState(before, 'back'), before)
+})
+
+test('launch is cleared on the next action', () => {
+  const launched = main.nextState(navState(), 'ok')
+  assert.equal(main.nextState(launched, 'down').launch, null)
+})
+
+test('point moves focus without launching; click focuses and launches', () => {
+  const p = main.nextState(navState(), {type: 'point', index: 1})
+  assert.equal(p.focusIdx, 1)
+  assert.equal(p.launch, null)
+  const c = main.nextState(navState(), {type: 'click', index: 1})
+  assert.equal(c.focusIdx, 1)
+  assert.equal(c.launch, 'b')
+})
+
+test('click on the All apps row opens the all view', () => {
+  assert.equal(main.nextState(navState(), {type: 'click', index: 2}).view, 'all')
+})
+
+test('point and click ignore out-of-range indices', () => {
+  const s = navState({focusIdx: 1})
+  assert.equal(main.nextState(s, {type: 'point', index: 9}).focusIdx, 1)
+  assert.equal(main.nextState(s, {type: 'click', index: -1}).launch, null)
+})

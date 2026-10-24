@@ -96,74 +96,123 @@ function buildLaunchParams(id, availableIds) {
   return { ok: false, reason: 'stale-id' };
 }
 
+// --- Navigation: one pure reducer for keys and the Magic Remote pointer ---
+
+// Sentinel row at the end of the Home view that opens the All apps view.
+var ALL_APPS_ID = '__all__';
+
+function keyAction(keyCode) {
+  switch (keyCode) {
+    case 38: return 'up';
+    case 40: return 'down';
+    case 37: return 'left';
+    case 39: return 'right';
+    case 13: return 'ok';
+    case 461: return 'back'; // webOS remote Back
+    case 27:                 // browser preview: Escape
+    case 8:  return 'back';  // browser preview: Backspace
+  }
+  return null;
+}
+
+// Rows currently on screen: Home apps plus the All apps row, or every app.
+function rowsFor(state) {
+  if (state.view === 'all') return state.allItems;
+  return state.homeItems.concat([{ id: ALL_APPS_ID, title: 'All apps', icon: null }]);
+}
+
+function withChanges(state, changes) {
+  var next = {};
+  var k;
+  for (k in state) if (state.hasOwnProperty(k)) next[k] = state[k];
+  for (k in changes) if (changes.hasOwnProperty(k)) next[k] = changes[k];
+  return next;
+}
+
+// state: { view: 'home'|'all', focusIdx, homeItems, allItems, launch }
+// action: a keyAction() value, or { type: 'point'|'click', index }.
+// Returns a new state; launch is the id to open, set only by the action
+// that asked for it. Back on Home is swallowed: as the Home app there is
+// nowhere to go back to.
+function nextState(state, action) {
+  var rows = rowsFor(state);
+  var last = rows.length - 1;
+  var idx = state.focusIdx;
+
+  function activate(i) {
+    var row = rows[i];
+    if (!row) return withChanges(state, { launch: null });
+    if (row.id === ALL_APPS_ID) return withChanges(state, { view: 'all', focusIdx: 0, launch: null });
+    return withChanges(state, { focusIdx: i, launch: row.id });
+  }
+
+  if (action && typeof action === 'object') {
+    if (action.index < 0 || action.index > last) return withChanges(state, { launch: null });
+    if (action.type === 'point') return withChanges(state, { focusIdx: action.index, launch: null });
+    if (action.type === 'click') return activate(action.index);
+    return state;
+  }
+  switch (action) {
+    case 'up':   return withChanges(state, { focusIdx: idx > 0 ? idx - 1 : 0, launch: null });
+    case 'down': return withChanges(state, { focusIdx: idx < last ? idx + 1 : last, launch: null });
+    case 'ok':   return activate(idx);
+    case 'back':
+      if (state.view === 'all') {
+        return withChanges(state, { view: 'home', focusIdx: state.homeItems.length, launch: null });
+      }
+      return state;
+  }
+  return withChanges(state, { launch: null });
+}
+
 // --- Browser runtime (guarded; does not execute when required from Node) ---
 
 function mountUI(doc) {
-  var state = { items: [], focusIdx: 0, status: 'loading', statusText: '', note: '' };
+  // status/note describe the service; nav is the reducer's state.
+  var state = { status: 'loading', statusText: '', note: '', launchNote: '' };
+  var nav = { view: 'home', focusIdx: 0, homeItems: [], allItems: [], launch: null };
   var root = doc.getElementById('root');
+
+  function appendState(className, text) {
+    var p = doc.createElement('p');
+    p.className = className;
+    p.textContent = text;
+    root.appendChild(p);
+  }
 
   function render() {
     while (root.firstChild) root.removeChild(root.firstChild);
     var h = doc.createElement('h1');
-    h.textContent = 'CustomWebOS';
+    h.textContent = nav.view === 'all' ? 'All apps' : 'CustomWebOS';
     root.appendChild(h);
 
-    if (state.status === 'loading') {
-      var p = doc.createElement('p');
-      p.className = 'state';
-      p.textContent = 'Loading installed apps…';
-      root.appendChild(p);
-      return;
-    }
-    if (state.status === 'error') {
-      var pe = doc.createElement('p');
-      pe.className = 'state error';
-      pe.textContent = 'Error: ' + state.statusText;
-      root.appendChild(pe);
-      return;
-    }
-    if (!state.items.length) {
-      var pn = doc.createElement('p');
-      pn.className = 'state';
-      pn.textContent = 'No apps found.';
-      root.appendChild(pn);
-      return;
-    }
+    if (state.status === 'loading') { appendState('state', 'Loading installed apps…'); return; }
+    if (state.status === 'error') { appendState('state error', 'Error: ' + state.statusText); return; }
+    if (!nav.homeItems.length && !nav.allItems.length) { appendState('state', 'No apps found.'); return; }
 
-    if (state.note) {
-      var pnote = doc.createElement('p');
-      pnote.className = 'state note';
-      pnote.textContent = state.note;
-      root.appendChild(pnote);
-    }
+    var note = state.launchNote || state.note;
+    if (note) appendState('state note', note);
 
     // The list is its own clipped viewport filling the rest of the screen;
     // keep the focused item centred in it as focus moves.
+    var rows = rowsFor(nav);
     var ul = doc.createElement('ul');
     ul.className = 'app-list';
     var focusedLi = null;
-    for (var i = 0; i < state.items.length; i++) {
+    for (var i = 0; i < rows.length; i++) {
       var li = doc.createElement('li');
-      li.className = 'app-item' + (i === state.focusIdx ? ' focused' : '');
+      li.className = 'app-item' + (i === nav.focusIdx ? ' focused' : '');
       li.setAttribute('tabindex', '-1');
-      li.setAttribute('data-id', state.items[i].id);
-      li.textContent = state.items[i].title || state.items[i].id;
+      li.setAttribute('data-id', rows[i].id);
+      li.setAttribute('data-index', String(i));
+      li.textContent = rows[i].title || rows[i].id;
       ul.appendChild(li);
-      if (i === state.focusIdx) focusedLi = li;
+      if (i === nav.focusIdx) focusedLi = li;
     }
     root.appendChild(ul);
     if (focusedLi) {
       ul.scrollTop = scrollTopFor(focusedLi.offsetTop, focusedLi.offsetHeight, ul.clientHeight, ul.scrollHeight);
     }
-  }
-
-  function moveFocus(delta) {
-    if (!state.items.length) return;
-    var next = state.focusIdx + delta;
-    if (next < 0) next = 0;
-    if (next > state.items.length - 1) next = state.items.length - 1;
-    state.focusIdx = next;
-    render();
   }
 
   // LG's own OSE bootplate uses WebOSServiceBridge; PalmServiceBridge is a
@@ -205,43 +254,63 @@ function mountUI(doc) {
     bridge.call(uri, JSON.stringify(payload));
   }
 
-  function activateFocused() {
-    if (state.status !== 'ready' || !state.items.length) return;
-    var pick = state.items[state.focusIdx];
-    var ids = [];
-    for (var j = 0; j < state.items.length; j++) ids.push(state.items[j].id);
-    var r = buildLaunchParams(pick.id, ids);
-    if (!r.ok) {
-      state.status = 'error';
-      state.statusText = r.reason;
-      render();
-      return;
-    }
+  function launch(id) {
+    state.launchNote = '';
     lunaCall(
       SERVICE_URI + '/launch',
-      r.params,
+      { id: id },
       function () {},
       function (err) {
-        state.status = 'error';
-        state.statusText = (err && err.errorText) || 'launch failed';
+        // A note, not the error screen: the list stays usable.
+        state.launchNote = 'Could not open ' + id + ': ' + ((err && err.errorText) || 'launch failed');
         render();
       }
     );
   }
 
+  function dispatch(action) {
+    if (state.status !== 'ready') return;
+    var before = nav;
+    nav = nextState(nav, action);
+    if (nav.launch) launch(nav.launch);
+    if (nav !== before) render();
+  }
+
   function onKey(e) {
-    var code = e.keyCode;
-    if (code === 38) { moveFocus(-1); e.preventDefault(); return; }
-    if (code === 40) { moveFocus(1); e.preventDefault(); return; }
-    if (code === 13) { activateFocused(); e.preventDefault(); return; }
+    var action = keyAction(e.keyCode);
+    if (!action) return;
+    e.preventDefault();
+    dispatch(action);
+  }
+
+  // Magic Remote pointer: hover focuses, click opens.
+  function rowIndex(target) {
+    while (target && target !== root) {
+      if (target.getAttribute && target.getAttribute('data-index') !== null) {
+        return parseInt(target.getAttribute('data-index'), 10);
+      }
+      target = target.parentNode;
+    }
+    return -1;
+  }
+
+  function onPointer(type) {
+    return function (e) {
+      var index = rowIndex(e.target);
+      if (index < 0 || (type === 'point' && index === nav.focusIdx)) return;
+      dispatch({ type: type, index: index });
+    };
   }
 
   function showApps(choice) {
-    var focusedId = state.items.length ? state.items[state.focusIdx].id : null;
-    state.items = choice.items;
+    // Keep focus on the same row across a list swap, but only if real apps
+    // were on screen; before the first list the only row is All apps.
+    var hadApps = nav.homeItems.length > 0 || nav.allItems.length > 0;
+    var focusedId = hadApps ? rowsFor(nav)[nav.focusIdx].id : null;
+    nav = { view: nav.view, focusIdx: 0, homeItems: choice.items, allItems: choice.items, launch: null };
+    nav.focusIdx = focusIndexFor(rowsFor(nav), focusedId);
     state.note = choice.note;
     state.status = 'ready';
-    state.focusIdx = focusIndexFor(state.items, focusedId);
     render();
   }
 
@@ -270,6 +339,8 @@ function mountUI(doc) {
   }
 
   doc.addEventListener('keydown', onKey);
+  root.addEventListener('mouseover', onPointer('point'));
+  root.addEventListener('click', onPointer('click'));
   render();
   fetchLaunchPoints();
 }
@@ -294,6 +365,10 @@ if (typeof module !== 'undefined' && module.exports) {
     focusIndexFor: focusIndexFor,
     retryDelayMs: retryDelayMs,
     scrollTopFor: scrollTopFor,
-    buildLaunchParams: buildLaunchParams
+    buildLaunchParams: buildLaunchParams,
+    ALL_APPS_ID: ALL_APPS_ID,
+    keyAction: keyAction,
+    rowsFor: rowsFor,
+    nextState: nextState
   };
 }
