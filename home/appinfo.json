@@ -4,7 +4,7 @@
     "type":  "web",
     "main":  "index.html",
     "vendor":  "Michał Jaźwiński",
-    "version":  "0.2.0",
+    "version":  "0.2.3",
     "icon":  "icon.png",
     "requiredPermissions": [
         "application.operation",

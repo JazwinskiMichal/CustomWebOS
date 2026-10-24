@@ -70,6 +70,21 @@ test('parseLaunchPoints skips entries without an id and hides the home app itsel
   assert.deepEqual(r.items, [{id: 'netflix', title: 'Netflix'}])
 })
 
+test('parseLaunchPoints keeps only the first entry for a repeated id', () => {
+  const r = main.parseLaunchPoints({
+    returnValue: true,
+    apps: [
+      {id: 'com.webos.app.browser', title: 'Web Browser'},
+      {id: 'netflix', title: 'Netflix'},
+      {id: 'com.webos.app.browser', title: 'Web Browser (again)'},
+    ],
+  })
+  assert.deepEqual(r.items, [
+    {id: 'com.webos.app.browser', title: 'Web Browser'},
+    {id: 'netflix', title: 'Netflix'},
+  ])
+})
+
 test('chooseApps uses the service list when it answered', () => {
   const items = [{id: 'netflix', title: 'Netflix'}]
   assert.deepEqual(main.chooseApps({ok: true, items}, main.FALLBACK_APPS), {items, source: 'service', note: ''})
@@ -93,6 +108,19 @@ test('focusIndexFor keeps focus on the same app across a list swap', () => {
   assert.equal(main.focusIndexFor(items, 'c'), 2)
   assert.equal(main.focusIndexFor(items, 'gone'), 0)
   assert.equal(main.focusIndexFor([], 'a'), 0)
+})
+
+test('retryDelayMs backs off and then settles at 30 s, never giving up', () => {
+  assert.deepEqual([0, 1, 2, 3, 10, 1000].map(main.retryDelayMs), [5000, 10000, 20000, 30000, 30000, 30000])
+})
+
+test('scrollTopFor centres the focused item, clamped to the list bounds', () => {
+  // 40 items of 100px in an 800px viewport (content 4000px).
+  assert.equal(main.scrollTopFor(0, 100, 800, 4000), 0)        // top: no scroll
+  assert.equal(main.scrollTopFor(300, 100, 800, 4000), 0)      // still in the first screenful
+  assert.equal(main.scrollTopFor(2000, 100, 800, 4000), 1650)  // middle: centred
+  assert.equal(main.scrollTopFor(3900, 100, 800, 4000), 3200)  // last item: bottom-aligned, no overscroll
+  assert.equal(main.scrollTopFor(100, 100, 800, 500), 0)       // list shorter than viewport
 })
 
 test('FALLBACK_APPS has unique ids and always includes Netflix', () => {

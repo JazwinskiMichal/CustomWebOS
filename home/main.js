@@ -29,7 +29,8 @@ var FALLBACK_APPS = [
 // returnValue:false, so collapsing both cases to [] would show "no apps"
 // when we should show an error.
 // Accepts both applicationManager's shape (launchPoints) and the home
-// service's listApps shape (apps). Entries without an id and the home app
+// service's listApps shape (apps). Entries without an id, repeated ids
+// (listLaunchPoints lists the browser twice on-device) and the home app
 // itself are dropped.
 function parseLaunchPoints(raw) {
   if (!raw) return { ok: false, reason: 'empty-response' };
@@ -38,10 +39,12 @@ function parseLaunchPoints(raw) {
   }
   var list = raw.apps || raw.launchPoints;
   var items = [];
+  var seen = {};
   if (list && list.length) {
     for (var i = 0; i < list.length; i++) {
       var lp = list[i];
-      if (!lp || !lp.id || lp.id === SELF_ID) continue;
+      if (!lp || !lp.id || lp.id === SELF_ID || seen.hasOwnProperty(lp.id)) continue;
+      seen[lp.id] = true;
       items.push({ id: lp.id, title: lp.title });
     }
   }
@@ -57,6 +60,24 @@ function chooseApps(parsed, fallback) {
     source: 'fallback',
     note: 'Built-in list (home service unavailable: ' + parsed.reason + ')'
   };
+}
+
+// Delay before re-asking the service after a failed listApps. Right after
+// boot the whole luna bus can stay unresponsive for minutes (seen on-device),
+// so keep trying — backing off to one cheap call every 30 s.
+function retryDelayMs(attempt) {
+  var delays = [5000, 10000, 20000];
+  return attempt < delays.length ? delays[attempt] : 30000;
+}
+
+// scrollTop that centres the focused item in the list viewport, clamped so
+// the list never scrolls past its first or last item.
+function scrollTopFor(itemTop, itemHeight, viewHeight, contentHeight) {
+  var top = itemTop - (viewHeight - itemHeight) / 2;
+  var max = contentHeight - viewHeight;
+  if (top > max) top = max;
+  if (top < 0) top = 0;
+  return Math.round(top);
 }
 
 function focusIndexFor(items, id) {
@@ -109,8 +130,18 @@ function mountUI(doc) {
       return;
     }
 
+    if (state.note) {
+      var pnote = doc.createElement('p');
+      pnote.className = 'state note';
+      pnote.textContent = state.note;
+      root.appendChild(pnote);
+    }
+
+    // The list is its own clipped viewport filling the rest of the screen;
+    // keep the focused item centred in it as focus moves.
     var ul = doc.createElement('ul');
     ul.className = 'app-list';
+    var focusedLi = null;
     for (var i = 0; i < state.items.length; i++) {
       var li = doc.createElement('li');
       li.className = 'app-item' + (i === state.focusIdx ? ' focused' : '');
@@ -118,14 +149,11 @@ function mountUI(doc) {
       li.setAttribute('data-id', state.items[i].id);
       li.textContent = state.items[i].title || state.items[i].id;
       ul.appendChild(li);
+      if (i === state.focusIdx) focusedLi = li;
     }
     root.appendChild(ul);
-
-    if (state.note) {
-      var pnote = doc.createElement('p');
-      pnote.className = 'state note';
-      pnote.textContent = state.note;
-      root.appendChild(pnote);
+    if (focusedLi) {
+      ul.scrollTop = scrollTopFor(focusedLi.offsetTop, focusedLi.offsetHeight, ul.clientHeight, ul.scrollHeight);
     }
   }
 
@@ -217,17 +245,28 @@ function mountUI(doc) {
     render();
   }
 
-  function fetchLaunchPoints() {
-    showApps({ items: FALLBACK_APPS, note: '' });
+  function requestApps(attempt) {
+    function retry(reason) {
+      var choice = chooseApps({ ok: false, reason: reason }, FALLBACK_APPS);
+      choice.note += ' — retrying';
+      showApps(choice);
+      setTimeout(function () { requestApps(attempt + 1); }, retryDelayMs(attempt));
+    }
     lunaCall(
       SERVICE_URI + '/listApps',
       {},
-      function (msg) { showApps(chooseApps(parseLaunchPoints(msg), FALLBACK_APPS)); },
-      function (err) {
-        var reason = (err && err.errorText) || 'listApps failed';
-        showApps(chooseApps({ ok: false, reason: reason }, FALLBACK_APPS));
-      }
+      function (msg) {
+        var parsed = parseLaunchPoints(msg);
+        if (parsed.ok) showApps(chooseApps(parsed, FALLBACK_APPS));
+        else retry(parsed.reason);
+      },
+      function (err) { retry((err && err.errorText) || 'listApps failed'); }
     );
+  }
+
+  function fetchLaunchPoints() {
+    showApps({ items: FALLBACK_APPS, note: '' });
+    requestApps(0);
   }
 
   doc.addEventListener('keydown', onKey);
@@ -253,6 +292,8 @@ if (typeof module !== 'undefined' && module.exports) {
     parseLaunchPoints: parseLaunchPoints,
     chooseApps: chooseApps,
     focusIndexFor: focusIndexFor,
+    retryDelayMs: retryDelayMs,
+    scrollTopFor: scrollTopFor,
     buildLaunchParams: buildLaunchParams
   };
 }

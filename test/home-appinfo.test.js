@@ -30,3 +30,9 @@ test('icon.png exists and is a PNG', () => {
   const buf = fs.readFileSync(path.join(HOME, 'icon.png'))
   assert.deepEqual(buf.subarray(0, 8), Buffer.from([0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A]))
 })
+
+test('style.css avoids CSS the webOS 4.4 engine lacks', () => {
+  // Flex/grid gap needs Chrome 84+; the TV's engine is far older and silently ignores it.
+  const css = fs.readFileSync(path.join(HOME, 'style.css'), 'utf8').replace(/\/\*[\s\S]*?\*\//g, '')
+  assert.doesNotMatch(css, /(^|[\s;{])(row-|column-)?gap\s*:/)
+})
