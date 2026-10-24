@@ -153,7 +153,7 @@ Not in M1: the full launcher UI (list/dock, wallpapers, settings, remote-focus n
 ## Later milestones (sketched, not committed)
 
 - **M2 — Home screen depth**: wallpapers, clock, remote navigation that feels good, settings for the few things Michał cares about. CleanFrame is the reference for shape, not source.
-- **M3 — First background service**: HDMI signal-loss switcher as a luna-service in `services/`. First inhabitant of the orchestrator pattern.
+- **M3 — First background service**: HDMI signal-loss switcher as a luna-service in `services/`. First inhabitant of the orchestrator pattern. **Goal (decided 2026-10-24):** when the active HDMI input loses signal, the TV shows a CustomWebOS photo slideshow fed from my NAS over LAN HTTP (base URL is a setting, not hard-coded). Ideally the slideshow replaces LG's own no-signal screen; if that turns out too hard, launching it over that screen is an acceptable first step. The OLED pixel-refresh screensaver is a separate LG mechanism, and the slideshow must not disable or interfere with it.
 - **M4 — Overlay rendering**: picture-in-picture over foreground apps. The doorbell-camera example becomes testable.
 - **M5+** — individual custom apps in `apps/` as Michał builds them.
 
