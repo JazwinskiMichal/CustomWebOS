@@ -1,5 +1,16 @@
-/* CustomWebOS Home — M1 scope: dark background, large hit targets, visible focus.
-   No decoration beyond what's needed to pick an app with the remote. */
+/* CustomWebOS Home — a dock of white logos on a photo (layout "A", see
+   docs/superpowers/specs/2026-10-25-home-redesign-design.md).
+   Chromium 53: no CSS Grid, no flex gap, no backdrop-filter; flex and mask
+   properties carry their -webkit- prefixes. Only transform and opacity
+   animate on focus. */
+
+:root {
+  --ink: #f5f3ee;
+  --ink-dim: rgba(245, 243, 238, 0.72);
+  --veil: rgba(16, 20, 24, 0.46);
+  --focus-fill: rgba(255, 255, 255, 0.2);
+  --fallback-bg: #0e1114;
+}
 
 * { box-sizing: border-box; }
 
@@ -8,174 +19,235 @@ html, body {
   padding: 0;
   width: 1920px;
   height: 1080px;
-  background: #0b0b0d;
-  color: #f2f2f0;
+  background: var(--fallback-bg);
+  color: var(--ink);
   font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
   overflow: hidden;
   -webkit-user-select: none;
   user-select: none;
 }
 
-/* Column layout: heading and note take their natural height, the app list
-   fills whatever is left of the 1080px stage and scrolls inside it. */
 #root {
+  position: relative;
+  width: 1920px;
+  height: 1080px;
+}
+
+/* Clock and date, top-left. */
+.top {
+  position: absolute;
+  left: 144px;
+  top: 96px;
+}
+
+.clock {
+  font-size: 96px;
+  font-weight: 500;
+  letter-spacing: -2px;
+  line-height: 1;
+}
+
+.date {
+  margin-top: 16px;
+  font-size: 32px;
+  color: var(--ink-dim);
+}
+
+/* "CustomWebOS" stays in the DOM on Home (tests and screen readers) but the
+   photo is the title; All apps shows its heading. */
+.view-title {
+  display: none;
+  margin: 0;
+}
+
+.view-all .view-title {
+  display: block;
+  position: absolute;
+  left: 432px;
+  top: 264px;
+  font-size: 44px;
+  font-weight: 500;
+}
+
+/* The dock: a centred glass panel in a full-width row whose bottom edge sits
+   at 908px (CleanFrame's dock spans 676-908). It grows upwards when a state
+   message needs more room. */
+.dock-row {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 172px;
+  text-align: center;
+}
+
+.dock {
+  display: inline-block;
+  vertical-align: bottom;
+  min-height: 232px;
+  padding: 16px;
+  border-radius: 48px;
+  background: var(--veil);
+  text-align: left;
+}
+
+.dock-track,
+.grid {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.dock-track {
+  display: -webkit-flex;
+  display: flex;
+}
+
+/* Tiles: 168 x 200 with 4px side margins, so the 10 Home tiles (9 curated +
+   All apps) need 1720px. Margins, not flex gap (Chrome 84+). */
+.app-item {
   display: -webkit-flex;
   display: flex;
   -webkit-flex-direction: column;
   flex-direction: column;
-  width: 100%;
-  height: 100%;
-  padding: 64px 128px;
-}
-
-/* Title left, clock right. */
-header {
-  display: -webkit-flex;
-  display: flex;
-  -webkit-justify-content: space-between;
-  justify-content: space-between;
-  -webkit-align-items: baseline;
-  align-items: baseline;
-  -webkit-flex-shrink: 0;
-  flex-shrink: 0;
-  max-width: 1664px;
-  margin: 0 0 32px 0;
-}
-
-.clock {
-  font-size: 48px;
-  font-weight: 300;
-  color: #c7c7c2;
-}
-
-h1 {
-  font-size: 48px;
-  font-weight: 400;
-  letter-spacing: -0.01em;
-  margin: 0;
-  color: #f2f2f0;
-}
-
-.app-list {
-  list-style: none;
-  padding: 0;
-  margin: 0;
-  max-width: 960px;
-  /* min-height: 0 lets the flex item shrink below its content height, so the
-     list clips and scrolls instead of pushing past the bottom of the screen. */
-  -webkit-flex: 1 1 auto;
-  flex: 1 1 auto;
-  min-height: 0;
-  overflow: hidden;
-  /* offsetTop of each item is measured from here (see scrollTopFor). */
-  position: relative;
-}
-
-.app-item {
-  display: block;
-  /* Compact enough that Home (9 apps + All apps, plus a note) fits the
-     stage without scrolling: 10 rows x 80px = 800px of ~860px. */
-  padding: 10px 28px;
-  background: #16161a;
-  border: 2px solid transparent;
-  border-radius: 8px;
-  font-size: 30px;
-  line-height: 1.2;
-  color: #c7c7c2;
-  outline: none;
-  /* margin, not flex gap: gap on flex containers needs Chrome 84+, far
-     newer than the webOS 4.4 web engine. */
-  margin-bottom: 8px;
-  transition: background-color 120ms ease, border-color 120ms ease, color 120ms ease;
-}
-
-/* Icon box before the title: the app's own icon, or its initials. */
-.app-item {
-  display: -webkit-flex;
-  display: flex;
-  -webkit-align-items: center;
-  align-items: center;
-}
-
-.app-icon {
-  display: -webkit-flex;
-  display: flex;
   -webkit-align-items: center;
   align-items: center;
   -webkit-justify-content: center;
   justify-content: center;
   -webkit-flex-shrink: 0;
   flex-shrink: 0;
-  width: 48px;
-  height: 48px;
-  margin-right: 24px;
-  border-radius: 8px;
-  overflow: hidden;
-  background: #24242a;
+  width: 168px;
+  height: 200px;
+  margin: 0 4px;
+  border-radius: 32px;
+  outline: none;
+  color: var(--ink);
+  transition: background-color 120ms ease;
 }
 
-.app-icon img {
-  width: 48px;
-  height: 48px;
+.app-item.focused {
+  background: var(--focus-fill);
+}
+
+.mark {
+  display: -webkit-flex;
+  display: flex;
+  -webkit-align-items: center;
+  align-items: center;
+  -webkit-justify-content: center;
+  justify-content: center;
+  width: 96px;
+  height: 80px;
+}
+
+/* White monochrome logo: the SVG is a mask, the colour comes from --ink. */
+.logo {
+  display: block;
+  width: 96px;
+  height: 72px;
+  background-color: var(--ink);
+  -webkit-mask-repeat: no-repeat;
+  mask-repeat: no-repeat;
+  -webkit-mask-position: center;
+  mask-position: center;
+  -webkit-mask-size: contain;
+  mask-size: contain;
+}
+
+/* An app with no bundled logo: the TV's own icon, turned white. */
+.icon img {
+  display: block;
+  width: 72px;
+  height: 72px;
   object-fit: contain;
+  -webkit-filter: brightness(0) invert(1);
+  filter: brightness(0) invert(1);
 }
 
-.app-icon .initials {
-  font-size: 20px;
+.initials {
+  font-size: 40px;
   font-weight: 600;
   letter-spacing: 0.02em;
-  color: #c7c7c2;
 }
 
-.app-item:focus,
-.app-item.focused {
-  background: #1f1f24;
-  border-color: #f2f2f0;
-  color: #f2f2f0;
-}
-
-.state {
-  font-size: 28px;
-  color: #7a7a74;
-  padding: 24px 0;
-}
-
-
-.state.note {
-  font-size: 22px;
-  padding: 0 0 24px 0;
-  margin: 0;
-  max-width: 1664px;
-  -webkit-flex-shrink: 0;
-  flex-shrink: 0;
-  /* Always one line, so Home's rows never get pushed off the stage. */
+.app-title {
+  display: block;
+  max-width: 152px;
+  margin-top: 16px;
+  font-size: 26px;
+  line-height: 32px;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
-/* Error screen until the home service first answers (no list behind it). */
+/* All apps: rows of 6 tiles (GRID_COLS in main.js), flex wrap (no CSS Grid),
+   scrolled to keep the focused row in view. */
+.grid {
+  position: absolute;
+  left: 432px;
+  width: 1056px;
+  top: 344px;
+  bottom: 64px;
+  overflow: hidden;
+  display: -webkit-flex;
+  display: flex;
+  -webkit-flex-wrap: wrap;
+  flex-wrap: wrap;
+  -webkit-align-content: flex-start;
+  align-content: flex-start;
+}
+
+.grid .app-item {
+  margin-bottom: 8px;
+}
+
+/* Loading, error and "no apps" in the dock's place. */
+.dock-state {
+  width: 1200px;
+}
+
+.dock-state .state-panel {
+  padding: 24px 40px;
+}
+
+.state {
+  margin: 0;
+  font-size: 32px;
+  color: var(--ink-dim);
+}
+
 .state.error-title {
   font-size: 44px;
   font-weight: 600;
-  color: #f2f2f0;
-  padding: 48px 0 16px 0;
-  margin: 0;
+  color: var(--ink);
+  padding: 0 0 16px 0;
 }
 
 .state.error-reason {
   font-size: 26px;
-  color: #c7c7c2;
   font-family: monospace;
   padding: 0 0 24px 0;
-  margin: 0;
-  max-width: 1400px;
   word-wrap: break-word;
 }
 
 .state.error-retry {
   font-size: 26px;
-  padding: 0;
-  margin: 0;
-  max-width: 1400px;
+}
+
+/* The launch note, one line, just above the dock. */
+.note-panel {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 432px;
+  text-align: center;
+}
+
+.state.note {
+  display: inline-block;
+  max-width: 1600px;
+  font-size: 26px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }

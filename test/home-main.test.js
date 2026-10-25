@@ -401,3 +401,10 @@ test('logoFor maps curated apps and All apps to bundled logos', () => {
   assert.equal(main.logoFor(main.ALL_APPS_ID), 'assets/icons/apps.svg')
   assert.equal(main.logoFor('pl.cda'), null)
 })
+
+test('a failed app list shows loading during the grace period, then the error', () => {
+  assert.equal(main.LOADING_GRACE_MS, 30000)
+  assert.equal(main.failureView(0), 'loading')
+  assert.equal(main.failureView(29999), 'loading')
+  assert.equal(main.failureView(30000), 'error')
+})

@@ -20,15 +20,28 @@ test.after(async () => {
 })
 
 // Opens the preview at the TV's 1920x1080 stage and waits for the first
-// list render. The mock answers listApps after ~150 ms.
+// render. The mock answers listApps after ~150 ms.
 async function openPreview(mode = 'ok') {
   const page = await browser.newPage({ viewport: { width: 1920, height: 1080 } })
   await page.goto(server.url + '?mock=' + mode)
-  await page.waitForSelector('.app-item, .state')
+  await page.waitForSelector('.clock')
   return { page, close: () => page.close() }
 }
 
-const APP_ROWS = '.app-item:not([data-id="__all__"])'
+// Failures in the first 30 s keep the loading state (LOADING_GRACE_MS), so
+// error-screen tests run the page on a fake clock and move it past that.
+async function openPastGrace(mode) {
+  const page = await browser.newPage({ viewport: { width: 1920, height: 1080 } })
+  await page.clock.install()
+  await page.goto(server.url + '?mock=' + mode)
+  await page.waitForSelector('.state-panel')
+  await page.clock.runFor(30500)
+  await page.waitForSelector('.state.error-title')
+  return { page, close: () => page.close() }
+}
+
+const DOCK_TILES = '.dock .app-item'
+const APP_TILES = '.dock .app-item:not([data-id="__all__"])'
 
 // Wait on the mock's answer counter, then one frame for the render.
 async function waitForServiceList(page) {
@@ -41,89 +54,168 @@ async function openAllApps(page) {
   await page.waitForFunction(() => document.querySelector('h1').textContent === 'All apps')
 }
 
+const focusedId = (page) => page.evaluate(() => document.querySelector('.app-item.focused').getAttribute('data-id'))
+const focusedIndex = (page) => page.evaluate(() => Array.from(document.querySelectorAll('.app-item')).findIndex((l) => l.classList.contains('focused')))
+
+function inside(inner, outer) {
+  return inner.x >= outer.x - 0.5 && inner.y >= outer.y - 0.5 &&
+    inner.x + inner.width <= outer.x + outer.width + 0.5 && inner.y + inner.height <= outer.y + outer.height + 0.5
+}
+
+const STAGE = { x: 0, y: 0, width: 1920, height: 1080 }
+
 const CURATED = ['netflix', 'youtube.leanback.v4', 'amazon', 'com.wbd.stream', 'canalplus',
   'com.apple.appletv', 'com.webos.app.livetv', 'com.webos.app.hdmi1', 'org.webosbrew.hbchannel']
+
+// --- Home dock ---
 
 test('Home shows the curated apps in config order, then All apps', async () => {
   const { page, close } = await openPreview()
   try {
     await waitForServiceList(page)
-    const ids = await page.locator('.app-item').evaluateAll((els) => els.map((e) => e.getAttribute('data-id')))
+    const ids = await page.locator(DOCK_TILES).evaluateAll((els) => els.map((e) => e.getAttribute('data-id')))
     assert.deepEqual(ids, CURATED.concat(['__all__']))
   } finally { await close() }
 })
 
-test('All apps lists every service app alphabetically', async () => {
+test('focus moves along the dock without rebuilding it', async () => {
   const { page, close } = await openPreview()
   try {
     await waitForServiceList(page)
-    await openAllApps(page)
-    const titles = await page.locator('.app-title').evaluateAll((els) => els.map((e) => e.textContent))
-    assert.equal(titles.length, 38)
-    assert.deepEqual(titles, titles.slice().sort((a, b) => a.localeCompare(b)))
+    await page.evaluate(() => {
+      window.__added = 0
+      new MutationObserver((records) => {
+        for (const r of records) window.__added += r.addedNodes.length
+      }).observe(document.getElementById('root'), { childList: true, subtree: true })
+    })
+    const start = await focusedIndex(page)
+    for (let i = 0; i < 5; i++) await page.keyboard.press('ArrowRight')
+    assert.equal(await focusedIndex(page), start + 5)
+    assert.equal(await page.evaluate(() => window.__added), 0)
   } finally { await close() }
 })
 
-test('focused item stays on screen while scrolling', async () => {
+test('all ten tiles fit inside the dock and the dock inside the stage', async () => {
   const { page, close } = await openPreview()
   try {
     await waitForServiceList(page)
-    await openAllApps(page)
-    for (let i = 0; i < 25; i++) await page.keyboard.press('ArrowDown')
-    const box = await page.locator('.app-item.focused').boundingBox()
-    assert.ok(box.y >= 0 && box.y + box.height <= 1080, 'focused row on screen: ' + JSON.stringify(box))
-    assert.ok(await page.locator('.app-list').evaluate((ul) => ul.scrollTop) > 0)
+    const dock = await page.locator('.dock').boundingBox()
+    assert.ok(inside(dock, STAGE), 'dock ' + JSON.stringify(dock))
+    const tiles = await page.locator(DOCK_TILES).evaluateAll((els) => els.map((e) => e.getBoundingClientRect().toJSON()))
+    assert.equal(tiles.length, 10)
+    for (const t of tiles) assert.ok(inside(t, dock), 'tile ' + JSON.stringify(t))
   } finally { await close() }
 })
 
-test('error mode shows an error screen with the reason and no app list', async () => {
-  const { page, close } = await openPreview('error')
+test('fewer curated apps centre the dock and keep All apps last', async () => {
+  const { page, close } = await openPreview('few')
   try {
-    await page.waitForSelector('.state.error-title')
-    assert.equal(await page.locator('.state.error-title').textContent(), "Can't reach the home service")
-    assert.equal(await page.locator('.state.error-reason').textContent(), 'mock error')
-    assert.match(await page.locator('.state.error-retry').textContent(), /Trying again in 5 s/)
-    assert.equal(await page.locator('.app-item').count(), 0)
+    await waitForServiceList(page)
+    const ids = await page.locator(DOCK_TILES).evaluateAll((els) => els.map((e) => e.getAttribute('data-id')))
+    assert.deepEqual(ids, ['netflix', 'youtube.leanback.v4', '__all__'])
+    const dock = await page.locator('.dock').boundingBox()
+    assert.ok(Math.abs(dock.x + dock.width / 2 - 960) <= 2, 'dock centre ' + (dock.x + dock.width / 2))
   } finally { await close() }
 })
+
+test('a long title stays on one line', async () => {
+  const { page, close } = await openPreview()
+  try {
+    await waitForServiceList(page)
+    const t = await page.locator('.app-item[data-id="org.webosbrew.hbchannel"] .app-title').evaluate((e) => ({
+      fits: e.scrollHeight <= e.clientHeight + 1, overflow: getComputedStyle(e).textOverflow, wrap: getComputedStyle(e).whiteSpace
+    }))
+    assert.deepEqual(t, { fits: true, overflow: 'ellipsis', wrap: 'nowrap' })
+  } finally { await close() }
+})
+
+test('the date shows in Polish and updates at midnight', async () => {
+  const page = await browser.newPage({ viewport: { width: 1920, height: 1080 } })
+  try {
+    await page.clock.install({ time: new Date(2026, 9, 25, 23, 59, 30) })
+    await page.goto(server.url + '?mock=ok')
+    await page.waitForSelector('.date')
+    assert.equal(await page.locator('.date').textContent(), 'niedziela, 25 października')
+    await page.clock.runFor(60000)
+    assert.equal(await page.locator('.date').textContent(), 'poniedziałek, 26 października')
+  } finally { await page.close() }
+})
+
+test('the header shows a 24h clock', async () => {
+  const { page, close } = await openPreview()
+  try {
+    assert.match(await page.locator('.clock').textContent(), /^\d{2}:\d{2}$/)
+  } finally { await close() }
+})
+
+test('curated apps and All apps show masked logos', async () => {
+  const { page, close } = await openPreview()
+  try {
+    await waitForServiceList(page)
+    const mask = (id) => page.locator('.app-item[data-id="' + id + '"] .logo').evaluate((e) => e.style.webkitMaskImage || e.style.maskImage)
+    assert.match(await mask('netflix'), /assets\/icons\/netflix\.svg/)
+    assert.match(await mask('__all__'), /assets\/icons\/apps\.svg/)
+  } finally { await close() }
+})
+
+// --- Loading and error states ---
 
 test('nothing shows a list before the service answers', async () => {
   const { page, close } = await openPreview('slow')
   try {
     await page.waitForTimeout(500)
     assert.equal(await page.locator('.app-item').count(), 0)
-    assert.match(await page.locator('body').textContent(), /Loading installed apps/)
+    assert.match(await page.locator('.state-panel').textContent(), /Loading installed apps/)
   } finally { await close() }
 })
 
-test('the error screen gives way to the list once the service answers', async () => {
+test('a failed list keeps the loading state during the grace period', async () => {
+  const page = await browser.newPage({ viewport: { width: 1920, height: 1080 } })
+  try {
+    await page.clock.install()
+    await page.goto(server.url + '?mock=error')
+    await page.waitForSelector('.state-panel')
+    await page.clock.runFor(29000)
+    assert.equal(await page.locator('.state.error-title').count(), 0)
+    assert.match(await page.locator('.state-panel').textContent(), /Loading installed apps/)
+    assert.ok(await page.evaluate(() => window.__mock.listAppsAnswered) >= 2, 'retried during the grace period')
+  } finally { await page.close() }
+})
+
+test('a cold start that fails once and then answers never shows the error', async () => {
   const { page, close } = await openPreview('recover')
   try {
-    await page.waitForSelector('.state.error-title')
-    await page.waitForSelector('.app-item', { timeout: 8000 })
+    await page.waitForSelector('.dock .app-item', { timeout: 8000 })
     assert.equal(await page.locator('.state.error-title').count(), 0)
-    assert.equal(await page.locator(APP_ROWS).count(), CURATED.length)
+    assert.equal(await page.locator(APP_TILES).count(), CURATED.length)
+  } finally { await close() }
+})
+
+test('error mode shows an error screen with the reason and no app list', async () => {
+  const { page, close } = await openPastGrace('error')
+  try {
+    assert.equal(await page.locator('.state-panel .state.error-title').textContent(), "Can't reach the home service")
+    assert.equal(await page.locator('.state.error-reason').textContent(), 'mock error')
+    assert.match(await page.locator('.state.error-retry').textContent(), /Trying again in \d+ s/)
+    assert.equal(await page.locator('.app-item').count(), 0)
   } finally { await close() }
 })
 
 test('keys on the error screen launch nothing', async () => {
-  const { page, close } = await openPreview('error')
+  const { page, close } = await openPastGrace('error')
   try {
-    await page.waitForSelector('.state.error-title')
     await page.keyboard.press('Enter')
-    await page.keyboard.press('ArrowDown')
+    await page.keyboard.press('ArrowRight')
     await page.keyboard.press('Enter')
-    await page.waitForTimeout(300)
     assert.equal(await page.evaluate(() => window.__mock.launches.length), 0)
   } finally { await close() }
 })
 
 test('a long error reason stays on screen', async () => {
-  const { page, close } = await openPreview('errorlong')
+  const { page, close } = await openPastGrace('errorlong')
   try {
-    await page.waitForSelector('.state.error-retry')
     const b = await page.locator('.state.error-retry').boundingBox()
-    assert.ok(b.y + b.height <= 1080 && b.x + b.width <= 1920, JSON.stringify(b))
+    assert.ok(inside(b, STAGE), JSON.stringify(b))
     assert.equal(await page.evaluate(() => document.documentElement.scrollWidth), 1920)
   } finally { await close() }
 })
@@ -135,6 +227,8 @@ test('empty mode shows "No apps found."', async () => {
   } finally { await close() }
 })
 
+// --- Launching ---
+
 test('launch reports the preview limitation', async () => {
   const { page, close } = await openPreview()
   try {
@@ -145,136 +239,70 @@ test('launch reports the preview limitation', async () => {
   } finally { await close() }
 })
 
+test('a failed launch keeps the dock on screen, with a one-line note above it', async () => {
+  const { page, close } = await openPreview()
+  try {
+    await waitForServiceList(page)
+    await page.keyboard.press('Enter')
+    await page.waitForFunction(() => /launching requires the TV/.test(document.body.textContent))
+    assert.equal(await page.locator(APP_TILES).count(), CURATED.length)
+    const note = await page.locator('.state-panel .state.note').boundingBox()
+    const dock = await page.locator('.dock').boundingBox()
+    assert.ok(note.y + note.height <= dock.y, 'note above the dock')
+    assert.ok(inside(dock, STAGE))
+    assert.equal(await page.locator('.state.note').evaluate((e) => getComputedStyle(e).whiteSpace), 'nowrap')
+  } finally { await close() }
+})
+
 test('pointer hover moves focus and click launches', async () => {
   const { page, close } = await openPreview()
   try {
     await waitForServiceList(page)
-    const third = page.locator('.app-item').nth(2)
+    const third = page.locator(DOCK_TILES).nth(2)
     const id = await third.getAttribute('data-id')
     await third.hover()
     await page.waitForFunction((i) => document.querySelector('.app-item.focused').getAttribute('data-id') === i, id)
-    await page.locator('.app-item').nth(2).click()
+    await third.click()
     await page.waitForFunction(() => window.__mock.launches.length > 0)
     await page.waitForTimeout(200)
     assert.deepEqual(await page.evaluate(() => window.__mock.launches), [id])
   } finally { await close() }
 })
 
-test('a failed launch keeps the list on screen', async () => {
+test('Escape on Home is swallowed; the dock stays', async () => {
   const { page, close } = await openPreview()
   try {
     await waitForServiceList(page)
-    await page.keyboard.press('Enter')
-    await page.waitForFunction(() => /launching requires the TV/.test(document.body.textContent))
-    assert.equal(await page.locator(APP_ROWS).count(), CURATED.length)
-  } finally { await close() }
-})
-
-test('Escape on Home is swallowed; the list stays', async () => {
-  const { page, close } = await openPreview()
-  try {
-    await waitForServiceList(page)
-    await page.keyboard.press('ArrowDown')
-    const focused = () => page.evaluate(() => document.querySelector('.app-item.focused').getAttribute('data-id'))
-    const before = await focused()
+    await page.keyboard.press('ArrowRight')
+    const before = await focusedId(page)
     await page.keyboard.press('Escape')
-    assert.equal(await page.locator(APP_ROWS).count(), CURATED.length)
-    assert.equal(await focused(), before)
+    assert.equal(await page.locator(APP_TILES).count(), CURATED.length)
+    assert.equal(await focusedId(page), before)
     assert.equal(await page.locator('h1').textContent(), 'CustomWebOS')
   } finally { await close() }
 })
 
-test('All apps opens from Home and Back returns to its row', async () => {
+test('pressing OK twice quickly launches once', async () => {
   const { page, close } = await openPreview()
   try {
     await waitForServiceList(page)
-    await page.locator('.app-item[data-id="__all__"]').click()
-    await page.waitForFunction(() => document.querySelector('h1').textContent === 'All apps')
-    await page.keyboard.press('Escape')
-    await page.waitForFunction(() => document.querySelector('.app-item.focused').getAttribute('data-id') === '__all__')
+    await page.keyboard.press('Enter')
+    await page.keyboard.press('Enter')
+    await page.waitForTimeout(300)
+    assert.equal(await page.evaluate(() => window.__mock.launches.length), 1)
   } finally { await close() }
 })
 
-test('rows show the app icon, or initials when it is missing or broken', async () => {
+test('after a failed launch, OK can retry straight away', async () => {
   const { page, close } = await openPreview()
   try {
     await waitForServiceList(page)
-    const netflixImg = page.locator('.app-item[data-id="netflix"] img')
-    await page.waitForFunction(() => {
-      const img = document.querySelector('.app-item[data-id="netflix"] img')
-      return img && img.complete && img.naturalWidth > 0
-    })
-    assert.equal(await netflixImg.count(), 1)
-    // Prime Video's fixture icon 404s: initials replace it, no broken img left.
-    await page.waitForFunction(() => {
-      const row = document.querySelector('.app-item[data-id="amazon"]')
-      return row && !row.querySelector('img') && row.querySelector('.initials')
-    })
-    assert.equal(await page.locator('.app-item[data-id="amazon"] .initials').textContent(), 'PV')
-    // No icon at all: initials straight away (Spotify is only in All apps).
-    await openAllApps(page)
-    assert.equal(await page.locator('.app-item[data-id="spotify-beehive"] .initials').textContent(), 'S')
+    await page.keyboard.press('Enter')
+    await page.waitForFunction(() => window.__mock.launches.length === 1 && /launching requires the TV/.test(document.body.textContent))
+    await page.keyboard.press('Enter')
+    await page.waitForFunction(() => window.__mock.launches.length === 2)
   } finally { await close() }
 })
-
-test('a broken icon stays as initials after re-renders', async () => {
-  const { page, close } = await openPreview()
-  try {
-    await waitForServiceList(page)
-    await page.waitForFunction(() => !document.querySelector('.app-item[data-id="amazon"] img'))
-    // Record any <img> re-inserted into the Prime Video row, however briefly.
-    await page.evaluate(() => {
-      window.__brokenImgReinserted = false
-      new MutationObserver((records) => {
-        for (const r of records) for (const n of r.addedNodes) {
-          const row = n.querySelector && n.querySelector('.app-item[data-id="amazon"]')
-          if (row && row.querySelector('img')) window.__brokenImgReinserted = true
-        }
-      }).observe(document.getElementById('root'), { childList: true, subtree: true })
-    })
-    for (let i = 0; i < 3; i++) await page.keyboard.press('ArrowDown')
-    assert.equal(await page.evaluate(() => window.__brokenImgReinserted), false)
-  } finally { await close() }
-})
-
-test('the header shows a 24h clock', async () => {
-  const { page, close } = await openPreview()
-  try {
-    await page.waitForSelector('.clock')
-    assert.match(await page.locator('.clock').textContent(), /^\d{2}:\d{2}$/)
-  } finally { await close() }
-})
-
-test('the last launched app is focused again after a reload', async () => {
-  const { page, close } = await openPreview()
-  try {
-    await waitForServiceList(page)
-    const third = page.locator('.app-item').nth(2)
-    const id = await third.getAttribute('data-id')
-    await third.click()
-    await page.waitForFunction((i) => window.__mock.launches.indexOf(i) !== -1, id)
-    await page.reload()
-    await waitForServiceList(page)
-    assert.equal(await page.locator('.app-item.focused').getAttribute('data-id'), id)
-  } finally { await close() }
-})
-
-test('returning to the page refreshes the app list', async () => {
-  const { page, close } = await openPreview()
-  try {
-    await waitForServiceList(page)
-    const before = await page.evaluate(() => window.__mock.listAppsAnswered)
-    await page.evaluate(() => {
-      Object.defineProperty(document, 'visibilityState', { configurable: true, get: () => 'hidden' })
-      document.dispatchEvent(new Event('visibilitychange'))
-      Object.defineProperty(document, 'visibilityState', { configurable: true, get: () => 'visible' })
-      document.dispatchEvent(new Event('visibilitychange'))
-    })
-    await page.waitForFunction((n) => window.__mock.listAppsAnswered > n, before)
-  } finally { await close() }
-})
-
-// --- Final-review fixes ---
 
 async function hideAndShow(page) {
   await page.evaluate(() => {
@@ -284,42 +312,6 @@ async function hideAndShow(page) {
     document.dispatchEvent(new Event('visibilitychange'))
   })
 }
-
-test('pointing at a lower row focuses that row and a click launches it, not another', async () => {
-  const { page, close } = await openPreview()
-  try {
-    await waitForServiceList(page)
-    await openAllApps(page)
-    // Pick the visible row nearest the bottom of the list viewport.
-    const target = await page.evaluate(() => {
-      const ul = document.querySelector('.app-list').getBoundingClientRect()
-      const rows = Array.from(document.querySelectorAll('.app-item'))
-      const visible = rows.filter((r) => { const b = r.getBoundingClientRect(); return b.top >= ul.top && b.bottom <= ul.bottom })
-      const row = visible[visible.length - 1]
-      const b = row.getBoundingClientRect()
-      return { id: row.getAttribute('data-id'), x: b.left + 40, y: b.top + b.height / 2 }
-    })
-    await page.mouse.move(target.x, target.y)
-    await page.waitForTimeout(300)
-    assert.equal(await page.locator('.app-item.focused').getAttribute('data-id'), target.id)
-    await page.mouse.click(target.x, target.y)
-    await page.waitForTimeout(300)
-    assert.deepEqual(await page.evaluate(() => window.__mock.launches), [target.id])
-  } finally { await close() }
-})
-
-test('a failed refresh keeps the service list instead of falling back', async () => {
-  const { page, close } = await openPreview('flaky')
-  try {
-    await waitForServiceList(page)
-    await openAllApps(page)
-    await hideAndShow(page)
-    await page.waitForFunction(() => window.__mock.listAppsAnswered >= 2)
-    await page.waitForTimeout(100)
-    assert.equal(await page.locator('.app-item').count(), 38)
-    assert.equal(await page.locator('.state.note').count(), 0)
-  } finally { await close() }
-})
 
 test('a launch-failure note clears when the user comes back', async () => {
   const { page, close } = await openPreview()
@@ -352,40 +344,23 @@ test('a launch timeout that fires while the launched app is open leaves no note'
   } finally { await close() }
 })
 
-test('pressing OK twice quickly launches once', async () => {
+// --- Remembering, refreshing ---
+
+test('the last launched app is focused again after a reload', async () => {
   const { page, close } = await openPreview()
   try {
     await waitForServiceList(page)
-    await page.keyboard.press('Enter')
-    await page.keyboard.press('Enter')
-    await page.waitForTimeout(300)
-    assert.equal(await page.evaluate(() => window.__mock.launches.length), 1)
-  } finally { await close() }
-})
-
-test('the All apps row shows an ellipsis glyph', async () => {
-  const { page, close } = await openPreview()
-  try {
+    const third = page.locator(DOCK_TILES).nth(2)
+    const id = await third.getAttribute('data-id')
+    await third.click()
+    await page.waitForFunction((i) => window.__mock.launches.indexOf(i) !== -1, id)
+    await page.reload()
     await waitForServiceList(page)
-    assert.equal(await page.locator('.app-item[data-id="__all__"] .initials').textContent(), '…')
+    assert.equal(await focusedId(page), id)
   } finally { await close() }
 })
 
-test('Home fits on screen without scrolling', async () => {
-  const { page, close } = await openPreview()
-  try {
-    await waitForServiceList(page)
-    const fit = await page.evaluate(() => {
-      const ul = document.querySelector('.app-list')
-      const last = document.querySelector('.app-item[data-id="__all__"]').getBoundingClientRect()
-      return { overflow: ul.scrollHeight - ul.clientHeight, lastBottom: last.bottom }
-    })
-    assert.ok(fit.overflow <= 1, 'Home list overflows by ' + fit.overflow + 'px')
-    assert.ok(fit.lastBottom <= 1080, 'All apps row off-screen at ' + fit.lastBottom)
-  } finally { await close() }
-})
-
-test('a last app outside Home is remembered via the All apps row', async () => {
+test('a last app outside Home is remembered via the All apps tile', async () => {
   const { page, close } = await openPreview()
   try {
     await waitForServiceList(page)
@@ -394,61 +369,145 @@ test('a last app outside Home is remembered via the All apps row', async () => {
     await page.waitForFunction(() => window.__mock.launches.indexOf('pl.cda') !== -1)
     await page.reload()
     await waitForServiceList(page)
-    assert.equal(await page.locator('.app-item.focused').getAttribute('data-id'), '__all__')
+    assert.equal(await focusedId(page), '__all__')
     await page.keyboard.press('Enter')
     await page.waitForFunction(() => document.querySelector('h1').textContent === 'All apps')
-    assert.equal(await page.locator('.app-item.focused').getAttribute('data-id'), 'pl.cda')
+    assert.equal(await focusedId(page), 'pl.cda')
   } finally { await close() }
 })
 
-test('Home still fits with a launch note', async () => {
+test('returning to the page refreshes the app list', async () => {
   const { page, close } = await openPreview()
   try {
     await waitForServiceList(page)
-    await page.keyboard.press('Enter')
-    await page.waitForFunction(() => /launching requires the TV/.test(document.body.textContent))
-    const fit = await page.evaluate(() => {
-      const ul = document.querySelector('.app-list')
-      const last = document.querySelector('.app-item[data-id="__all__"]').getBoundingClientRect()
-      return { overflow: ul.scrollHeight - ul.clientHeight, lastBottom: last.bottom }
-    })
-    assert.ok(fit.overflow <= 1, 'Home list overflows by ' + fit.overflow + 'px')
-    assert.ok(fit.lastBottom <= 1080, 'All apps row off-screen at ' + fit.lastBottom)
+    const before = await page.evaluate(() => window.__mock.listAppsAnswered)
+    await hideAndShow(page)
+    await page.waitForFunction((n) => window.__mock.listAppsAnswered > n, before)
   } finally { await close() }
 })
 
-test('arrow keys keep focus while the pointer rests over the list', async () => {
+test('a failed refresh keeps the service list', async () => {
+  const { page, close } = await openPreview('flaky')
+  try {
+    await waitForServiceList(page)
+    await openAllApps(page)
+    await hideAndShow(page)
+    await page.waitForFunction(() => window.__mock.listAppsAnswered >= 2)
+    await page.waitForTimeout(100)
+    assert.equal(await page.locator('.app-item').count(), 38)
+    assert.equal(await page.locator('.state.note').count(), 0)
+  } finally { await close() }
+})
+
+// --- All apps (the grid itself is Task 6) ---
+
+test('All apps lists every service app alphabetically', async () => {
+  const { page, close } = await openPreview()
+  try {
+    await waitForServiceList(page)
+    await openAllApps(page)
+    const titles = await page.locator('.grid .app-title').evaluateAll((els) => els.map((e) => e.textContent))
+    assert.equal(titles.length, 38)
+    assert.deepEqual(titles, titles.slice().sort((a, b) => a.localeCompare(b)))
+  } finally { await close() }
+})
+
+test('All apps opens from Home and Back returns to its tile', async () => {
+  const { page, close } = await openPreview()
+  try {
+    await waitForServiceList(page)
+    await openAllApps(page)
+    await page.keyboard.press('Escape')
+    await page.waitForFunction(() => document.querySelector('.app-item.focused').getAttribute('data-id') === '__all__')
+  } finally { await close() }
+})
+
+test('apps without a bundled logo show the TV icon whitened, or initials', async () => {
+  const { page, close } = await openPreview()
+  try {
+    await waitForServiceList(page)
+    await openAllApps(page)
+    // pl.cda's fixture icon loads: shown, turned white.
+    await page.waitForFunction(() => {
+      const img = document.querySelector('.app-item[data-id="pl.cda"] .icon img')
+      return img && img.complete && img.naturalWidth > 0
+    })
+    assert.match(await page.locator('.app-item[data-id="pl.cda"] .icon img').evaluate((e) => getComputedStyle(e).filter), /invert\(1\)/)
+    // ipla's icon 404s: initials replace it, no broken img left.
+    await page.waitForFunction(() => {
+      const row = document.querySelector('.app-item[data-id="ipla"]')
+      return row && !row.querySelector('img') && row.querySelector('.initials')
+    })
+    // No icon at all: initials straight away.
+    assert.equal(await page.locator('.app-item[data-id="spotify-beehive"] .initials').textContent(), 'S')
+  } finally { await close() }
+})
+
+test('a broken icon stays as initials after re-renders', async () => {
+  const { page, close } = await openPreview()
+  try {
+    await waitForServiceList(page)
+    await openAllApps(page)
+    await page.waitForFunction(() => !document.querySelector('.app-item[data-id="ipla"] img'))
+    await page.evaluate(() => {
+      window.__brokenImgReinserted = false
+      new MutationObserver((records) => {
+        for (const r of records) for (const n of r.addedNodes) {
+          const row = n.querySelector && n.querySelector('.app-item[data-id="ipla"]')
+          if (row && row.querySelector('img')) window.__brokenImgReinserted = true
+        }
+      }).observe(document.getElementById('root'), { childList: true, subtree: true })
+    })
+    await page.keyboard.press('Escape')
+    await openAllApps(page)
+    assert.equal(await page.evaluate(() => window.__brokenImgReinserted), false)
+  } finally { await close() }
+})
+
+test('pointing at a lower tile focuses it and a click launches it, not another', async () => {
+  const { page, close } = await openPreview()
+  try {
+    await waitForServiceList(page)
+    await openAllApps(page)
+    const target = await page.evaluate(() => {
+      const grid = document.querySelector('.grid').getBoundingClientRect()
+      const tiles = Array.from(document.querySelectorAll('.app-item'))
+      const visible = tiles.filter((t) => { const b = t.getBoundingClientRect(); return b.top >= grid.top && b.bottom <= grid.bottom })
+      const tile = visible[visible.length - 1]
+      const b = tile.getBoundingClientRect()
+      return { id: tile.getAttribute('data-id'), x: b.left + b.width / 2, y: b.top + b.height / 2 }
+    })
+    await page.mouse.move(target.x, target.y)
+    await page.waitForTimeout(300)
+    assert.equal(await focusedId(page), target.id)
+    await page.mouse.click(target.x, target.y)
+    await page.waitForTimeout(300)
+    assert.deepEqual(await page.evaluate(() => window.__mock.launches), [target.id])
+  } finally { await close() }
+})
+
+test('arrow keys keep focus while the pointer rests over the tiles', async () => {
   const { page, close } = await openPreview()
   try {
     await waitForServiceList(page)
     await openAllApps(page)
     const box = await page.locator('.app-item').nth(3).boundingBox()
-    await page.mouse.move(box.x + 40, box.y + box.height / 2)
+    await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2)
     await page.waitForTimeout(100)
-    const start = await page.evaluate(() => Array.from(document.querySelectorAll('.app-item')).findIndex((l) => l.classList.contains('focused')))
-    for (let i = 0; i < 15; i++) await page.keyboard.press('ArrowDown')
+    const start = await focusedIndex(page)
+    for (let i = 0; i < 15; i++) await page.keyboard.press('ArrowRight')
     await page.waitForTimeout(150)
-    const end = await page.evaluate(() => Array.from(document.querySelectorAll('.app-item')).findIndex((l) => l.classList.contains('focused')))
-    assert.equal(end, start + 15)
+    assert.equal(await focusedIndex(page), start + 15)
   } finally { await close() }
 })
 
-test('after a failed launch, OK can retry straight away', async () => {
-  const { page, close } = await openPreview()
-  try {
-    await waitForServiceList(page)
-    await page.keyboard.press('Enter')
-    await page.waitForFunction(() => window.__mock.launches.length === 1 && /launching requires the TV/.test(document.body.textContent))
-    await page.keyboard.press('Enter')
-    await page.waitForFunction(() => window.__mock.launches.length === 2)
-  } finally { await close() }
-})
+// --- Perf mode ---
 
 test('perf mode steps focus and reports timings', async () => {
   const page = await browser.newPage({ viewport: { width: 1920, height: 1080 } })
   try {
     await page.addInitScript(() => {
-      window.PalmSystem = { launchParams: '{"perf":{"action":"down","steps":5,"intervalMs":20}}' }
+      window.PalmSystem = { launchParams: '{"perf":{"action":"right","steps":5,"intervalMs":20}}' }
     })
     await page.goto(server.url + '?mock=ok')
     await page.waitForFunction(() => window.__mock.perfReports.length === 1, null, { timeout: 8000 })
@@ -456,8 +515,8 @@ test('perf mode steps focus and reports timings', async () => {
     assert.equal(r.dispatchMs.frames, 5)
     assert.ok(r.frames.frames > 0)
     assert.ok(r.appsShownMs >= r.firstPaintMs)
-    assert.deepEqual(r.params, { action: 'down', steps: 5, intervalMs: 20 })
+    assert.deepEqual(r.params, { action: 'right', steps: 5, intervalMs: 20 })
     assert.equal(await page.evaluate(() => window.__mock.launches.length), 0)
-    assert.equal(await page.locator('.app-item').nth(5).getAttribute('class'), 'app-item focused')
+    assert.equal(await focusedIndex(page), 5)
   } finally { await page.close() }
 })

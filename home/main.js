@@ -71,6 +71,15 @@ function unavailableText(reason, retryMs) {
   };
 }
 
+// How long a failing app list keeps showing "Loading installed apps…"
+// before the error screen. A cold-started TV's first listApps can fail
+// while the service spawns; the retry 5 s later usually works.
+var LOADING_GRACE_MS = 30000;
+
+function failureView(elapsedMs) {
+  return elapsedMs < LOADING_GRACE_MS ? 'loading' : 'error';
+}
+
 // Delay before re-asking the service after a failed listApps (service still
 // spawning, slow reply): keep trying, backing off to one cheap call every
 // 30 s.
@@ -359,104 +368,148 @@ function mountUI(doc) {
   // so a broken icon doesn't flash back on every re-render.
   var brokenIcons = {};
 
-  function appendState(className, text) {
-    var p = doc.createElement('p');
-    p.className = className;
-    p.textContent = text;
-    root.appendChild(p);
+  var lang = (typeof navigator !== 'undefined' && navigator.language) || '';
+
+  function el(tag, className, text) {
+    var e = doc.createElement(tag);
+    if (className) e.className = className;
+    if (text !== undefined) e.textContent = text;
+    return e;
   }
 
   function initialsBox(title) {
-    var span = doc.createElement('span');
-    span.className = 'initials';
-    span.textContent = appInitials(title);
-    return span;
+    return el('span', 'initials', appInitials(title));
   }
 
-  function iconBox(row) {
-    var box = doc.createElement('span');
-    box.className = 'app-icon';
-    var url = row.id === ALL_APPS_ID ? null : iconUrl(row.icon);
-    if (row.id === ALL_APPS_ID) {
-      var more = doc.createElement('span');
-      more.className = 'initials';
-      more.textContent = '…';
-      box.appendChild(more);
-    } else if (!url || brokenIcons[url]) {
-      box.appendChild(initialsBox(row.title || row.id));
-    } else {
-      var img = doc.createElement('img');
-      img.alt = '';
-      img.onerror = function () {
-        brokenIcons[url] = true;
-        if (img.parentNode) box.replaceChild(initialsBox(row.title || row.id), img);
-      };
-      img.src = url;
-      box.appendChild(img);
+  // A tile's mark: the bundled white logo; else the TV's own icon, turned
+  // white in CSS; else initials (also when the icon fails to load).
+  function markFor(row) {
+    var logo = logoFor(row.id);
+    if (logo) {
+      var m = el('span', 'logo');
+      m.style.webkitMaskImage = 'url(' + logo + ')';
+      m.style.maskImage = 'url(' + logo + ')';
+      return m;
     }
+    var url = iconUrl(row.icon);
+    if (!url || brokenIcons[url]) return initialsBox(row.title || row.id);
+    var box = el('span', 'icon');
+    var img = el('img');
+    img.alt = '';
+    img.onerror = function () {
+      brokenIcons[url] = true;
+      if (box.parentNode) box.parentNode.replaceChild(initialsBox(row.title || row.id), box);
+    };
+    img.src = url;
+    box.appendChild(img);
     return box;
   }
 
-  function render(keepScroll) {
-    renderView(keepScroll);
+  function tile(row, i) {
+    var li = el('li', 'app-item');
+    li.setAttribute('tabindex', '-1');
+    li.setAttribute('data-id', row.id);
+    li.setAttribute('data-index', String(i));
+    var mark = el('span', 'mark');
+    mark.appendChild(markFor(row));
+    li.appendChild(mark);
+    li.appendChild(el('span', 'app-title', row.title || row.id));
+    return li;
+  }
+
+  // The current view's tiles by row index, the element they scroll in, and
+  // the panel that holds the launch note. render() rebuilds them when the
+  // view or the app list changes; focus moves only swap a class.
+  var tiles = [];
+  var listEl = null;
+  var notePanel = null;
+  var shownFocus = -1;
+
+  function render() {
+    renderView();
     perfMarkRender();
   }
 
-  // keepScroll: a pointer action. Keep the list where it is; recentring
-  // would slide another row under the pointer. (Synthetic mousemoves at an
-  // unchanged position are also filtered in onPointer.)
-  function renderView(keepScroll) {
-    var oldList = root.querySelector('.app-list');
-    var oldScroll = oldList ? oldList.scrollTop : 0;
+  function renderView() {
     while (root.firstChild) root.removeChild(root.firstChild);
-    var header = doc.createElement('header');
-    var h = doc.createElement('h1');
-    h.textContent = nav.view === 'all' ? 'All apps' : 'CustomWebOS';
-    header.appendChild(h);
-    var clock = doc.createElement('span');
-    clock.className = 'clock';
-    clock.textContent = formatClock(new Date());
-    header.appendChild(clock);
-    root.appendChild(header);
+    tiles = [];
+    listEl = null;
+    notePanel = null;
+    shownFocus = -1;
+    root.className = 'view-' + nav.view;
 
-    if (state.status === 'loading') { appendState('state', 'Loading installed apps…'); return; }
-    if (state.status === 'error') {
-      var t = unavailableText(state.error.reason, state.error.retryMs);
-      appendState('state error-title', t.title);
-      appendState('state error-reason', t.reason);
-      appendState('state error-retry', t.retry);
+    var top = el('div', 'top');
+    var now = new Date();
+    top.appendChild(el('div', 'clock', formatClock(now)));
+    top.appendChild(el('div', 'date', formatDate(now, lang)));
+    root.appendChild(top);
+    root.appendChild(el('h1', 'view-title', nav.view === 'all' ? 'All apps' : 'CustomWebOS'));
+
+    var hasApps = nav.homeItems.length > 0 || nav.allItems.length > 0;
+    if (state.status !== 'ready' || !hasApps) {
+      // Loading, error and "no apps" sit where the dock would be.
+      var panel = el('div', 'state-panel');
+      if (state.status === 'loading') {
+        panel.appendChild(el('p', 'state', 'Loading installed apps…'));
+      } else if (state.status === 'error') {
+        var t = unavailableText(state.error.reason, state.error.retryMs);
+        panel.appendChild(el('p', 'state error-title', t.title));
+        panel.appendChild(el('p', 'state error-reason', t.reason));
+        panel.appendChild(el('p', 'state error-retry', t.retry));
+      } else {
+        panel.appendChild(el('p', 'state', 'No apps found.'));
+      }
+      root.appendChild(dockRow(panel, 'dock dock-state'));
       return;
     }
-    if (!nav.homeItems.length && !nav.allItems.length) { appendState('state', 'No apps found.'); return; }
 
-    // A single-line note (see .state.note) so Home keeps its fixed height.
-    if (state.launchNote) appendState('state note', state.launchNote);
+    notePanel = el('div', 'state-panel note-panel');
+    root.appendChild(notePanel);
+    renderNote();
 
-    // The list is its own clipped viewport filling the rest of the screen;
-    // keep the focused item centred in it as focus moves.
     var rows = rowsFor(nav);
-    var ul = doc.createElement('ul');
-    ul.className = 'app-list';
-    var focusedLi = null;
-    for (var i = 0; i < rows.length; i++) {
-      var li = doc.createElement('li');
-      li.className = 'app-item' + (i === nav.focusIdx ? ' focused' : '');
-      li.setAttribute('tabindex', '-1');
-      li.setAttribute('data-id', rows[i].id);
-      li.setAttribute('data-index', String(i));
-      li.appendChild(iconBox(rows[i]));
-      var label = doc.createElement('span');
-      label.className = 'app-title';
-      label.textContent = rows[i].title || rows[i].id;
-      li.appendChild(label);
-      ul.appendChild(li);
-      if (i === nav.focusIdx) focusedLi = li;
+    if (nav.view === 'home') {
+      listEl = el('ul', 'dock-track');
+      root.appendChild(dockRow(listEl, 'dock'));
+    } else {
+      listEl = el('ul', 'grid');
+      root.appendChild(listEl);
     }
-    root.appendChild(ul);
-    if (keepScroll) {
-      ul.scrollTop = oldScroll;
-    } else if (focusedLi) {
-      ul.scrollTop = scrollTopFor(focusedLi.offsetTop, focusedLi.offsetHeight, ul.clientHeight, ul.scrollHeight);
+    for (var i = 0; i < rows.length; i++) {
+      tiles.push(tile(rows[i], i));
+      listEl.appendChild(tiles[i]);
+    }
+    updateFocus(false);
+  }
+
+  // The dock is centred in a full-width row (an absolutely positioned box
+  // offset by left:50% could only shrink-wrap to half the stage).
+  function dockRow(content, className) {
+    var row = el('div', 'dock-row');
+    var dock = el('div', className);
+    dock.appendChild(content);
+    row.appendChild(dock);
+    return row;
+  }
+
+  // The one-line launch note above the dock (see .state.note).
+  function renderNote() {
+    if (!notePanel) return;
+    while (notePanel.firstChild) notePanel.removeChild(notePanel.firstChild);
+    if (state.launchNote) notePanel.appendChild(el('p', 'state note', state.launchNote));
+  }
+
+  // keepScroll: a pointer action. Keep the grid where it is; recentring
+  // would slide another tile under the pointer. (Synthetic mousemoves at an
+  // unchanged position are also filtered in onPointer.)
+  function updateFocus(keepScroll) {
+    if (tiles[shownFocus]) tiles[shownFocus].className = 'app-item';
+    shownFocus = nav.focusIdx;
+    var t = tiles[shownFocus];
+    if (!t) return;
+    t.className = 'app-item focused';
+    if (!keepScroll && nav.view === 'all' && listEl) {
+      listEl.scrollTop = scrollTopFor(t.offsetTop, t.offsetHeight, listEl.clientHeight, listEl.scrollHeight);
     }
   }
 
@@ -500,7 +553,10 @@ function mountUI(doc) {
   }
 
   function launch(id) {
-    state.launchNote = '';
+    if (state.launchNote) {
+      state.launchNote = '';
+      renderNote();
+    }
     prefs.lastAppId = id;
     savePrefs(storage, prefs);
     lunaCall(
@@ -514,7 +570,7 @@ function mountUI(doc) {
         if (doc.visibilityState === 'hidden') return;
         // A note, not the error screen: the list stays usable.
         state.launchNote = 'Could not open ' + id + ': ' + ((err && err.errorText) || 'launch failed');
-        render();
+        renderNote();
       }
     );
   }
@@ -531,8 +587,11 @@ function mountUI(doc) {
         launch(nav.launch);
       }
     }
-    var pointer = typeof action === 'object' && nav.view === before.view;
-    if (nav !== before) render(pointer);
+    if (nav.view !== before.view) {
+      render();
+    } else if (nav.focusIdx !== before.focusIdx) {
+      updateFocus(typeof action === 'object');
+    }
   }
 
   function onKey(e) {
@@ -585,19 +644,32 @@ function mountUI(doc) {
   }
 
   var retryTimer = null;
+  var retryDueAt = 0;
   var listInFlight = false;
   var haveServiceList = false;
+  var mountedAt = nowMs();
+  var lastFailure = null;
+
+  // Until the service has answered once: within LOADING_GRACE_MS of opening,
+  // failures keep the loading state; after it, the error screen shows.
+  function showFailure() {
+    if (haveServiceList || !lastFailure || failureView(nowMs() - mountedAt) !== 'error') return;
+    state.status = 'error';
+    state.error = { reason: lastFailure, retryMs: Math.max(1000, retryDueAt - nowMs()) };
+    render();
+  }
+
+  setTimeout(showFailure, LOADING_GRACE_MS);
 
   function requestApps(attempt) {
     function retry(reason) {
       // Once the service has answered, a failed refresh (slow bus after
       // boot, see m2-tracking) keeps the list on screen and retries quietly.
-      if (!haveServiceList) {
-        state.status = 'error';
-        state.error = { reason: reason, retryMs: retryDelayMs(attempt) };
-        render();
-      }
-      retryTimer = setTimeout(function () { retryTimer = null; requestApps(attempt + 1); }, retryDelayMs(attempt));
+      var delay = retryDelayMs(attempt);
+      retryDueAt = nowMs() + delay;
+      lastFailure = reason;
+      showFailure();
+      retryTimer = setTimeout(function () { retryTimer = null; requestApps(attempt + 1); }, delay);
     }
     listInFlight = true;
     lunaCall(
@@ -625,9 +697,11 @@ function mountUI(doc) {
   // chain rather than setInterval so it re-aligns after the TV sleeps.
   var clockTimer = null;
   function tickClock() {
-    var el = root.querySelector('.clock');
+    var clock = root.querySelector('.clock');
+    var date = root.querySelector('.date');
     var now = new Date();
-    if (el) el.textContent = formatClock(now);
+    if (clock) clock.textContent = formatClock(now);
+    if (date) date.textContent = formatDate(now, lang);
     clearTimeout(clockTimer);
     clockTimer = setTimeout(tickClock, msToNextMinute(now));
   }
@@ -641,7 +715,7 @@ function mountUI(doc) {
       state.launchNote = '';
       return;
     }
-    render();
+    renderNote();
     tickClock();
     if (!retryTimer && !listInFlight) requestApps(0);
   }
@@ -763,6 +837,8 @@ if (typeof module !== 'undefined' && module.exports) {
     savePrefs: savePrefs,
     frameStats: frameStats,
     formatDate: formatDate,
+    LOADING_GRACE_MS: LOADING_GRACE_MS,
+    failureView: failureView,
     APP_LOGOS: APP_LOGOS,
     logoFor: logoFor,
     perfParams: perfParams

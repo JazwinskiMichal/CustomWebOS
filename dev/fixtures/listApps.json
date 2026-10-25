@@ -59,12 +59,12 @@
     {
       "id": "ipla",
       "title": "Polsat Box Go",
-      "icon": null
+      "icon": "/__dev/fixtures/missing.png"
     },
     {
       "id": "pl.cda",
       "title": "CDA",
-      "icon": null
+      "icon": "/__dev/fixtures/icon-netflix.png"
     },
     {
       "id": "com.webos.app.browser",

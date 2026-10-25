@@ -10,6 +10,7 @@
 // ?mock=errorlong  like error, with the real 10 s-timeout reason text
 // ?mock=recover    first listApps fails, later ones answer normally
 // ?mock=slowlaunch listApps as ok; launch answers after 12 s
+// ?mock=few      only netflix, youtube and pl.cda are installed
 (function () {
   var mode = (/[?&]mock=(\w+)/.exec(window.location.search) || [])[1] || 'ok'
   var SERVICE = 'luna://org.jazwinski.customwebos.home.service/'
@@ -27,7 +28,11 @@
     if (mode === 'recover' && window.__mock.listAppsAnswered === 0) {
       return Promise.resolve({ returnValue: false, errorText: 'mock not yet' })
     }
-    return fetch('/__dev/fixtures/listApps.json').then(function (r) { return r.json() })
+    return fetch('/__dev/fixtures/listApps.json').then(function (r) { return r.json() }).then(function (j) {
+      if (mode !== 'few') return j
+      var keep = { 'netflix': true, 'youtube.leanback.v4': true, 'pl.cda': true }
+      return { returnValue: true, apps: j.apps.filter(function (a) { return keep[a.id] }) }
+    })
   }
 
   function answer(uri, payload) {
