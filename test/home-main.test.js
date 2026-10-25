@@ -78,7 +78,8 @@ test('unavailableText names the problem, the reason and the next try', () => {
   assert.equal(t.title, "Can't reach the home service")
   assert.equal(t.reason, 'no response from luna://x within 10s')
   assert.match(t.retry, /Trying again in 20 s/)
-  assert.match(t.retry, /about 5 minutes after the TV is switched on/)
+  assert.match(t.retry, /close CustomWebOS and open it again/)
+  assert.doesNotMatch(t.retry, /5 minutes/)
 })
 
 test('unavailableText rounds the delay up to whole seconds', () => {

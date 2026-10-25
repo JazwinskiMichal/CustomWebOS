@@ -67,13 +67,13 @@ function unavailableText(reason, retryMs) {
     title: "Can't reach the home service",
     reason: reason,
     retry: 'Trying again in ' + Math.ceil(retryMs / 1000) + ' s. ' +
-      'This is normal for about 5 minutes after the TV is switched on.'
+      "If this doesn't clear, close CustomWebOS and open it again."
   };
 }
 
-// Delay before re-asking the service after a failed listApps. Right after
-// boot the whole luna bus can stay unresponsive for minutes (seen on-device),
-// so keep trying — backing off to one cheap call every 30 s.
+// Delay before re-asking the service after a failed listApps (service still
+// spawning, slow reply): keep trying, backing off to one cheap call every
+// 30 s.
 function retryDelayMs(attempt) {
   var delays = [5000, 10000, 20000];
   return attempt < delays.length ? delays[attempt] : 30000;

@@ -132,7 +132,7 @@ if ($LASTEXITCODE -ne 0) {
 }
 
 if ($Reboot) {
-    Write-Output "TV is rebooting. The luna bus takes ~5 min to answer after boot; the app retries on its own."
+    Write-Output "TV is rebooting. Open CustomWebOS once SSH is back (~40 s); if the TV reopened it by itself, close it and open it again."
 } else {
     Write-Warning "Reboot the TV before testing: until then the hub drops every call from the app to the home service (the app shows its fallback list). Next time pass -Reboot."
 }
