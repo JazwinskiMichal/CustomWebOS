@@ -362,12 +362,13 @@ test('frameStats of no frames is all zeros', () => {
 })
 
 test('perfParams reads the perf launch parameters, with defaults', () => {
-  assert.deepEqual(main.perfParams('{"perf":{"action":"down","steps":10,"intervalMs":50}}'), { action: 'down', steps: 10, intervalMs: 50 })
-  assert.deepEqual(main.perfParams('{"perf":{}}'), { action: 'right', steps: 40, intervalMs: 80 })
+  assert.deepEqual(main.perfParams('{"perf":{"action":"down","steps":10,"intervalMs":50}}'), { action: 'down', steps: 10, intervalMs: 50, view: 'home' })
+  assert.deepEqual(main.perfParams('{"perf":{}}'), { action: 'right', steps: 40, intervalMs: 80, view: 'home' })
+  assert.equal(main.perfParams('{"perf":{"view":"all"}}').view, 'all')
 })
 
 test('perfParams is null without a usable perf object', () => {
-  for (const raw of [undefined, 'nope', '{}', '{"perf":{"action":"jump"}}']) {
+  for (const raw of [undefined, 'nope', '{}', '{"perf":{"action":"jump"}}', '{"perf":{"view":"settings"}}']) {
     assert.equal(main.perfParams(raw), null, String(raw))
   }
 })

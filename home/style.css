@@ -27,6 +27,7 @@
   --sheet: rgba(8, 11, 14, 0.62);
   --focus-fill: rgba(255, 255, 255, 0.22);
   --fallback-bg: #0e1114;
+  --note-bg: rgba(12, 15, 18, 0.72);
   --text-shadow: 0 1px 2px rgba(6, 8, 10, 0.35), 0 3px 14px rgba(6, 8, 10, 0.25);
 }
 
@@ -37,6 +38,7 @@
   --sheet: rgba(244, 241, 236, 0.66);
   --focus-fill: rgba(0, 0, 0, 0.1);
   --fallback-bg: #ece8e1;
+  --note-bg: rgba(250, 248, 244, 0.82);
   --text-shadow: none;
 }
 
@@ -320,7 +322,9 @@ html, body {
   font-size: 26px;
 }
 
-/* The launch note, one line, just above the dock. */
+/* The launch note, one line, just above the dock: full ink on a dark pill,
+   since it is the only sign a launch failed and the photo behind it can be
+   bright. */
 .note-panel {
   position: absolute;
   left: 0;
@@ -332,6 +336,10 @@ html, body {
 .state.note {
   display: inline-block;
   max-width: 1600px;
+  padding: 10px 28px;
+  border-radius: 28px;
+  background: var(--note-bg);
+  color: var(--ink);
   font-size: 26px;
   white-space: nowrap;
   overflow: hidden;

@@ -2,7 +2,8 @@
 // change them (there's deliberately no on-device editor). Ids come from the
 // TV's launch points; anything not installed is skipped. At most 9.
 // Background photo: a name from assets/wallpapers/ (<name>.jpg plus its
-// pre-blurred <name>-field-frost.jpg for the glass dock).
+// pre-blurred <name>-dock.jpg for the glass dock; record new photos in
+// assets/wallpapers/SOURCES.json).
 var HOME_WALLPAPER = 'alpine';
 
 var HOME_APPS = [

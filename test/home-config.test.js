@@ -35,6 +35,12 @@ test('HOME_APPS starts with the planned curated order', () => {
   ])
 })
 
+test('config.js describes the wallpaper files the app loads', () => {
+  const src = fs.readFileSync(path.join(__dirname, '..', 'home', 'config.js'), 'utf8')
+  assert.match(src, /<name>-dock\.jpg/)
+  assert.doesNotMatch(src, /field-frost/)
+})
+
 test('config.js names a wallpaper', () => {
   const { HOME_WALLPAPER } = loadConfig()
   assert.equal(typeof HOME_WALLPAPER, 'string')

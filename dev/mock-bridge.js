@@ -11,6 +11,7 @@
 // ?mock=recover    first listApps fails, later ones answer normally
 // ?mock=slowlaunch listApps as ok; launch answers after 12 s
 // ?mock=few      only netflix, youtube and pl.cda are installed
+// ?mock=recoverlate  the first three listApps fail, then it answers
 (function () {
   var mode = (/[?&]mock=(\w+)/.exec(window.location.search) || [])[1] || 'ok'
   var SERVICE = 'luna://org.jazwinski.customwebos.home.service/'
@@ -24,6 +25,9 @@
     if (mode === 'empty') return Promise.resolve({ returnValue: true, apps: [] })
     if (mode === 'flaky' && window.__mock.listAppsAnswered > 0) {
       return Promise.resolve({ returnValue: false, errorText: 'mock flaky' })
+    }
+    if (mode === 'recoverlate' && window.__mock.listAppsAnswered < 3) {
+      return Promise.resolve({ returnValue: false, errorText: 'mock not yet' })
     }
     if (mode === 'recover' && window.__mock.listAppsAnswered === 0) {
       return Promise.resolve({ returnValue: false, errorText: 'mock not yet' })

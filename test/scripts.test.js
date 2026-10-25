@@ -195,6 +195,12 @@ test('perf.ps1 -WhatIf prints the close, launch, wait and read commands', { skip
   assert.doesNotMatch(r.stdout, /^running:/m)
 })
 
+test('perf.ps1 -View all asks the app to open All apps first', { skip: !PS && 'no PowerShell' }, () => {
+  const r = ps('perf.ps1', ['-TvHost', '192.0.2.1', '-Action', 'down', '-View', 'all', '-WhatIf'])
+  assert.equal(r.status, 0, r.stderr)
+  assert.ok(r.stdout.includes('"perf":{"action":"down","steps":40,"intervalMs":80,"view":"all"}'), r.stdout)
+})
+
 test('perf.ps1 waits for the bus to answer before relaunching the app', { skip: !PS && 'no PowerShell' }, () => {
   // A close or launch sent while luna-send can't get an answer is silently
   // lost (docs/m2-tracking.md), so the script checks first.

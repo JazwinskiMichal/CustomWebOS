@@ -21,6 +21,9 @@
 .PARAMETER Action
   Focus direction to step: right (dock), left, down (the old list), up.
 
+.PARAMETER View
+  Where to step: home (the dock, default) or all (opens All apps first).
+
 .PARAMETER Steps
   How many focus steps. Defaults to 40.
 
@@ -43,6 +46,7 @@
 param(
     [Parameter(Mandatory=$true)][string]$TvHost,
     [ValidateSet('right', 'left', 'down', 'up')][string]$Action = 'right',
+    [ValidateSet('home', 'all')][string]$View = 'home',
     [int]$Steps = 40,
     [int]$IntervalMs = 80,
     [int]$Port = 22022,
@@ -53,7 +57,7 @@ $ErrorActionPreference = 'Stop'
 
 $appId  = 'org.jazwinski.customwebos.home'
 $out    = '/tmp/customwebos-perf.json'
-$launch = '{"id":"' + $appId + '","params":{"perf":{"action":"' + $Action + '","steps":' + $Steps + ',"intervalMs":' + $IntervalMs + '}}}'
+$launch = '{"id":"' + $appId + '","params":{"perf":{"action":"' + $Action + '","steps":' + $Steps + ',"intervalMs":' + $IntervalMs + $(if ($View -ne 'home') { ',"view":"' + $View + '"' } else { '' }) + '}}}'
 $close  = '{"id":"' + $appId + '"}'
 
 $lines = @(

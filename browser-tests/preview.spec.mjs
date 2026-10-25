@@ -283,6 +283,16 @@ test('a cold start that fails once and then answers never shows the error', asyn
   } finally { await close() }
 })
 
+test('the error screen gives way to the list once the service answers', async () => {
+  const { page, close } = await openPastGrace('recoverlate')
+  try {
+    await page.clock.runFor(30000)
+    await page.waitForSelector('.dock .app-item')
+    assert.equal(await page.locator('.state.error-title').count(), 0)
+    assert.equal(await page.locator(APP_TILES).count(), CURATED.length)
+  } finally { await close() }
+})
+
 test('error mode shows an error screen with the reason and no app list', async () => {
   const { page, close } = await openPastGrace('error')
   try {
@@ -343,6 +353,22 @@ test('a failed launch keeps the dock on screen, with a one-line note above it', 
     assert.ok(note.y + note.height <= dock.y, 'note above the dock')
     assert.ok(inside(dock, STAGE))
     assert.equal(await page.locator('.state.note').evaluate((e) => getComputedStyle(e).whiteSpace), 'nowrap')
+  } finally { await close() }
+})
+
+test('the launch note is readable over the photo', async () => {
+  // It is the only sign a launch failed; dim text straight on a bright
+  // photo measured about 1.3:1 in review.
+  const { page, close } = await openPreview()
+  try {
+    await waitForServiceList(page)
+    await page.keyboard.press('Enter')
+    await page.waitForSelector('.state.note')
+    const n = await page.locator('.state.note').evaluate((e) => ({ color: getComputedStyle(e).color, bg: getComputedStyle(e).backgroundColor }))
+    const ch = (c) => c.match(/[\d.]+/g).map(Number)
+    for (const v of ch(n.color).slice(0, 3)) assert.ok(v > 200, 'full ink ' + n.color)
+    const bg = ch(n.bg)
+    assert.ok(bg.length === 4 && bg[3] >= 0.4 && bg.slice(0, 3).every((v) => v < 60), 'dark pill behind it ' + n.bg)
   } finally { await close() }
 })
 
@@ -668,6 +694,21 @@ test('arrow keys keep focus while the pointer rests over the tiles', async () =>
 
 // --- Perf mode ---
 
+test('perf mode can open All apps before stepping', async () => {
+  const page = await browser.newPage({ viewport: { width: 1920, height: 1080 } })
+  try {
+    await page.addInitScript(() => {
+      window.PalmSystem = { launchParams: '{"perf":{"action":"down","steps":5,"intervalMs":20,"view":"all"}}' }
+    })
+    await page.goto(server.url + '?mock=ok')
+    await page.waitForFunction(() => window.__mock.perfReports.length === 1, null, { timeout: 8000 })
+    assert.equal(await page.locator('h1').textContent(), 'All apps')
+    assert.equal(await focusedIndex(page), 30)
+    assert.equal(await page.evaluate(() => window.__mock.perfReports[0].params.view), 'all')
+    assert.equal(await page.evaluate(() => window.__mock.launches.length), 0)
+  } finally { await page.close() }
+})
+
 test('perf mode steps focus and reports timings', async () => {
   const page = await browser.newPage({ viewport: { width: 1920, height: 1080 } })
   try {
@@ -680,7 +721,7 @@ test('perf mode steps focus and reports timings', async () => {
     assert.equal(r.dispatchMs.frames, 5)
     assert.ok(r.frames.frames > 0)
     assert.ok(r.appsShownMs >= r.firstPaintMs)
-    assert.deepEqual(r.params, { action: 'right', steps: 5, intervalMs: 20 })
+    assert.deepEqual(r.params, { action: 'right', steps: 5, intervalMs: 20, view: 'home' })
     assert.equal(await page.evaluate(() => window.__mock.launches.length), 0)
     assert.equal(await focusedIndex(page), 5)
   } finally { await page.close() }

@@ -333,9 +333,11 @@ function frameStats(deltas) {
 }
 
 var PERF_ACTIONS = { right: true, left: true, down: true, up: true };
+var PERF_VIEWS = { home: true, all: true };
 
 // The app's launch parameters (PalmSystem.launchParams, a JSON string) may
-// carry {"perf": {action, steps, intervalMs}}; anything else means no perf run.
+// carry {"perf": {action, steps, intervalMs, view}}; anything else means no
+// perf run. view 'all' opens All apps before stepping.
 function perfParams(raw) {
   var parsed;
   try { parsed = JSON.parse(raw); } catch (e) { return null; }
@@ -343,10 +345,13 @@ function perfParams(raw) {
   if (!p || typeof p !== 'object') return null;
   var action = p.action === undefined ? 'right' : p.action;
   if (!PERF_ACTIONS.hasOwnProperty(action)) return null;
+  var view = p.view === undefined ? 'home' : p.view;
+  if (!PERF_VIEWS.hasOwnProperty(view)) return null;
   return {
     action: action,
     steps: typeof p.steps === 'number' ? p.steps : 40,
-    intervalMs: typeof p.intervalMs === 'number' ? p.intervalMs : 80
+    intervalMs: typeof p.intervalMs === 'number' ? p.intervalMs : 80,
+    view: view
   };
 }
 
@@ -808,6 +813,16 @@ function mountUI(doc) {
       dispatch(perf.action);
       durations.push(nowMs() - t0);
       setTimeout(tick, perf.intervalMs);
+    }
+    if (perf.view === 'all' && nav.view !== 'all') {
+      // Open All apps through the All apps tile, as a click would, and let
+      // it paint before sampling.
+      dispatch({ type: 'click', index: rowsFor(nav).length - 1 });
+      setTimeout(function () {
+        window.requestAnimationFrame(frame);
+        tick();
+      }, 500);
+      return;
     }
     window.requestAnimationFrame(frame);
     tick();
