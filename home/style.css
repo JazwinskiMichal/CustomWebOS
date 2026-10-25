@@ -153,3 +153,29 @@ h1 {
   overflow: hidden;
   text-overflow: ellipsis;
 }
+
+/* Error screen until the home service first answers (no list behind it). */
+.state.error-title {
+  font-size: 44px;
+  font-weight: 600;
+  color: #f2f2f0;
+  padding: 48px 0 16px 0;
+  margin: 0;
+}
+
+.state.error-reason {
+  font-size: 26px;
+  color: #c7c7c2;
+  font-family: monospace;
+  padding: 0 0 24px 0;
+  margin: 0;
+  max-width: 1400px;
+  word-wrap: break-word;
+}
+
+.state.error-retry {
+  font-size: 26px;
+  padding: 0;
+  margin: 0;
+  max-width: 1400px;
+}

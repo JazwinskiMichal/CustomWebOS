@@ -8,6 +8,8 @@
 // ?mock=empty  {returnValue:true, apps:[]}
 // ?mock=flaky  first listApps answers normally, later ones fail
 // ?mock=errorlong  like error, with the real 10 s-timeout reason text
+// ?mock=recover    first listApps fails, later ones answer normally
+// ?mock=slowlaunch listApps as ok; launch answers after 12 s
 (function () {
   var mode = (/[?&]mock=(\w+)/.exec(window.location.search) || [])[1] || 'ok'
   var SERVICE = 'luna://org.jazwinski.customwebos.home.service/'
@@ -21,6 +23,9 @@
     if (mode === 'empty') return Promise.resolve({ returnValue: true, apps: [] })
     if (mode === 'flaky' && window.__mock.listAppsAnswered > 0) {
       return Promise.resolve({ returnValue: false, errorText: 'mock flaky' })
+    }
+    if (mode === 'recover' && window.__mock.listAppsAnswered === 0) {
+      return Promise.resolve({ returnValue: false, errorText: 'mock not yet' })
     }
     return fetch('/__dev/fixtures/listApps.json').then(function (r) { return r.json() })
   }
@@ -37,7 +42,8 @@
   function MockBridge() { this.onservicecallback = null }
   MockBridge.prototype.call = function (uri, payloadJson) {
     var self = this
-    var delay = mode === 'slow' ? 12000 : 150
+    var slow = mode === 'slow' || (mode === 'slowlaunch' && uri === SERVICE + 'launch')
+    var delay = slow ? 12000 : 150
     answer(uri, JSON.parse(payloadJson || '{}')).then(function (msg) {
       setTimeout(function () {
         if (uri === SERVICE + 'listApps') window.__mock.listAppsAnswered++

@@ -8,18 +8,9 @@ var SELF_ID = 'org.jazwinski.customwebos.home';
 // and launching go through the bundled service component instead.
 var SERVICE_URI = 'luna://org.jazwinski.customwebos.home.service';
 
-// Home apps and the fallback list come from config.js (global HOME_APPS).
+// The Home view's apps, in order, come from config.js (global HOME_APPS).
 function homeApps() {
   return typeof HOME_APPS !== 'undefined' ? HOME_APPS : [];
-}
-
-// Shown immediately on boot, and kept when the service can't be reached, so
-// the screen is never empty while the service is down or still spawning.
-function fallbackItems() {
-  var out = [];
-  var apps = homeApps();
-  for (var i = 0; i < apps.length; i++) out.push({ id: apps[i].id, title: apps[i].title, icon: null });
-  return out;
 }
 
 // Returns a tagged result so the caller can distinguish between:
@@ -68,14 +59,15 @@ function appInitials(title) {
   return out || '?';
 }
 
-// Picks what to show from a parseLaunchPoints result. A successful empty
-// list is shown as-is ("No apps found"); only a failure falls back.
-function chooseApps(parsed, fallback) {
-  if (parsed.ok) return { items: parsed.items, source: 'service', note: '' };
+// The error screen shown until the home service first answers. There is
+// deliberately no built-in app list: a list that can't launch anything
+// looks like a working Home and hides the real problem.
+function unavailableText(reason, retryMs) {
   return {
-    items: fallback,
-    source: 'fallback',
-    note: 'Built-in list (home service unavailable: ' + parsed.reason + ')'
+    title: "Can't reach the home service",
+    reason: reason,
+    retry: 'Trying again in ' + Math.ceil(retryMs / 1000) + ' s. ' +
+      'This is normal for about 5 minutes after the TV is switched on.'
   };
 }
 
@@ -267,12 +259,11 @@ function nowMs() {
 // --- Browser runtime (guarded; does not execute when required from Node) ---
 
 function mountUI(doc) {
-  // status/note describe the service; nav is the reducer's state.
-  var state = { status: 'loading', note: '', launchNote: '' };
+  // status is loading | error | ready; nav is the reducer's state.
+  var state = { status: 'loading', error: null, launchNote: '' };
   var nav = { view: 'home', focusIdx: 0, homeItems: [], allItems: [], launch: null, lastAppId: null };
   var lastLaunch = null;
-  // Until the user does anything, each new list re-derives the boot focus
-  // (the fallback list may not contain the remembered app).
+  // Until the user does anything, each new list re-derives the boot focus.
   var userMoved = false;
   var root = doc.getElementById('root');
   var storage = null;
@@ -338,14 +329,17 @@ function mountUI(doc) {
     root.appendChild(header);
 
     if (state.status === 'loading') { appendState('state', 'Loading installed apps…'); return; }
+    if (state.status === 'error') {
+      var t = unavailableText(state.error.reason, state.error.retryMs);
+      appendState('state error-title', t.title);
+      appendState('state error-reason', t.reason);
+      appendState('state error-retry', t.retry);
+      return;
+    }
     if (!nav.homeItems.length && !nav.allItems.length) { appendState('state', 'No apps found.'); return; }
 
-    // One single-line note (see .state.note), launch result first, so Home
-    // keeps its fixed height whatever the messages say.
-    var notes = [];
-    if (state.launchNote) notes.push(state.launchNote);
-    if (state.note) notes.push(state.note);
-    if (notes.length) appendState('state note', notes.join(' · '));
+    // A single-line note (see .state.note) so Home keeps its fixed height.
+    if (state.launchNote) appendState('state note', state.launchNote);
 
     // The list is its own clipped viewport filling the rest of the screen;
     // keep the focused item centred in it as focus moves.
@@ -486,15 +480,15 @@ function mountUI(doc) {
     };
   }
 
-  function showApps(choice) {
+  function showApps(items) {
     // Keep focus on the same row across a list swap, but only if real apps
     // were on screen; before the first list the only row is All apps.
     var hadApps = nav.homeItems.length > 0 || nav.allItems.length > 0;
     var focusedId = hadApps ? rowsFor(nav)[nav.focusIdx].id : null;
-    var split = splitHomeApps(choice.items, homeApps());
+    var split = splitHomeApps(items, homeApps());
     nav = { view: nav.view, focusIdx: 0, homeItems: split.home, allItems: split.all, launch: null, lastAppId: prefs.lastAppId };
     nav.focusIdx = hadApps && userMoved ? focusIndexFor(rowsFor(nav), focusedId) : bootFocusIndex(nav, prefs.lastAppId);
-    state.note = choice.note;
+    state.error = null;
     state.status = 'ready';
     render();
   }
@@ -508,9 +502,9 @@ function mountUI(doc) {
       // Once the service has answered, a failed refresh (slow bus after
       // boot, see m2-tracking) keeps the list on screen and retries quietly.
       if (!haveServiceList) {
-        var choice = chooseApps({ ok: false, reason: reason }, fallbackItems());
-        choice.note += ' — retrying';
-        showApps(choice);
+        state.status = 'error';
+        state.error = { reason: reason, retryMs: retryDelayMs(attempt) };
+        render();
       }
       retryTimer = setTimeout(function () { retryTimer = null; requestApps(attempt + 1); }, retryDelayMs(attempt));
     }
@@ -523,7 +517,7 @@ function mountUI(doc) {
         var parsed = parseLaunchPoints(msg);
         if (parsed.ok) {
           haveServiceList = true;
-          showApps(chooseApps(parsed, fallbackItems()));
+          showApps(parsed.items);
         } else {
           retry(parsed.reason);
         }
@@ -535,10 +529,6 @@ function mountUI(doc) {
     );
   }
 
-  function fetchLaunchPoints() {
-    showApps({ items: fallbackItems(), note: '' });
-    requestApps(0);
-  }
 
   // Updates the clock text in place at each minute boundary; a setTimeout
   // chain rather than setInterval so it re-aligns after the TV sleeps.
@@ -571,7 +561,7 @@ function mountUI(doc) {
   root.addEventListener('click', onPointer('click'));
   render();
   tickClock();
-  fetchLaunchPoints();
+  requestApps(0);
 }
 
 if (typeof window !== 'undefined' && window.document) {
@@ -589,7 +579,7 @@ if (typeof module !== 'undefined' && module.exports) {
     SELF_ID: SELF_ID,
     SERVICE_URI: SERVICE_URI,
     parseLaunchPoints: parseLaunchPoints,
-    chooseApps: chooseApps,
+    unavailableText: unavailableText,
     focusIndexFor: focusIndexFor,
     retryDelayMs: retryDelayMs,
     scrollTopFor: scrollTopFor,

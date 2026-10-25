@@ -3,8 +3,6 @@ const assert = require('node:assert/strict')
 
 const main = require('../home/main.js')
 
-const FALLBACK = [{id: 'netflix', title: 'Netflix', icon: null}]
-
 test('parseLaunchPoints returns ok:true with items for a valid response', () => {
   const raw = {
     returnValue: true,
@@ -75,22 +73,16 @@ test('parseLaunchPoints keeps only the first entry for a repeated id', () => {
   ])
 })
 
-test('chooseApps uses the service list when it answered', () => {
-  const items = [{id: 'netflix', title: 'Netflix'}]
-  assert.deepEqual(main.chooseApps({ok: true, items}, FALLBACK), {items, source: 'service', note: ''})
+test('unavailableText names the problem, the reason and the next try', () => {
+  const t = main.unavailableText('no response from luna://x within 10s', 20000)
+  assert.equal(t.title, "Can't reach the home service")
+  assert.equal(t.reason, 'no response from luna://x within 10s')
+  assert.match(t.retry, /Trying again in 20 s/)
+  assert.match(t.retry, /about 5 minutes after the TV is switched on/)
 })
 
-test('chooseApps keeps an honest empty service list (shows "No apps found")', () => {
-  const r = main.chooseApps({ok: true, items: []}, FALLBACK)
-  assert.deepEqual(r.items, [])
-  assert.equal(r.source, 'service')
-})
-
-test('chooseApps falls back to the built-in list and says why when the service fails', () => {
-  const r = main.chooseApps({ok: false, reason: 'no response'}, FALLBACK)
-  assert.equal(r.items, FALLBACK)
-  assert.equal(r.source, 'fallback')
-  assert.match(r.note, /no response/)
+test('unavailableText rounds the delay up to whole seconds', () => {
+  assert.match(main.unavailableText('x', 4500).retry, /in 5 s/)
 })
 
 test('focusIndexFor keeps focus on the same app across a list swap', () => {

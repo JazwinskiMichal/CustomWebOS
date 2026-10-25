@@ -1,7 +1,6 @@
 // CustomWebOS Home — the apps on the Home view, in order. Edit this file to
 // change them (there's deliberately no on-device editor). Ids come from the
 // TV's launch points; anything not installed is skipped. At most 9.
-// Also the fallback list shown while the home service is unavailable.
 var HOME_APPS = [
   { id: 'netflix',                 title: 'Netflix' },
   { id: 'youtube.leanback.v4',     title: 'YouTube' },

@@ -30,8 +30,7 @@ async function openPreview(mode = 'ok') {
 
 const APP_ROWS = '.app-item:not([data-id="__all__"])'
 
-// Home shows the 9 curated apps both before (fallback) and after the
-// service answers, so wait on the mock's answer counter, then one frame.
+// Wait on the mock's answer counter, then one frame for the render.
 async function waitForServiceList(page) {
   await page.waitForFunction(() => window.__mock.listAppsAnswered > 0)
   await page.evaluate(() => new Promise((r) => requestAnimationFrame(() => r())))
@@ -77,12 +76,55 @@ test('focused item stays on screen while scrolling', async () => {
   } finally { await close() }
 })
 
-test('error mode keeps the fallback list and says it is retrying', async () => {
+test('error mode shows an error screen with the reason and no app list', async () => {
   const { page, close } = await openPreview('error')
   try {
-    await page.waitForSelector('.state.note')
-    assert.match(await page.locator('.state.note').textContent(), /mock error.*retrying/)
-    assert.ok(await page.locator('.app-item').count() > 0)
+    await page.waitForSelector('.state.error-title')
+    assert.equal(await page.locator('.state.error-title').textContent(), "Can't reach the home service")
+    assert.equal(await page.locator('.state.error-reason').textContent(), 'mock error')
+    assert.match(await page.locator('.state.error-retry').textContent(), /Trying again in 5 s/)
+    assert.equal(await page.locator('.app-item').count(), 0)
+  } finally { await close() }
+})
+
+test('nothing shows a list before the service answers', async () => {
+  const { page, close } = await openPreview('slow')
+  try {
+    await page.waitForTimeout(500)
+    assert.equal(await page.locator('.app-item').count(), 0)
+    assert.match(await page.locator('body').textContent(), /Loading installed apps/)
+  } finally { await close() }
+})
+
+test('the error screen gives way to the list once the service answers', async () => {
+  const { page, close } = await openPreview('recover')
+  try {
+    await page.waitForSelector('.state.error-title')
+    await page.waitForSelector('.app-item', { timeout: 8000 })
+    assert.equal(await page.locator('.state.error-title').count(), 0)
+    assert.equal(await page.locator(APP_ROWS).count(), CURATED.length)
+  } finally { await close() }
+})
+
+test('keys on the error screen launch nothing', async () => {
+  const { page, close } = await openPreview('error')
+  try {
+    await page.waitForSelector('.state.error-title')
+    await page.keyboard.press('Enter')
+    await page.keyboard.press('ArrowDown')
+    await page.keyboard.press('Enter')
+    await page.waitForTimeout(300)
+    assert.equal(await page.evaluate(() => window.__mock.launches.length), 0)
+  } finally { await close() }
+})
+
+test('a long error reason stays on screen', async () => {
+  const { page, close } = await openPreview('errorlong')
+  try {
+    await page.waitForSelector('.state.error-retry')
+    const b = await page.locator('.state.error-retry').boundingBox()
+    assert.ok(b.y + b.height <= 1080 && b.x + b.width <= 1920, JSON.stringify(b))
+    assert.equal(await page.evaluate(() => document.documentElement.scrollWidth), 1920)
   } finally { await close() }
 })
 
@@ -290,21 +332,13 @@ test('a launch-failure note clears when the user comes back', async () => {
   } finally { await close() }
 })
 
-test('the launch note does not hide the service note', async () => {
-  const { page, close } = await openPreview('error')
-  try {
-    await page.waitForSelector('.state.note')
-    await page.keyboard.press('Enter')
-    await page.waitForFunction(() => /launching requires the TV/.test(document.body.textContent))
-    assert.match(await page.locator('body').textContent(), /mock error/)
-  } finally { await close() }
-})
-
 test('a launch timeout that fires while the launched app is open leaves no note', async () => {
-  const { page, close } = await openPreview('slow')
+  const { page, close } = await openPreview('slowlaunch')
   try {
-    // slow mode: every answer takes 12 s, past the 10 s timeout.
+    // slowlaunch: launch answers after 12 s, past the 10 s timeout.
+    await waitForServiceList(page)
     await page.keyboard.press('Enter')
+    await page.waitForFunction(() => window.__mock.launches.length === 1)
     await page.evaluate(() => {
       Object.defineProperty(document, 'visibilityState', { configurable: true, get: () => 'hidden' })
       document.dispatchEvent(new Event('visibilitychange'))
@@ -337,22 +371,19 @@ test('the All apps row shows an ellipsis glyph', async () => {
   } finally { await close() }
 })
 
-for (const mode of ['ok', 'error']) {
-  test('Home fits on screen without scrolling (' + mode + ')', async () => {
-    const { page, close } = await openPreview(mode)
-    try {
-      if (mode === 'ok') await waitForServiceList(page)
-      else await page.waitForSelector('.state.note')
-      const fit = await page.evaluate(() => {
-        const ul = document.querySelector('.app-list')
-        const last = document.querySelector('.app-item[data-id="__all__"]').getBoundingClientRect()
-        return { overflow: ul.scrollHeight - ul.clientHeight, lastBottom: last.bottom }
-      })
-      assert.ok(fit.overflow <= 1, 'Home list overflows by ' + fit.overflow + 'px')
-      assert.ok(fit.lastBottom <= 1080, 'All apps row off-screen at ' + fit.lastBottom)
-    } finally { await close() }
-  })
-}
+test('Home fits on screen without scrolling', async () => {
+  const { page, close } = await openPreview()
+  try {
+    await waitForServiceList(page)
+    const fit = await page.evaluate(() => {
+      const ul = document.querySelector('.app-list')
+      const last = document.querySelector('.app-item[data-id="__all__"]').getBoundingClientRect()
+      return { overflow: ul.scrollHeight - ul.clientHeight, lastBottom: last.bottom }
+    })
+    assert.ok(fit.overflow <= 1, 'Home list overflows by ' + fit.overflow + 'px')
+    assert.ok(fit.lastBottom <= 1080, 'All apps row off-screen at ' + fit.lastBottom)
+  } finally { await close() }
+})
 
 test('a last app outside Home is remembered via the All apps row', async () => {
   const { page, close } = await openPreview()
@@ -370,10 +401,10 @@ test('a last app outside Home is remembered via the All apps row', async () => {
   } finally { await close() }
 })
 
-test('Home still fits with a long service note and a launch note', async () => {
-  const { page, close } = await openPreview('errorlong')
+test('Home still fits with a launch note', async () => {
+  const { page, close } = await openPreview()
   try {
-    await page.waitForSelector('.state.note')
+    await waitForServiceList(page)
     await page.keyboard.press('Enter')
     await page.waitForFunction(() => /launching requires the TV/.test(document.body.textContent))
     const fit = await page.evaluate(() => {
