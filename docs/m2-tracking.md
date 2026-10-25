@@ -44,7 +44,13 @@ Alternative that **does not work** (confirmed): setting `requiredPermissions` in
 - **Installed 0.3.0 with `install.ps1 -TvHost 192.168.88.244 -Reboot`.** Only the developer copy exists afterwards (no duplicate under `/media/cryptofs/apps`).
 - **After the reboot the app showed the fallback list and could not launch, but the install and permissions were fine.** As root, `listApps` returned the real list. The system log shows the TV **relaunched CustomWebOS itself 31 s after boot** (`SAM NL_APP_LAUNCH_BEGIN … "caller_id":"com.webos.surfacemanager","mode":"recent"`, i.e. it was the last app), well inside the ~5 min the bus is dead. That app instance never got a call onto the bus: a 40 s `ls-monitor` trace at 8+ min uptime showed nothing from `org.jazwinski.customwebos.home-*`, although it retries every 30 s.
 - **Closing and relaunching the app fixes it.** `applicationManager/closeByAppId`, then `launch`: the fresh instance's `listApps` goes home-<pid> → home.service → `listLaunchPoints` → reply in ~25 ms.
-- **Open question:** the earlier "every upgrade needs a reboot" finding may be the same thing: an app instance whose bus connection broke, rather than hub permissions being reset. Task 11 should try close + relaunch after an upgrade before anything heavier. Also untested: whether `location.reload()` inside a stuck instance is enough to recover it.
+- **Untested:** whether `location.reload()` inside a stuck instance is enough to recover it.
+- **Task 11 (reboot-free upgrade): no candidate works; upgrades still need a reboot.** Installed 0.3.1 over 0.3.0 without `-Reboot`. After each candidate, the app was closed (`closeByAppId`), relaunched, and traced in `ls-monitor` for 30–35 s. Every time, it put **no calls on the bus** (nothing from `org.jazwinski.customwebos.home-*`) and showed "Can't reach the home service".
+  1. Close + relaunch alone: no calls. So the upgrade problem is *not* the boot-relaunch problem above.
+  2. `ls-control scan-volatile-dirs` (rc 0): no calls.
+  3. Re-running `register-service.ps1` (rewrote all nine files with version 0.3.1, `pkill -SIGHUP ls-hubd`): no calls.
+  4. `restart WebAppMgr` (the upstart job is `WebAppMgr`; it closes every web app): the app relaunched in the foreground, still no calls.
+  A reboot is the only fix found. `install.ps1 -TvHost -Reboot` stays the documented route.
 - The registration manifest still says `"version":"0.2.2"` (written at 0.2.2, never rewritten). Harmless: 0.2.3 and 0.3.0 both work with it.
 - **Testing pitfall:** BusyBox `timeout` needs `-t <secs>`. `timeout 45 cmd` fails with "can't execute '45'" and produces no output, which looks like an empty trace.
 - **UI change prompted by this session:** the built-in fallback list was misleading (it looked like a working Home but couldn't launch anything). It's replaced by an error screen showing the reason and when the next try is.
