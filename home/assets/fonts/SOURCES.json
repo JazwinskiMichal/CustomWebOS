@@ -1,0 +1,12 @@
+{
+  "manrope-latin.woff2": {
+    "source": "https://fonts.gstatic.com/s/manrope/v20/xn7gYHE41ni1AdIRggexSg.woff2",
+    "subset": "latin"
+  },
+  "manrope-latin-ext.woff2": {
+    "source": "https://fonts.gstatic.com/s/manrope/v20/xn7gYHE41ni1AdIRggmxSuXd.woff2",
+    "subset": "latin-ext (Polish letters)"
+  },
+  "licence": "SIL Open Font License 1.1, OFL.txt",
+  "project": "https://github.com/googlefonts/manrope"
+}

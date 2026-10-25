@@ -190,7 +190,6 @@ var APP_LOGOS = {
   'youtube.leanback.v4': 'youtube',
   'amazon': 'primevideo',
   'com.wbd.stream': 'max',
-  'canalplus': 'canalplus',
   'com.apple.appletv': 'appletv',
   'com.webos.app.livetv': 'livetv',
   'com.webos.app.hdmi1': 'hdmi',
@@ -370,6 +369,18 @@ function mountUI(doc) {
 
   var lang = (typeof navigator !== 'undefined' && navigator.language) || '';
 
+  // The photo behind everything, and its pre-blurred copy for the glass
+  // dock (both from config.js's HOME_WALLPAPER). If either fails to load,
+  // the dark background colour and the translucent dock veil remain.
+  var wallName = typeof HOME_WALLPAPER !== 'undefined' ? HOME_WALLPAPER : 'alpine';
+  var dockSrc = 'assets/wallpapers/' + wallName + '-dock.jpg';
+  var dockMaterialBroken = false;
+  var wallpaper = doc.getElementById('wallpaper');
+  if (wallpaper) {
+    wallpaper.onerror = function () { wallpaper.style.display = 'none'; };
+    wallpaper.src = 'assets/wallpapers/' + wallName + '.jpg';
+  }
+
   function el(tag, className, text) {
     var e = doc.createElement(tag);
     if (className) e.className = className;
@@ -423,6 +434,7 @@ function mountUI(doc) {
   var tiles = [];
   var listEl = null;
   var notePanel = null;
+  var dockEl = null;
   var shownFocus = -1;
 
   function render() {
@@ -435,8 +447,11 @@ function mountUI(doc) {
     tiles = [];
     listEl = null;
     notePanel = null;
+    dockEl = null;
     shownFocus = -1;
     root.className = 'view-' + nav.view;
+    // All apps dims the photo so its rows of white marks stay readable.
+    if (nav.view === 'all') root.appendChild(el('div', 'sheet'));
 
     var top = el('div', 'top');
     var now = new Date();
@@ -459,7 +474,8 @@ function mountUI(doc) {
       } else {
         panel.appendChild(el('p', 'state', 'No apps found.'));
       }
-      root.appendChild(dockRow(panel, 'dock dock-state'));
+      appendDock(panel, 'dock dock-state');
+      alignGlass();
       return;
     }
 
@@ -470,7 +486,7 @@ function mountUI(doc) {
     var rows = rowsFor(nav);
     if (nav.view === 'home') {
       listEl = el('ul', 'dock-track');
-      root.appendChild(dockRow(listEl, 'dock'));
+      appendDock(listEl, 'dock');
     } else {
       listEl = el('ul', 'grid');
       root.appendChild(listEl);
@@ -479,17 +495,46 @@ function mountUI(doc) {
       tiles.push(tile(rows[i], i));
       listEl.appendChild(tiles[i]);
     }
+    alignGlass();
     updateFocus(false);
   }
 
   // The dock is centred in a full-width row (an absolutely positioned box
-  // offset by left:50% could only shrink-wrap to half the stage).
-  function dockRow(content, className) {
+  // offset by left:50% could only shrink-wrap to half the stage). Its glass
+  // is the pre-blurred photo, clipped by the dock and shifted back by the
+  // dock's own position so it lines up with the photo behind it: no
+  // backdrop-filter on this engine, and no blurring at run time.
+  function appendDock(content, className) {
     var row = el('div', 'dock-row');
     var dock = el('div', className);
+    var mat = null;
+    if (!dockMaterialBroken) {
+      mat = el('div', 'mat');
+      var img = el('img', 'mat-img');
+      img.alt = '';
+      img.onerror = function () {
+        dockMaterialBroken = true;
+        if (mat.parentNode) mat.parentNode.removeChild(mat);
+      };
+      img.src = dockSrc;
+      mat.appendChild(img);
+      dock.appendChild(mat);
+    }
     dock.appendChild(content);
     row.appendChild(dock);
-    return row;
+    root.appendChild(row);
+    dockEl = dock;
+  }
+
+  // Call once the dock's content is in place: its size decides where it
+  // sits, and so how far the glass image must shift.
+  function alignGlass() {
+    var img = dockEl && dockEl.querySelector('.mat-img');
+    if (!img) return;
+    var box = dockEl.getBoundingClientRect();
+    var rootBox = root.getBoundingClientRect();
+    img.style.left = Math.round(rootBox.left - box.left) + 'px';
+    img.style.top = Math.round(rootBox.top - box.top) + 'px';
   }
 
   // The one-line launch note above the dock (see .state.note).

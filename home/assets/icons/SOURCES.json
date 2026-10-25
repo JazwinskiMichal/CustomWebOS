@@ -1,0 +1,47 @@
+{
+  "netflix": {
+    "source": "https://raw.githubusercontent.com/simple-icons/simple-icons/4d29a35c954699b389a834aacc97dd6e7e74143c/icons/netflix.svg",
+    "licence": "CC0-1.0 (Simple Icons)",
+    "note": "White fill."
+  },
+  "youtube": {
+    "source": "https://raw.githubusercontent.com/simple-icons/simple-icons/4d29a35c954699b389a834aacc97dd6e7e74143c/icons/youtube.svg",
+    "licence": "CC0-1.0 (Simple Icons)",
+    "note": "White fill."
+  },
+  "appletv": {
+    "source": "https://raw.githubusercontent.com/simple-icons/simple-icons/4d29a35c954699b389a834aacc97dd6e7e74143c/icons/appletv.svg",
+    "licence": "CC0-1.0 (Simple Icons)",
+    "note": "White fill."
+  },
+  "primevideo": {
+    "source": "https://raw.githubusercontent.com/simple-icons/simple-icons/11.15.0/icons/primevideo.svg",
+    "licence": "CC0-1.0 (Simple Icons)",
+    "note": "The two closed subpaths of the Amazon smile only, no wordmark; white fill."
+  },
+  "max": {
+    "source": "https://github.com/simple-icons/simple-icons/blob/develop/icons/hbomax.svg",
+    "licence": "CC0-1.0 (Simple Icons)",
+    "note": "hbomax.svg, shape unchanged; white fill. Used for the Max app."
+  },
+  "apps": {
+    "source": "CustomWebOS original",
+    "licence": "MIT (this repository)",
+    "note": "24-unit grid, 1.6 stroke."
+  },
+  "livetv": {
+    "source": "CustomWebOS original",
+    "licence": "MIT (this repository)",
+    "note": "24-unit grid, 1.6 stroke."
+  },
+  "hdmi": {
+    "source": "CustomWebOS original",
+    "licence": "MIT (this repository)",
+    "note": "24-unit grid, 1.6 stroke."
+  },
+  "homebrew": {
+    "source": "CustomWebOS original",
+    "licence": "MIT (this repository)",
+    "note": "24-unit grid, 1.6 stroke."
+  }
+}

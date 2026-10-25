@@ -44,6 +44,15 @@ test('serves home/ assets and dev/ fixtures', () => withServer(async (url) => {
   assert.ok(json.apps.length >= 10)
 }))
 
+test('serves svg, jpg and woff2 with their media types', () => withServer(async (url) => {
+  const { startDevServer } = await import(SERVER)
+  assert.ok(startDevServer)
+  const { TYPES } = await import(SERVER)
+  assert.equal(TYPES['.svg'], 'image/svg+xml')
+  assert.equal(TYPES['.jpg'], 'image/jpeg')
+  assert.equal(TYPES['.woff2'], 'font/woff2')
+}))
+
 test('refuses path traversal', () => withServer(async (url) => {
   for (const p of ['/../package.json', '/__dev/../../package.json', '/%2e%2e/package.json']) {
     assert.equal((await get(url, p)).status, 404, p)

@@ -158,6 +158,85 @@ test('curated apps and All apps show masked logos', async () => {
   } finally { await close() }
 })
 
+// --- Photo, glass, font, theme ---
+
+test('the configured photo fills the stage behind everything', async () => {
+  const { page, close } = await openPreview()
+  try {
+    await page.waitForFunction(() => {
+      const w = document.getElementById('wallpaper')
+      return w && w.complete && w.naturalWidth > 0
+    })
+    const w = await page.locator('#wallpaper').evaluate((e) => ({ src: e.getAttribute('src'), box: e.getBoundingClientRect().toJSON() }))
+    assert.match(w.src, /assets\/wallpapers\/alpine\.jpg$/)
+    assert.deepEqual([w.box.x, w.box.y, w.box.width, w.box.height], [0, 0, 1920, 1080])
+  } finally { await close() }
+})
+
+test('the dock glass is the blurred photo, lined up with the background', async () => {
+  const { page, close } = await openPreview()
+  try {
+    await waitForServiceList(page)
+    await page.waitForFunction(() => {
+      const m = document.querySelector('.dock .mat-img')
+      return m && m.complete && m.naturalWidth > 0
+    })
+    const m = await page.locator('.dock .mat-img').evaluate((e) => ({ src: e.getAttribute('src'), box: e.getBoundingClientRect().toJSON() }))
+    assert.match(m.src, /assets\/wallpapers\/alpine-dock\.jpg$/)
+    assert.ok(Math.abs(m.box.x) <= 1 && Math.abs(m.box.y) <= 1, 'registered at the stage origin: ' + JSON.stringify(m.box))
+    assert.equal(Math.round(m.box.width), 1920)
+  } finally { await close() }
+})
+
+test('a missing photo leaves a dark, readable screen', async () => {
+  const page = await browser.newPage({ viewport: { width: 1920, height: 1080 } })
+  try {
+    await page.route('**/assets/wallpapers/**', (r) => r.abort())
+    await page.goto(server.url + '?mock=ok')
+    await waitForServiceList(page)
+    await page.waitForTimeout(200)
+    const rgb = (c) => c.match(/\d+/g).slice(0, 3).map(Number)
+    const look = await page.evaluate(() => ({
+      body: getComputedStyle(document.body).backgroundColor,
+      clock: getComputedStyle(document.querySelector('.clock')).color,
+      wallpaperShown: getComputedStyle(document.getElementById('wallpaper')).visibility !== 'hidden' && getComputedStyle(document.getElementById('wallpaper')).display !== 'none',
+      dock: getComputedStyle(document.querySelector('.dock')).backgroundColor
+    }))
+    for (const ch of rgb(look.body)) assert.ok(ch < 60, 'dark background ' + look.body)
+    for (const ch of rgb(look.clock)) assert.ok(ch > 200, 'light clock ' + look.clock)
+    assert.equal(look.wallpaperShown, false)
+    assert.match(look.dock, /rgba\(/, 'translucent dock fallback ' + look.dock)
+  } finally { await page.close() }
+})
+
+test('text is set in Manrope', async () => {
+  const { page, close } = await openPreview()
+  try {
+    await page.evaluate(() => document.fonts.ready)
+    assert.equal(await page.evaluate(() => document.fonts.check('40px Manrope')), true)
+    assert.match(await page.locator('.clock').evaluate((e) => getComputedStyle(e).fontFamily), /^Manrope/)
+  } finally { await close() }
+})
+
+test('colours come from the dark theme set', async () => {
+  const { page, close } = await openPreview()
+  try {
+    assert.equal(await page.evaluate(() => document.documentElement.className), 'theme-dark')
+    assert.ok(await page.evaluate(() => getComputedStyle(document.documentElement).getPropertyValue('--ink').trim().length > 0))
+  } finally { await close() }
+})
+
+test('All apps sits on a dimmed sheet over the photo', async () => {
+  const { page, close } = await openPreview()
+  try {
+    await waitForServiceList(page)
+    await openAllApps(page)
+    const sheet = await page.locator('.sheet').evaluate((e) => ({ bg: getComputedStyle(e).backgroundColor, box: e.getBoundingClientRect().toJSON() }))
+    assert.match(sheet.bg, /rgba\(/)
+    assert.deepEqual([sheet.box.width, sheet.box.height], [1920, 1080])
+  } finally { await close() }
+})
+
 // --- Loading and error states ---
 
 test('nothing shows a list before the service answers', async () => {

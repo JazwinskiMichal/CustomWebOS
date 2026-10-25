@@ -15,12 +15,15 @@ const DEV_DIR = path.join(ROOT, 'dev')
 const DEV_PREFIX = '/__dev/'
 const MOCK_TAG = '<script src="/__dev/mock-bridge.js"></script>'
 
-const TYPES = {
+export const TYPES = {
   '.html': 'text/html; charset=utf-8',
   '.js': 'text/javascript; charset=utf-8',
   '.css': 'text/css; charset=utf-8',
   '.json': 'application/json; charset=utf-8',
   '.png': 'image/png',
+  '.jpg': 'image/jpeg',
+  '.svg': 'image/svg+xml',
+  '.woff2': 'font/woff2',
 }
 
 // Maps a request path to a file under home/ or dev/, or null if it would
