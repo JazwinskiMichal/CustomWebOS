@@ -181,13 +181,14 @@ html, body {
 }
 
 /* All apps: rows of 6 tiles (GRID_COLS in main.js), flex wrap (no CSS Grid),
-   scrolled to keep the focused row in view. */
+   scrolled to keep the focused row centred. Exactly 3 rows tall (tile 200 +
+   margin 8), so no row is ever cut off at the bottom. */
 .grid {
   position: absolute;
   left: 432px;
   width: 1056px;
   top: 344px;
-  bottom: 64px;
+  height: 624px;
   overflow: hidden;
   display: -webkit-flex;
   display: flex;

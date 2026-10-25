@@ -412,6 +412,79 @@ test('All apps lists every service app alphabetically', async () => {
   } finally { await close() }
 })
 
+test('arrow keys move in two dimensions in the grid', async () => {
+  const { page, close } = await openPreview()
+  try {
+    await waitForServiceList(page)
+    await openAllApps(page)
+    await page.keyboard.press('Home') // no-op key; focus starts on tile 0 (no remembered app)
+    assert.equal(await focusedIndex(page), 0)
+    await page.keyboard.press('ArrowDown')
+    assert.equal(await focusedIndex(page), 6)
+    await page.keyboard.press('ArrowUp')
+    await page.keyboard.press('ArrowRight')
+    await page.keyboard.press('ArrowDown')
+    assert.equal(await focusedIndex(page), 7)
+  } finally { await close() }
+})
+
+test('the grid shows whole rows only', async () => {
+  const { page, close } = await openPreview()
+  try {
+    await waitForServiceList(page)
+    await openAllApps(page)
+    const g = await page.locator('.grid').evaluate((e) => {
+      const t = e.querySelector('.app-item')
+      const pitch = t.offsetHeight + parseFloat(getComputedStyle(t).marginBottom)
+      return { h: e.clientHeight, pitch }
+    })
+    assert.equal(g.h % g.pitch, 0, JSON.stringify(g))
+    assert.ok(inside(await page.locator('.grid').boundingBox(), STAGE))
+  } finally { await close() }
+})
+
+test('the focused tile stays on screen while the grid scrolls', async () => {
+  const { page, close } = await openPreview()
+  try {
+    await waitForServiceList(page)
+    await openAllApps(page)
+    for (let i = 0; i < 25; i++) await page.keyboard.press('ArrowDown')
+    await page.keyboard.press('ArrowLeft')
+    const grid = await page.locator('.grid').boundingBox()
+    const box = await page.locator('.app-item.focused').boundingBox()
+    assert.ok(inside(box, grid), 'focused ' + JSON.stringify(box) + ' grid ' + JSON.stringify(grid))
+    assert.ok(await page.locator('.grid').evaluate((e) => e.scrollTop) > 0)
+  } finally { await close() }
+})
+
+test('moving in the grid does not rebuild it', async () => {
+  const { page, close } = await openPreview()
+  try {
+    await waitForServiceList(page)
+    await openAllApps(page)
+    await page.evaluate(() => {
+      window.__added = 0
+      new MutationObserver((records) => {
+        for (const r of records) window.__added += r.addedNodes.length
+      }).observe(document.getElementById('root'), { childList: true, subtree: true })
+    })
+    for (const k of ['ArrowDown', 'ArrowRight', 'ArrowDown', 'ArrowUp', 'ArrowLeft']) await page.keyboard.press(k)
+    assert.equal(await page.evaluate(() => window.__added), 0)
+  } finally { await close() }
+})
+
+test('a long title stays on one line in the grid', async () => {
+  const { page, close } = await openPreview()
+  try {
+    await waitForServiceList(page)
+    await openAllApps(page)
+    const t = await page.locator('.grid .app-item[data-id="org.webosbrew.hbchannel"] .app-title').evaluate((e) => ({
+      fits: e.scrollHeight <= e.clientHeight + 1, overflow: getComputedStyle(e).textOverflow, wrap: getComputedStyle(e).whiteSpace
+    }))
+    assert.deepEqual(t, { fits: true, overflow: 'ellipsis', wrap: 'nowrap' })
+  } finally { await close() }
+})
+
 test('All apps opens from Home and Back returns to its tile', async () => {
   const { page, close } = await openPreview()
   try {
