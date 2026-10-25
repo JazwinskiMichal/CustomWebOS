@@ -194,3 +194,24 @@ test('perf.ps1 -WhatIf prints the close, launch, wait and read commands', { skip
   assert.match(r.stdout, /cat \/tmp\/customwebos-perf\.json/)
   assert.doesNotMatch(r.stdout, /^running:/m)
 })
+
+test('perf.ps1 waits for the bus to answer before relaunching the app', { skip: !PS && 'no PowerShell' }, () => {
+  // A close or launch sent while luna-send can't get an answer is silently
+  // lost (docs/m2-tracking.md), so the script checks first.
+  const out = ps('perf.ps1', ['-TvHost', '192.0.2.1', '-WhatIf']).stdout
+  const ready = out.indexOf('getForegroundAppInfo')
+  assert.ok(ready > -1, out)
+  assert.ok(ready < out.indexOf('closeByAppId'), 'readiness check comes first')
+  assert.match(out, /bus not answering/)
+})
+
+test('perf.ps1 gives every luna-send /dev/null as stdin', { skip: !PS && 'no PowerShell' }, () => {
+  // The script reaches the TV on sh's stdin; luna-send reading that pipe
+  // returns nothing with rc 0 (seen on-device 2026-10-25).
+  const out = ps('perf.ps1', ['-TvHost', '192.0.2.1', '-WhatIf']).stdout
+  const lines = out.split(/\r?\n/).filter((l) => l.includes('luna-send'))
+  assert.ok(lines.length >= 3, out)
+  for (const l of lines) {
+    assert.equal(l.split('< /dev/null').length, l.split('luna-send').length, l)
+  }
+})

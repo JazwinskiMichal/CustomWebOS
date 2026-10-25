@@ -57,6 +57,24 @@ Alternative that **does not work** (confirmed): setting `requiredPermissions` in
 - **Testing pitfall:** BusyBox `timeout` needs `-t <secs>`. `timeout 45 cmd` fails with "can't execute '45'" and produces no output, which looks like an empty trace.
 - **UI change prompted by this session:** the built-in fallback list was misleading (it looked like a working Home but couldn't launch anything). It's replaced by an error screen showing the reason and when the next try is.
 
+## Home redesign baseline (0.3.2, 2026-10-25)
+
+Today's list UI plus perf mode, measured with `scripts/perf.ps1 -TvHost 192.168.88.244 -Action down -Steps 9` (two runs; the app relaunched with perf params, 9 focus steps 80 ms apart):
+
+| | run 1 | run 2 |
+|---|---|---|
+| first render (ms from navigation start) | 214 | 195 |
+| app list shown | 324 | 321 |
+| frame time p50 / p95 / max (ms) | 16.7 / 16.7 / 16.7 | 16.7 / 16.7 / 16.7 |
+| frames over 33 ms | 0 of 46 | 0 of 47 |
+| one focus step, synchronous render (p50 / p95 ms) | 5.7 / 7.3 | 5.2 / 7.5 |
+
+- User agent `Mozilla/5.0 (Web0S; Linux/SmartTV) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/53.0.2785.34 Safari/537.36 WebAppManager`; `navigator.language` is `pl-PL`.
+- `toLocaleDateString('pl-PL', …)` returns `niedziela, 25 października`, so the TV's Polish date formatting works. The redesign uses built-in tables anyway (same output, testable).
+- `CSS.supports`: grid **false**, `-webkit-backdrop-filter` **false**, `-webkit-mask-image` **true** (the logo masks will work).
+- The list holds a steady 60 fps, and a full re-render costs ~6 ms per key press. The redesign must stay within the bar (first paint ≤ 1 s, focus response ≤ 100 ms, p95 frame < 33 ms) and should not be much worse than this.
+- **`luna-send` returns nothing (rc 0) when its stdin is a pipe.** perf.ps1 sends its script over `ssh … sh -s`, so every `luna-send` inherited that pipe and silently produced no output: the first runs reported "no perf report" and then "bus not answering after 5 min" while hand-run calls worked. Giving each `luna-send` `< /dev/null` fixes it (tested side by side: piped stdin 0 bytes, `/dev/null` 91 bytes). This may also explain the unexplained empty answer at 165 s noted above. `perf.ps1` now redirects stdin and waits for the bus to answer before closing and relaunching the app.
+
 ## Repo-side progress (no device access)
 
 Done on 2026-10-24, all covered by `node --test`:

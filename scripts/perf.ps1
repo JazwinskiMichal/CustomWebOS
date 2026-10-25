@@ -57,10 +57,13 @@ $launch = '{"id":"' + $appId + '","params":{"perf":{"action":"' + $Action + '","
 $close  = '{"id":"' + $appId + '"}'
 
 $lines = @(
+    # After some boots luna-send returns nothing (rc 0) for minutes, and a
+    # close or launch sent then is lost; wait until the bus really answers.
+    "i=0; until luna-send -n 1 luna://com.webos.applicationManager/getForegroundAppInfo '{}' < /dev/null > /tmp/perf-ready.txt 2>&1 && grep -q returnValue /tmp/perf-ready.txt; do [ `$i -ge 60 ] && echo 'bus not answering after 5 min' && exit 1; sleep 5; i=`$((i+1)); done",
     "rm -f $out",
-    "luna-send -n 1 luna://com.webos.applicationManager/closeByAppId '$close' > /tmp/perf-close.txt 2>&1",
+    "luna-send -n 1 luna://com.webos.applicationManager/closeByAppId '$close' < /dev/null > /tmp/perf-close.txt 2>&1",
     'sleep 2',
-    "luna-send -n 1 luna://com.webos.applicationManager/launch '$launch' > /tmp/perf-launch.txt 2>&1",
+    "luna-send -n 1 luna://com.webos.applicationManager/launch '$launch' < /dev/null > /tmp/perf-launch.txt 2>&1",
     'cat /tmp/perf-launch.txt; echo',
     "i=0; while [ ! -s $out ] && [ `$i -lt 30 ]; do sleep 2; i=`$((i+1)); done",
     "if [ -s $out ]; then cat $out; echo; else echo 'no perf report within 60 s'; exit 1; fi"
