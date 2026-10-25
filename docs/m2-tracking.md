@@ -39,6 +39,16 @@ Alternative that **does not work** (confirmed): setting `requiredPermissions` in
 - **Every app upgrade breaks app → service calls until the next reboot.** After installing 0.2.3 over 0.2.2, the web app's `listApps` was silently dropped; it never showed up in `ls-monitor`. All nine registration files were unchanged on disk, and `ls-control scan-services` didn't help. A reboot with nothing else changed fixed it. The installer evidently resets the hub's in-memory permissions for the app id. `install.ps1 -TvHost -Reboot` handles it; an open question is whether there's a lighter fix than a full reboot (e.g. restarting WebAppMgr).
 - **Testing pitfalls:** (1) `luna-send` writing to a pipe can get killed by `timeout` with its output still buffered, which looks like "no answer". Use `ssh -tt` or watch `ls-monitor`. (2) `luna-send-pub -a <appId>` always fails with -1031 because luna-send-pub itself isn't allowed to call as an app. It tells you nothing about the app's real permissions. (3) Load average ~10 is normal on this TV: driver kthreads sit in D state.
 
+## On-device session, 2026-10-25 morning (0.3.0)
+
+- **Installed 0.3.0 with `install.ps1 -TvHost 192.168.88.244 -Reboot`.** Only the developer copy exists afterwards (no duplicate under `/media/cryptofs/apps`).
+- **After the reboot the app showed the fallback list and could not launch, but the install and permissions were fine.** As root, `listApps` returned the real list. The system log shows the TV **relaunched CustomWebOS itself 31 s after boot** (`SAM NL_APP_LAUNCH_BEGIN … "caller_id":"com.webos.surfacemanager","mode":"recent"`, i.e. it was the last app), well inside the ~5 min the bus is dead. That app instance never got a call onto the bus: a 40 s `ls-monitor` trace at 8+ min uptime showed nothing from `org.jazwinski.customwebos.home-*`, although it retries every 30 s.
+- **Closing and relaunching the app fixes it.** `applicationManager/closeByAppId`, then `launch`: the fresh instance's `listApps` goes home-<pid> → home.service → `listLaunchPoints` → reply in ~25 ms.
+- **Open question:** the earlier "every upgrade needs a reboot" finding may be the same thing: an app instance whose bus connection broke, rather than hub permissions being reset. Task 11 should try close + relaunch after an upgrade before anything heavier. Also untested: whether `location.reload()` inside a stuck instance is enough to recover it.
+- The registration manifest still says `"version":"0.2.2"` (written at 0.2.2, never rewritten). Harmless: 0.2.3 and 0.3.0 both work with it.
+- **Testing pitfall:** BusyBox `timeout` needs `-t <secs>`. `timeout 45 cmd` fails with "can't execute '45'" and produces no output, which looks like an empty trace.
+- **UI change prompted by this session:** the built-in fallback list was misleading (it looked like a working Home but couldn't launch anything). It's replaced by an error screen showing the reason and when the next try is.
+
 ## Repo-side progress (no device access)
 
 Done on 2026-10-24, all covered by `node --test`:
