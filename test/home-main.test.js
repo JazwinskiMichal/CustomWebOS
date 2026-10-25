@@ -127,10 +127,40 @@ test('rowsFor appends the All apps row to the home view only', () => {
   assert.deepEqual(main.rowsFor(navState({view: 'all'})).map((r) => r.id), ['a', 'b', 'c'])
 })
 
-test('down/up clamp without wrapping', () => {
-  assert.equal(main.nextState(navState({focusIdx: 2}), 'down').focusIdx, 2)
-  assert.equal(main.nextState(navState({focusIdx: 0}), 'up').focusIdx, 0)
-  assert.equal(main.nextState(navState({focusIdx: 0}), 'down').focusIdx, 1)
+test('right/left move along the dock and clamp at both ends', () => {
+  assert.equal(main.nextState(navState({focusIdx: 0}), 'right').focusIdx, 1)
+  assert.equal(main.nextState(navState({focusIdx: 2}), 'right').focusIdx, 2)
+  assert.equal(main.nextState(navState({focusIdx: 1}), 'left').focusIdx, 0)
+  assert.equal(main.nextState(navState({focusIdx: 0}), 'left').focusIdx, 0)
+})
+
+test('up/down on Home leave focus where it is', () => {
+  assert.equal(main.nextState(navState({focusIdx: 1}), 'up').focusIdx, 1)
+  assert.equal(main.nextState(navState({focusIdx: 1}), 'down').focusIdx, 1)
+})
+
+// 14 apps in rows of GRID_COLS (6): indices 0-5, 6-11, 12-13.
+const grid = (focusIdx) => navState({view: 'all', focusIdx, allItems: 'abcdefghijklmn'.split('').map(item)})
+
+test('the grid has 6 columns', () => {
+  assert.equal(main.GRID_COLS, 6)
+})
+
+test('down moves a row in the grid, landing on the last app of a short row', () => {
+  assert.equal(main.nextState(grid(2), 'down').focusIdx, 8)
+  assert.equal(main.nextState(grid(8), 'down').focusIdx, 13)
+  assert.equal(main.nextState(grid(13), 'down').focusIdx, 13)
+})
+
+test('up moves a row in the grid and stays on the top row', () => {
+  assert.equal(main.nextState(grid(13), 'up').focusIdx, 7)
+  assert.equal(main.nextState(grid(3), 'up').focusIdx, 3)
+})
+
+test('right/left move one app in the grid and clamp at the ends', () => {
+  assert.equal(main.nextState(grid(13), 'right').focusIdx, 13)
+  assert.equal(main.nextState(grid(5), 'right').focusIdx, 6)
+  assert.equal(main.nextState(grid(0), 'left').focusIdx, 0)
 })
 
 test('ok on an app sets launch to its id', () => {

@@ -221,7 +221,12 @@ function withChanges(state, changes) {
   return next;
 }
 
+// Tiles per row in the All apps grid.
+var GRID_COLS = 6;
+
 // state: { view: 'home'|'all', focusIdx, homeItems, allItems, launch, lastAppId }
+// Home is a one-row dock (left/right; up/down do nothing yet: up is kept
+// for a future control row). All apps is a grid of GRID_COLS columns.
 // action: a keyAction() value, or { type: 'point'|'click', index }.
 // Returns a new state; launch is the id to open, set only by the action
 // that asked for it. Back on Home is swallowed: as the Home app there is
@@ -246,9 +251,18 @@ function nextState(state, action) {
     if (action.type === 'click') return activate(action.index);
     return state;
   }
+  function moveTo(i) { return withChanges(state, { focusIdx: i, launch: null }); }
+  var grid = state.view === 'all';
   switch (action) {
-    case 'up':   return withChanges(state, { focusIdx: idx > 0 ? idx - 1 : 0, launch: null });
-    case 'down': return withChanges(state, { focusIdx: idx < last ? idx + 1 : last, launch: null });
+    case 'left':  return moveTo(idx > 0 ? idx - 1 : 0);
+    case 'right': return moveTo(idx < last ? idx + 1 : last);
+    case 'up':    return moveTo(grid && idx - GRID_COLS >= 0 ? idx - GRID_COLS : idx);
+    case 'down':
+      // Down from a row above a short last row lands on its last app.
+      if (grid && Math.floor(idx / GRID_COLS) < Math.floor(last / GRID_COLS)) {
+        return moveTo(Math.min(idx + GRID_COLS, last));
+      }
+      return moveTo(idx);
     case 'ok':   return activate(idx);
     case 'back':
       if (state.view === 'all') {
@@ -732,6 +746,7 @@ if (typeof module !== 'undefined' && module.exports) {
     retryDelayMs: retryDelayMs,
     scrollTopFor: scrollTopFor,
     ALL_APPS_ID: ALL_APPS_ID,
+    GRID_COLS: GRID_COLS,
     keyAction: keyAction,
     rowsFor: rowsFor,
     nextState: nextState,
