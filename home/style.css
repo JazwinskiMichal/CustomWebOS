@@ -1,8 +1,7 @@
 /* CustomWebOS Home — a dock of white logos on a photo (layout "A", see
    docs/superpowers/specs/2026-10-25-home-redesign-design.md).
    Chromium 53: no CSS Grid, no flex gap, no backdrop-filter; flex and mask
-   properties carry their -webkit- prefixes. Only transform and opacity
-   animate on focus. */
+   properties carry their -webkit- prefixes. Nothing animates on focus. */
 
 /* Manrope (OFL, assets/fonts/OFL.txt) in two subsets; latin-ext carries the
    Polish letters of the date. Chromium 53 predates variable fonts, so it
@@ -205,14 +204,12 @@ html, body {
   border-radius: 32px;
   outline: none;
   color: var(--ink);
-  -webkit-transition: -webkit-transform 120ms ease, background-color 120ms ease;
-  transition: transform 120ms ease, background-color 120ms ease;
 }
 
+/* Focus is an instant fill, no scale or fade: on the TV a 120 ms transition
+   over the glass dropped 6 of 32 frames per 9 moves (docs/m2-tracking.md). */
 .app-item.focused {
   background: var(--focus-fill);
-  -webkit-transform: scale(1.04);
-  transform: scale(1.04);
 }
 
 .mark {

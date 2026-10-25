@@ -95,6 +95,19 @@ test('focus moves along the dock without rebuilding it', async () => {
   } finally { await close() }
 })
 
+test('focus changes without animation', async () => {
+  // On the TV the 120 ms scale/fade dropped 6 of 32 frames per 9 moves
+  // (p95 67-83 ms); without it, 0 of 44 (docs/m2-tracking.md).
+  const { page, close } = await openPreview()
+  try {
+    await waitForServiceList(page)
+    const f = await page.locator('.app-item.focused').evaluate((e) => ({
+      transform: getComputedStyle(e).transform, duration: getComputedStyle(e).transitionDuration
+    }))
+    assert.deepEqual(f, { transform: 'none', duration: '0s' })
+  } finally { await close() }
+})
+
 test('all ten tiles fit inside the dock and the dock inside the stage', async () => {
   const { page, close } = await openPreview()
   try {
