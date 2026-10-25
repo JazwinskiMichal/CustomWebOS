@@ -443,3 +443,21 @@ test('after a failed launch, OK can retry straight away', async () => {
     await page.waitForFunction(() => window.__mock.launches.length === 2)
   } finally { await close() }
 })
+
+test('perf mode steps focus and reports timings', async () => {
+  const page = await browser.newPage({ viewport: { width: 1920, height: 1080 } })
+  try {
+    await page.addInitScript(() => {
+      window.PalmSystem = { launchParams: '{"perf":{"action":"down","steps":5,"intervalMs":20}}' }
+    })
+    await page.goto(server.url + '?mock=ok')
+    await page.waitForFunction(() => window.__mock.perfReports.length === 1, null, { timeout: 8000 })
+    const r = await page.evaluate(() => window.__mock.perfReports[0])
+    assert.equal(r.dispatchMs.frames, 5)
+    assert.ok(r.frames.frames > 0)
+    assert.ok(r.appsShownMs >= r.firstPaintMs)
+    assert.deepEqual(r.params, { action: 'down', steps: 5, intervalMs: 20 })
+    assert.equal(await page.evaluate(() => window.__mock.launches.length), 0)
+    assert.equal(await page.locator('.app-item').nth(5).getAttribute('class'), 'app-item focused')
+  } finally { await page.close() }
+})

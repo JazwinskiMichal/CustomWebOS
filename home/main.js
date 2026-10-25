@@ -256,6 +256,40 @@ function nowMs() {
   return new Date().getTime();
 }
 
+// --- Perf mode: measured on the TV by scripts/perf.ps1 ---
+
+// Summary of frame (or dispatch) durations in ms: p50 is the median, p95 the
+// nearest-rank 95th percentile, over33 the count slower than 30 fps.
+function frameStats(deltas) {
+  var n = deltas.length;
+  if (!n) return { frames: 0, p50: 0, p95: 0, max: 0, over33: 0 };
+  var s = deltas.slice().sort(function (a, b) { return a - b; });
+  var mid = Math.floor(n / 2);
+  var p50 = n % 2 ? s[mid] : (s[mid - 1] + s[mid]) / 2;
+  var over = 0;
+  for (var i = 0; i < n; i++) if (s[i] > 33) over++;
+  function r(x) { return Math.round(x * 10) / 10; }
+  return { frames: n, p50: r(p50), p95: r(s[Math.ceil(0.95 * n) - 1]), max: r(s[n - 1]), over33: over };
+}
+
+var PERF_ACTIONS = { right: true, left: true, down: true, up: true };
+
+// The app's launch parameters (PalmSystem.launchParams, a JSON string) may
+// carry {"perf": {action, steps, intervalMs}}; anything else means no perf run.
+function perfParams(raw) {
+  var parsed;
+  try { parsed = JSON.parse(raw); } catch (e) { return null; }
+  var p = parsed && parsed.perf;
+  if (!p || typeof p !== 'object') return null;
+  var action = p.action === undefined ? 'right' : p.action;
+  if (!PERF_ACTIONS.hasOwnProperty(action)) return null;
+  return {
+    action: action,
+    steps: typeof p.steps === 'number' ? p.steps : 40,
+    intervalMs: typeof p.intervalMs === 'number' ? p.intervalMs : 80
+  };
+}
+
 // --- Browser runtime (guarded; does not execute when required from Node) ---
 
 function mountUI(doc) {
@@ -311,10 +345,15 @@ function mountUI(doc) {
     return box;
   }
 
+  function render(keepScroll) {
+    renderView(keepScroll);
+    perfMarkRender();
+  }
+
   // keepScroll: a pointer action. Keep the list where it is; recentring
   // would slide another row under the pointer. (Synthetic mousemoves at an
   // unchanged position are also filtered in onPointer.)
-  function render(keepScroll) {
+  function renderView(keepScroll) {
     var oldList = root.querySelector('.app-list');
     var oldScroll = oldList ? oldList.scrollTop : 0;
     while (root.firstChild) root.removeChild(root.firstChild);
@@ -555,6 +594,77 @@ function mountUI(doc) {
     if (!retryTimer && !listInFlight) requestApps(0);
   }
 
+  // Perf mode (scripts/perf.ps1 launches the app with {"perf": {…}}): note
+  // when the first screen and the first app list render, then step focus
+  // through dispatch() as the keys would, sampling frame times, and hand
+  // the numbers to the service, which writes them to a file on the TV.
+  var perf = perfParams(window.PalmSystem && window.PalmSystem.launchParams);
+  var perfMarks = { firstPaintMs: null, appsShownMs: null };
+
+  function perfMarkRender() {
+    if (!perf) return;
+    var t = Math.round(nowMs());
+    if (perfMarks.firstPaintMs === null) perfMarks.firstPaintMs = t;
+    if (perfMarks.appsShownMs === null && state.status === 'ready' && (nav.homeItems.length || nav.allItems.length)) {
+      perfMarks.appsShownMs = t;
+      setTimeout(runPerf, 1000);
+    }
+  }
+
+  function supports(prop, value) {
+    try { return !!(window.CSS && window.CSS.supports(prop, value)); } catch (e) { return false; }
+  }
+
+  function runPerf() {
+    var deltas = [];
+    var durations = [];
+    var lastFrame = null;
+    var running = true;
+    var step = 0;
+    function frame(t) {
+      if (lastFrame !== null) deltas.push(t - lastFrame);
+      lastFrame = t;
+      if (running) window.requestAnimationFrame(frame);
+    }
+    function tick() {
+      if (step >= perf.steps) {
+        running = false;
+        sendPerfReport(deltas, durations);
+        return;
+      }
+      step++;
+      var t0 = nowMs();
+      dispatch(perf.action);
+      durations.push(nowMs() - t0);
+      setTimeout(tick, perf.intervalMs);
+    }
+    window.requestAnimationFrame(frame);
+    tick();
+  }
+
+  function sendPerfReport(deltas, durations) {
+    var datePl = null;
+    try {
+      datePl = new Date(2026, 9, 25).toLocaleDateString('pl-PL', { weekday: 'long', day: 'numeric', month: 'long' });
+    } catch (e) { /* no Intl */ }
+    var report = {
+      ua: navigator.userAgent,
+      lang: navigator.language,
+      params: perf,
+      firstPaintMs: perfMarks.firstPaintMs,
+      appsShownMs: perfMarks.appsShownMs,
+      frames: frameStats(deltas),
+      dispatchMs: frameStats(durations),
+      datePl: datePl,
+      supports: {
+        grid: supports('display', 'grid'),
+        backdrop: supports('-webkit-backdrop-filter', 'blur(1px)'),
+        mask: supports('-webkit-mask-image', 'url(x.svg)')
+      }
+    };
+    lunaCall(SERVICE_URI + '/perfReport', { report: report }, function () {}, function () {});
+  }
+
   doc.addEventListener('keydown', onKey);
   doc.addEventListener('visibilitychange', onVisibility);
   root.addEventListener('mousemove', onPointer('point'));
@@ -597,6 +707,8 @@ if (typeof module !== 'undefined' && module.exports) {
     msToNextMinute: msToNextMinute,
     PREFS_KEY: PREFS_KEY,
     loadPrefs: loadPrefs,
-    savePrefs: savePrefs
+    savePrefs: savePrefs,
+    frameStats: frameStats,
+    perfParams: perfParams
   };
 }

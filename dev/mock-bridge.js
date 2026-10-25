@@ -13,7 +13,7 @@
 (function () {
   var mode = (/[?&]mock=(\w+)/.exec(window.location.search) || [])[1] || 'ok'
   var SERVICE = 'luna://org.jazwinski.customwebos.home.service/'
-  window.__mock = { mode: mode, launches: [], listAppsAnswered: 0 }
+  window.__mock = { mode: mode, launches: [], listAppsAnswered: 0, perfReports: [] }
 
   function listApps() {
     if (mode === 'error') return Promise.resolve({ returnValue: false, errorText: 'mock error' })
@@ -32,6 +32,10 @@
 
   function answer(uri, payload) {
     if (uri === SERVICE + 'listApps') return listApps()
+    if (uri === SERVICE + 'perfReport') {
+      window.__mock.perfReports.push(payload.report)
+      return Promise.resolve({ returnValue: true })
+    }
     if (uri === SERVICE + 'launch') {
       window.__mock.launches.push(payload.id)
       return Promise.resolve({ returnValue: false, errorText: 'preview: launching requires the TV' })

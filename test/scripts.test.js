@@ -185,3 +185,12 @@ test('PowerShell scripts get -WhatIf from SupportsShouldProcess, not a hand-roll
     assert.match(src, /\$PSCmdlet\.ShouldProcess\(/, f)
   }
 })
+
+test('perf.ps1 -WhatIf prints the close, launch, wait and read commands', { skip: !PS && 'no PowerShell' }, () => {
+  const r = ps('perf.ps1', ['-TvHost', '192.0.2.1', '-WhatIf'])
+  assert.equal(r.status, 0, r.stderr)
+  assert.match(r.stdout, /closeByAppId/)
+  assert.ok(r.stdout.includes('"perf":{"action":"right","steps":40,"intervalMs":80}'), r.stdout)
+  assert.match(r.stdout, /cat \/tmp\/customwebos-perf\.json/)
+  assert.doesNotMatch(r.stdout, /^running:/m)
+})

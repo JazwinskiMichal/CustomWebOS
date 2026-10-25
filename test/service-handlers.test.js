@@ -80,3 +80,37 @@ test('launch responds with an error when applicationManager returns nothing', ()
   createHandlers(call).launch(msg)
   assert.deepEqual(msg.responses, [{ returnValue: false, errorText: 'empty response' }])
 })
+
+function fakeWrite(err) {
+  const writes = []
+  const writeFile = (p, text, cb) => { writes.push({ p, text }); cb(err || null) }
+  return { writeFile, writes }
+}
+
+test('perfReport writes the report to /tmp/customwebos-perf.json', () => {
+  const w = fakeWrite()
+  const h = createHandlers(fakeCall({}).call, w.writeFile)
+  const m = fakeMessage({ report: { frames: { p95: 20 } } })
+  h.perfReport(m)
+  assert.equal(w.writes.length, 1)
+  assert.equal(w.writes[0].p, '/tmp/customwebos-perf.json')
+  assert.deepEqual(JSON.parse(w.writes[0].text), { frames: { p95: 20 } })
+  assert.deepEqual(m.responses, [{ returnValue: true }])
+})
+
+test('perfReport rejects a missing report', () => {
+  const w = fakeWrite()
+  const h = createHandlers(fakeCall({}).call, w.writeFile)
+  const m = fakeMessage({})
+  h.perfReport(m)
+  assert.equal(w.writes.length, 0)
+  assert.deepEqual(m.responses, [{ returnValue: false, errorText: 'report required' }])
+})
+
+test('perfReport reports a write error', () => {
+  const w = fakeWrite(new Error('disk full'))
+  const h = createHandlers(fakeCall({}).call, w.writeFile)
+  const m = fakeMessage({ report: { a: 1 } })
+  h.perfReport(m)
+  assert.deepEqual(m.responses, [{ returnValue: false, errorText: 'disk full' }])
+})

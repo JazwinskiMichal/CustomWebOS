@@ -322,3 +322,22 @@ test('bootFocusIndex: a curated last app, a non-curated one (the All apps row), 
   assert.equal(main.bootFocusIndex(s, 'unknown'), 0)
   assert.equal(main.bootFocusIndex(s, null), 0)
 })
+
+test('frameStats summarises frame deltas', () => {
+  assert.deepEqual(main.frameStats([16, 16, 17, 50]), { frames: 4, p50: 16.5, p95: 50, max: 50, over33: 1 })
+})
+
+test('frameStats of no frames is all zeros', () => {
+  assert.deepEqual(main.frameStats([]), { frames: 0, p50: 0, p95: 0, max: 0, over33: 0 })
+})
+
+test('perfParams reads the perf launch parameters, with defaults', () => {
+  assert.deepEqual(main.perfParams('{"perf":{"action":"down","steps":10,"intervalMs":50}}'), { action: 'down', steps: 10, intervalMs: 50 })
+  assert.deepEqual(main.perfParams('{"perf":{}}'), { action: 'right', steps: 40, intervalMs: 80 })
+})
+
+test('perfParams is null without a usable perf object', () => {
+  for (const raw of [undefined, 'nope', '{}', '{"perf":{"action":"jump"}}']) {
+    assert.equal(main.perfParams(raw), null, String(raw))
+  }
+})

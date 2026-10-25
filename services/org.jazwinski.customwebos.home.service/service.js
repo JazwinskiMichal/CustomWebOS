@@ -7,6 +7,9 @@
 //   luna://org.jazwinski.customwebos.home.service/launch
 //     payload: {id: string}
 //     -> whatever applicationManager/launch returned
+//   luna://org.jazwinski.customwebos.home.service/perfReport
+//     payload: {report: object}  (the home app's perf mode)
+//     -> writes /tmp/customwebos-perf.json, {returnValue: true}
 //
 // The webapp (org.jazwinski.customwebos.home) runs unprivileged and cannot
 // talk to com.webos.applicationManager directly (LSCallFromApplication is
@@ -23,9 +26,11 @@ var service = new Service(pkg.name);
 // dynamic-service dispatch, we don't need to self-exit on quiet.
 service.activityManager.exitOnTimeout = false;
 
+var fs = require('fs');
 var handlers = require('./handlers.js').createHandlers(function (uri, params, callback) {
     service.call(uri, params, callback);
-});
+}, fs.writeFile);
 
 service.register('listApps', handlers.listApps);
 service.register('launch', handlers.launch);
+service.register('perfReport', handlers.perfReport);
