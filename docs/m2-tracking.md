@@ -75,6 +75,23 @@ Today's list UI plus perf mode, measured with `scripts/perf.ps1 -TvHost 192.168.
 - The list holds a steady 60 fps, and a full re-render costs ~6 ms per key press. The redesign must stay within the bar (first paint ≤ 1 s, focus response ≤ 100 ms, p95 frame < 33 ms) and should not be much worse than this.
 - **`luna-send` returns nothing (rc 0) when its stdin is a pipe.** perf.ps1 sends its script over `ssh … sh -s`, so every `luna-send` inherited that pipe and silently produced no output: the first runs reported "no perf report" and then "bus not answering after 5 min" while hand-run calls worked. Giving each `luna-send` `< /dev/null` fixes it (tested side by side: piped stdin 0 bytes, `/dev/null` 91 bytes). This may also explain the unexplained empty answer at 165 s noted above. `perf.ps1` now redirects stdin and waits for the bus to answer before closing and relaunching the app.
 
+## Home redesign on the TV (0.4.0 / 0.4.1, 2026-10-25)
+
+Dock layout, white logos, photo with pre-blurred glass, Manrope, Polish date. Measured with `scripts/perf.ps1 -TvHost 192.168.88.244 -Action right -Steps 9`:
+
+| | 0.4.0 | 0.4.0, no focus animation (CSS edited in place) | 0.4.1 (committed, after reboot) | bar |
+|---|---|---|---|---|
+| first render (ms) | 322 / 287 | 229 / 259 | 367 / 310 | ≤ 1000 |
+| app list shown (ms) | 1266 / 452 | 397 / 350 | 1307 / 428 | |
+| frame p95 (ms) | **66.7 / 83.3** | 16.7 / 16.7 | 16.7 / 16.7 | < 33 |
+| frames over 33 ms | **6 of 32**, 6 of 32 | 0 of 44, 0 of 44 | 0 of 44, 0 of 45 | |
+| one focus step, p95 (ms) | 2.4 / 3.6 | 2.9 / 2.4 | 2.4 / 2.7 | ≤ 100 |
+
+- The JS side is ~60× cheaper per key press than the old list (p50 0.1 ms vs ~6 ms), because focus moves only swap a class.
+- The 120 ms scale/fade on the focused tile over the glass dock was what dropped frames. Giving it up (step 1 of the agreed order) was enough: font, glass and photo stay. The ~1.3 s "app list shown" on the first run after a reboot is the service cold start.
+- Editing the installed `style.css` in place under `/media/developer/apps/usr/palm/applications/org.jazwinski.customwebos.home/` and relaunching (perf.ps1 does that) takes effect without a reinstall or reboot. A quick loop for visual experiments; the committed build was then installed normally.
+- **Owner check, 0.4.1:** "its all looking very good" — look, logos, All apps, date, pointer, Back and speed all accepted.
+
 ## Repo-side progress (no device access)
 
 Done on 2026-10-24, all covered by `node --test`:
