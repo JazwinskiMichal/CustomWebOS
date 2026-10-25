@@ -341,3 +341,33 @@ test('perfParams is null without a usable perf object', () => {
     assert.equal(main.perfParams(raw), null, String(raw))
   }
 })
+
+test('formatDate gives the Polish date by default and English for en', () => {
+  const d = new Date(2026, 9, 25)
+  assert.equal(main.formatDate(d, 'pl-PL'), 'niedziela, 25 października')
+  assert.equal(main.formatDate(d, 'en-US'), 'Sunday, 25 October')
+  assert.equal(main.formatDate(d, undefined), 'niedziela, 25 października')
+  assert.equal(main.formatDate(d, ''), 'niedziela, 25 października')
+})
+
+test('formatDate uses the genitive for every Polish month', () => {
+  const months = ['stycznia', 'lutego', 'marca', 'kwietnia', 'maja', 'czerwca', 'lipca', 'sierpnia', 'września', 'października', 'listopada', 'grudnia']
+  months.forEach((m, i) => {
+    assert.match(main.formatDate(new Date(2026, i, 3), 'pl'), new RegExp(', 3 ' + m + '$'))
+  })
+})
+
+test('formatDate names every Polish weekday', () => {
+  // 2026-10-25 is a Sunday.
+  const days = ['niedziela', 'poniedziałek', 'wtorek', 'środa', 'czwartek', 'piątek', 'sobota']
+  days.forEach((d, i) => {
+    assert.equal(main.formatDate(new Date(2026, 9, 25 + i), 'pl').split(',')[0], d)
+  })
+})
+
+test('logoFor maps curated apps and All apps to bundled logos', () => {
+  assert.equal(main.logoFor('netflix'), 'assets/icons/netflix.svg')
+  assert.equal(main.logoFor('com.wbd.stream'), 'assets/icons/max.svg')
+  assert.equal(main.logoFor(main.ALL_APPS_ID), 'assets/icons/apps.svg')
+  assert.equal(main.logoFor('pl.cda'), null)
+})

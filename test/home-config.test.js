@@ -34,3 +34,9 @@ test('HOME_APPS starts with the planned curated order', () => {
     'com.apple.appletv', 'com.webos.app.livetv', 'com.webos.app.hdmi1', 'org.webosbrew.hbchannel',
   ])
 })
+
+test('config.js names a wallpaper', () => {
+  const { HOME_WALLPAPER } = loadConfig()
+  assert.equal(typeof HOME_WALLPAPER, 'string')
+  assert.ok(HOME_WALLPAPER.length > 0)
+})

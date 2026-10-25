@@ -139,6 +139,25 @@ function formatClock(date) {
   return pad2(date.getHours()) + ':' + pad2(date.getMinutes());
 }
 
+// The date under the clock, in the TV's language: built-in tables rather
+// than toLocaleDateString, which depends on the TV's ICU build. English for
+// en*, Polish (genitive months) for everything else.
+var DATE_NAMES = {
+  pl: {
+    days: ['niedziela', 'poniedziałek', 'wtorek', 'środa', 'czwartek', 'piątek', 'sobota'],
+    months: ['stycznia', 'lutego', 'marca', 'kwietnia', 'maja', 'czerwca', 'lipca', 'sierpnia', 'września', 'października', 'listopada', 'grudnia']
+  },
+  en: {
+    days: ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'],
+    months: ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December']
+  }
+};
+
+function formatDate(date, lang) {
+  var names = String(lang || '').toLowerCase().indexOf('en') === 0 ? DATE_NAMES.en : DATE_NAMES.pl;
+  return names.days[date.getDay()] + ', ' + date.getDate() + ' ' + names.months[date.getMonth()];
+}
+
 function msToNextMinute(date) {
   return 60000 - (date.getSeconds() * 1000 + date.getMilliseconds());
 }
@@ -154,6 +173,25 @@ function focusIndexFor(items, id) {
 
 // Sentinel row at the end of the Home view that opens the All apps view.
 var ALL_APPS_ID = '__all__';
+
+// White monochrome logos bundled in assets/icons/ (sources and licences in
+// that folder), by app id. Apps not listed use the TV's icon or initials.
+var APP_LOGOS = {
+  'netflix': 'netflix',
+  'youtube.leanback.v4': 'youtube',
+  'amazon': 'primevideo',
+  'com.wbd.stream': 'max',
+  'canalplus': 'canalplus',
+  'com.apple.appletv': 'appletv',
+  'com.webos.app.livetv': 'livetv',
+  'com.webos.app.hdmi1': 'hdmi',
+  'org.webosbrew.hbchannel': 'homebrew'
+};
+APP_LOGOS[ALL_APPS_ID] = 'apps';
+
+function logoFor(id) {
+  return APP_LOGOS.hasOwnProperty(id) ? 'assets/icons/' + APP_LOGOS[id] + '.svg' : null;
+}
 
 function keyAction(keyCode) {
   switch (keyCode) {
@@ -709,6 +747,9 @@ if (typeof module !== 'undefined' && module.exports) {
     loadPrefs: loadPrefs,
     savePrefs: savePrefs,
     frameStats: frameStats,
+    formatDate: formatDate,
+    APP_LOGOS: APP_LOGOS,
+    logoFor: logoFor,
     perfParams: perfParams
   };
 }
