@@ -25,6 +25,7 @@
 #include "lginput.h"
 #include "pointer.h"
 #include "session.h"
+#include "toast.h"
 
 #define TILE 64
 #define CONFIG_DIR "/home/root/.config/customwebos"
@@ -299,9 +300,10 @@ static void apply(int actions)
         capture_stop();
         input_stop();
     }
-    if (actions & (SA_TOAST_START | SA_TOAST_END)) {
-        /* Task 6: toast */
-    }
+    if (actions & SA_TOAST_START)
+        toast_send(1);
+    if (actions & SA_TOAST_END)
+        toast_send(0);
 }
 
 /* 1 if the password file exists and is non-empty (the default passwordCheck
