@@ -34,7 +34,6 @@ Two more projects were agreed on 2026-10-25 (see Next steps): a Home Assistant c
 In suggested order. Each new piece of work starts with a design (`docs/superpowers/specs/`).
 
 0. **Remote view follow-ups** (small, none blocking):
-   - Offer the DILE_VT cleanup fix (`native/remoteview/backends/libdile_vt.c`) upstream to hyperion-webos.
    - The persistent "someone is watching" badge comes with M4; the toast is temporary.
    - Parked minors with reasons: the log rotates only at restart; pointer drift after using the Magic Remote mid-session; `pointer_scale` above 1.2 can drop big moves; capture-library waits have no time limit (not seen on this TV).
 1. **Time-of-day theme:** after a set hour, a dark wallpaper and colours, "similar to macOS".
