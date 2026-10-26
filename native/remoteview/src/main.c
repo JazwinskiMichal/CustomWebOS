@@ -128,7 +128,7 @@ static int dump_rgb(const uint8_t *argb, int w, int h, const char *path)
     for (y = 0; y < h; y++)
         for (x = 0; x < w; x++) {
             const uint8_t *p = argb + ((size_t)y * w + x) * 4;
-            uint8_t rgb[3] = { p[2], p[1], p[0] };
+            uint8_t rgb[3] = { p[0], p[1], p[2] }; /* frames are R,G,B,A in memory */
             fwrite(rgb, 1, 3, f);
         }
     return fclose(f);

@@ -71,7 +71,7 @@ int config_parse(const char *text, rv_config *out)
 
     out->width = 960;
     out->height = 540;
-    out->fps_max = 10;
+    out->fps_max = 15;
     out->pointer_scale = 0.51;
     while (p && *p) {
         char line[128];

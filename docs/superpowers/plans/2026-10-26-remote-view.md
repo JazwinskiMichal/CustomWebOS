@@ -14,7 +14,7 @@
 
 - Port **5900**, RFB "VNC Authentication" only; **no password file → refuse every client**.
 - **Idle costs nothing:** no capture context open, no capture thread, no timers spinning while no client is connected. Capture opens on the first authenticated client and closes on the last disconnect.
-- **Budgets while connected:** default **960×540**, fps cap default **10**, RSS **< 30 MB**, CPU **< 50% of one core** measured from `/proc/<pid>/stat` ticks (one core = 100%), not busybox `top`. **Over budget → lower fps first** (below 10 allowed, floor 2); never shrink size or drop video automatically.
+- **Budgets while connected:** default **960×540**, fps cap default **15** (raised from 10 after the Task 5 measurement: Netflix settles at 12 fps within budget), RSS **< 30 MB**, CPU **< 50% of one core** measured from `/proc/<pid>/stat` ticks (one core = 100%), not busybox `top`. **Over budget → lower fps first** (below 10 allowed, floor 2); never shrink size or drop video automatically.
 - **Never leak `DILE_VT`:** SIGTERM, SIGINT, SIGHUP and client errors all run the same close path. If `DILE_VT` fails to open, serve the UI layer alone and log why.
 - **No side effects:** never switch HDR or power state; nothing that blocks the OLED pixel-refresh screensaver.
 - **LAN only:** refuse clients whose IPv4 source isn't 10/8, 172.16/12, 192.168/16, 169.254/16 or 127/8.

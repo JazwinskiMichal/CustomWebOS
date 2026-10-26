@@ -184,3 +184,20 @@ Versions 0.1.1 → 0.1.5 are on-device-test iterations. 0.1.5 is the current `ma
 - **A signal during open leaked `DILE_VT`.** Three SIGTERMs a few ms after start, while `DILE_VT_Create` had run but the code hadn't yet recorded the context, left every later open failing (`Failed to get DILE_VT context`) until a reboot. The UI-only fallback worked and logged why. Fixed by blocking SIGTERM/SIGINT/SIGHUP/SIGQUIT inside `capture_open`/`capture_frame`/`capture_close`. After the fix, SIGTERM at 0, 1, 2 and 4 s into a run was followed each time by a clean `video=1` run.
 - **No vsync wait.** `capture_frame` no longer calls `DILE_VT_WaitVsync` (unbounded with no video signal). Frames still carry the live picture: video layer non-black, UI layer alpha 0 over live TV, composited frame correct.
 - **An all-black frame was the OLED screensaver, not a bug.** With CustomWebOS open and idle the screensaver starts. Both our capture and hyperion-webos then show a black screen with a cloud of coloured particles, with an opaque UI layer covering the video. It doesn't appear over live TV.
+
+## Remote view: first VNC sessions and budgets (2026-10-26)
+
+`remoteview` serving from `/tmp/rv` with a test password; viewers on the PC: UltraVNC (picked ZRLE) and TightVNC (picked Tight with JPEG, quality 6). CPU from `/proc/<pid>/stat` ticks (fraction of one core), memory from `VmHWM`.
+
+- **Missing library.** The binary needs `libjpeg.so.8` (libjpeg-turbo, from the toolchain); the TV has only `libjpeg.so.62`. For these runs it sat beside the binary with `LD_LIBRARY_PATH`; packaging has to ship it.
+- **Logs.** PmLogDaemon on this TV drops plain `syslog()` (no `logger` level reached `/var/log/messages`), and the capture backends re-run `openlog()`. The daemon now also writes every log line to stderr.
+- **First run (ZRLE, 10 fps cap):** 0.87 of a core at 10 fps, so the governor held 2–3 fps. ZRLE sent ~540 KB per frame. Colours were wrong (red as blue).
+- **Per-step capture timing (960×540, ms per frame):** video acquire 0.1, video NV21→ARGB 30, UI acquire 9, UI convert 9, blend 2. The capture buffers are slow uncached memory: one `memcpy` out and converting the copy cuts video to ~5 ms and the whole frame from ~51 to ~26 ms.
+- **Colours.** The composited frame is bytes R,G,B,A in memory, not libyuv's documented B,G,R,A for "ARGB". Confirmed by swapping a captured Netflix frame's channels. The server now declares red shift 0, blue shift 16. Owner: "colors are correct".
+- **After the fixes (copy-first capture, Tight/JPEG, 960×540):**
+  - home screen, 10 fps cap: 10 fps steady, 0.41 of a core, VmHWM 16 MB; `perf.ps1 -Action right -Steps 9` while connected: p95 16.7 ms, 0 frames over 33 ms;
+  - Netflix, 10 fps cap: 10 fps steady, 0.37 (0.19 encoding, 0.18 capture), VmHWM 16.6 MB;
+  - Netflix at 1280×720: settles at 6 fps, 0.39–0.40, VmHWM 26 MB (close to the 30 MB budget, so 960×540 stays the default);
+  - Netflix, cap raised to 15 with a proportional governor (fps × 0.45/cpu when over 0.50): 15 → 12, then 12 fps steady at 0.44–0.45, VmHWM 16.5 MB.
+- **Idle after disconnecting:** 0.00 CPU over 30 s, one thread, VmRSS 7.2 MB. `/dev/lg/gfx0` and the `gm` message queues stay open (libgm keeps them); no DILE_VT handle.
+- **The OLED screensaver came on over the idle home screen during the session** (`tvpowerd … "Screen Saver"`).

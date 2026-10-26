@@ -5,6 +5,7 @@
 #include <limits.h>
 #include <signal.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
 
@@ -20,6 +21,58 @@ static int ui_up, video_up;      /* backend initialised (needs cleanup) */
 static int ui_run, video_run;    /* backend started (needs terminate) */
 static int cap_w, cap_h;
 static converter_t ui_conv, video_conv;
+
+/* Cached copies of a layer's planes. Capture buffers are uncached device memory:
+ * libyuv reading them directly took ~30 ms per 960x540 video frame on the TV;
+ * one memcpy out and converting the copy takes ~5 ms (tv-log 2026-10-26). */
+typedef struct {
+    uint8_t *buf[2];
+    size_t size[2];
+} bounce_t;
+static bounce_t ui_bounce, video_bounce;
+
+/* Rows in plane p of a frame, or 0 for formats we don't copy (converted in place). */
+static int plane_rows(const frame_info_t *f, int p)
+{
+    switch (f->pixel_format) {
+    case PIXFMT_YUV420_SEMI_PLANAR:
+        return p == 0 ? f->height : p == 1 ? f->height / 2 : 0;
+    case PIXFMT_RGB:
+    case PIXFMT_ABGR:
+    case PIXFMT_ARGB:
+        return p == 0 ? f->height : 0;
+    default:
+        return 0;
+    }
+}
+
+/* Copies f's planes into b and points f at the copies; on allocation failure
+ * leaves f pointing at the original buffers (slower, still correct). */
+static void bounce(bounce_t *b, frame_info_t *f)
+{
+    int p;
+
+    for (p = 0; p < 2 && plane_rows(f, p); p++) {
+        size_t n = (size_t)f->planes[p].stride * plane_rows(f, p);
+        if (b->size[p] < n) {
+            uint8_t *nb = realloc(b->buf[p], n);
+            if (!nb)
+                return;
+            b->buf[p] = nb;
+            b->size[p] = n;
+        }
+        memcpy(b->buf[p], f->planes[p].buffer, n);
+        f->planes[p].buffer = b->buf[p];
+    }
+}
+
+/* Frees a layer's copies. */
+static void bounce_free(bounce_t *b)
+{
+    free(b->buf[0]);
+    free(b->buf[1]);
+    memset(b, 0, sizeof *b);
+}
 
 /* Builds the path of a backend .so beside this binary (resolved via /proc/self/exe). */
 static int backend_path(char *out, size_t n, const char *name)
@@ -116,11 +169,14 @@ static int frame_locked(uint8_t *argb_out, int stride)
     if (video_run) {
         /* No vsync wait: it blocks without a video signal; the caller paces frames. */
         got_video = video.acquire_frame(video.state, &vf) == 0;
+        if (got_video)
+            bounce(&video_bounce, &vf);
         if (got_video && converter_run(&video_conv, &vf, &vc, PIXFMT_ARGB) != 0)
             got_video = 0;
     }
     if (ui.acquire_frame(ui.state, &uf) == 0) {
         got_ui = 1;
+        bounce(&ui_bounce, &uf);
         if (converter_run(&ui_conv, &uf, &uc, PIXFMT_ARGB) != 0)
             got_ui = 0;
     }
@@ -161,6 +217,8 @@ static void close_locked(void)
     converter_release(&video_conv);
     converter_init(&ui_conv);
     converter_init(&video_conv);
+    bounce_free(&ui_bounce);
+    bounce_free(&video_bounce);
 }
 
 /* Blocks the termination signals so the shutdown handler never runs while the

@@ -9,7 +9,7 @@ int main(void)
     rv_config c;
 
     assert(config_parse("", &c) == 0);
-    assert(c.width == 960 && c.height == 540 && c.fps_max == 10 && fabs(c.pointer_scale - 0.51) < 1e-9);
+    assert(c.width == 960 && c.height == 540 && c.fps_max == 15 && fabs(c.pointer_scale - 0.51) < 1e-9);
 
     assert(config_parse("width=1280\nheight=720\nfps=5\n", &c) == 0);
     assert(c.width == 1280 && c.height == 720 && c.fps_max == 5);

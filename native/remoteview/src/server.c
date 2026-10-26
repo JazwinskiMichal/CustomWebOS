@@ -56,12 +56,21 @@ static struct {
     double prev_t, last_log_t;
 } gov;
 
-/* Logs to syslog (never a file on flash). Also used for LibVNCServer's own log. */
+/* Logs to syslog and stderr (never a file on flash). This TV's PmLogDaemon drops
+ * plain syslog, and the capture backends re-run openlog(), so stderr is the
+ * readable copy; the boot hook points it at /tmp. Also LibVNCServer's log. */
 static void logf_(const char *fmt, ...)
 {
     va_list ap;
+
     va_start(ap, fmt);
     vsyslog(LOG_INFO, fmt, ap);
+    va_end(ap);
+    va_start(ap, fmt);
+    fputs("remoteview: ", stderr);
+    vfprintf(stderr, fmt, ap);
+    if (*fmt && fmt[strlen(fmt) - 1] != '\n')
+        fputc('\n', stderr);
     va_end(ap);
 }
 
@@ -428,15 +437,16 @@ int server_run(const rv_config *config)
     dirty = calloc(1, (size_t)((cfg.width + TILE - 1) / TILE) * ((cfg.height + TILE - 1) / TILE));
     if (!screen->frameBuffer || !stage || !dirty)
         return 1;
-    /* libyuv ARGB: bytes B,G,R,A in memory; alpha ignored. */
+    /* Captured frames are bytes R,G,B,A in memory (checked against a live frame on
+     * the TV, tv-log 2026-10-26), so red is the low byte; alpha ignored. */
     screen->serverFormat.bitsPerPixel = 32;
     screen->serverFormat.depth = 24;
     screen->serverFormat.bigEndian = 0;
     screen->serverFormat.trueColour = 1;
     screen->serverFormat.redMax = screen->serverFormat.greenMax = screen->serverFormat.blueMax = 255;
-    screen->serverFormat.redShift = 16;
+    screen->serverFormat.redShift = 0;
     screen->serverFormat.greenShift = 8;
-    screen->serverFormat.blueShift = 0;
+    screen->serverFormat.blueShift = 16;
     screen->desktopName = "LG TV";
     screen->authPasswdData = (void *)PASSWD_PATH;
     screen->newClientHook = new_client;
