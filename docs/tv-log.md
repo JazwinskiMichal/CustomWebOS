@@ -175,3 +175,12 @@ Versions 0.1.1 → 0.1.5 are on-device-test iterations. 0.1.5 is the current `ma
   - Scale 1.0: 100 units from the corner → 205 px; a centre move of +860/−440 units → +1682/−870 px. **About 1.96–1.98 px per unit**; the other targets overshot to the screen edges.
   - Scale 0.5: four of five clicks landed within 22 px of their target (1798,116 / 1798,986 / 116,986 / 959,549). The first click of the run (top-left) never reached the page, probably because it only woke the hidden cursor; the 1.0 run's first click did register.
   - Default `pointer_scale` set to **0.51**.
+
+## Remote view: leak-safe capture (2026-10-26)
+
+`remoteview --capture-test` (our own capture over hyperion-webos 0.2.1's `libdile_vt` and `libgm` backends), run from `/tmp/rv` with live TV playing:
+
+- **20 open → 5 frames → close cycles at 960×540:** all `ui=1 video=1`, about 50–65 ms per composited frame.
+- **A signal during open leaked `DILE_VT`.** Three SIGTERMs a few ms after start, while `DILE_VT_Create` had run but the code hadn't yet recorded the context, left every later open failing (`Failed to get DILE_VT context`) until a reboot. The UI-only fallback worked and logged why. Fixed by blocking SIGTERM/SIGINT/SIGHUP/SIGQUIT inside `capture_open`/`capture_frame`/`capture_close`. After the fix, SIGTERM at 0, 1, 2 and 4 s into a run was followed each time by a clean `video=1` run.
+- **No vsync wait.** `capture_frame` no longer calls `DILE_VT_WaitVsync` (unbounded with no video signal). Frames still carry the live picture: video layer non-black, UI layer alpha 0 over live TV, composited frame correct.
+- **An all-black frame was the OLED screensaver, not a bug.** With CustomWebOS open and idle the screensaver starts. Both our capture and hyperion-webos then show a black screen with a cloud of coloured particles, with an opaque UI layer covering the video. It doesn't appear over live TV.
