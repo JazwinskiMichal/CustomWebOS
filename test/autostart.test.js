@@ -33,14 +33,27 @@ function stubs(answerFrom) {
     'exit 0',
   ].join('\n') + '\n', { mode: 0o755 })
   fs.writeFileSync(path.join(dir, 'sleep'), '#!/bin/sh\nexit 0\n', { mode: 0o755 })
+  fs.writeFileSync(path.join(dir, 'ps'), [
+    '#!/bin/sh',
+    'echo "UID        PID  PPID  C STIME TTY          TIME CMD"',
+    'echo "root      4402  1404  1 09:09 ?        00:00:00 org.webosbrew.inputhook.service"',
+    'echo "root      4483  1404  1 08:59 ?        00:00:00 org.jazwinski.customwebos.home.service"',
+  ].join('\n') + '\n', { mode: 0o755 })
+  fs.writeFileSync(path.join(dir, 'kill'), '#!/bin/sh\necho "kill $*" >> "' + log.replace(/\\/g, '/') + '"\n', { mode: 0o755 })
   return { dir, log }
 }
 
-function run(answerFrom) {
+// By default LG Input Hook looks absent (its app dir doesn't exist).
+function run(answerFrom, extraEnv) {
   const s = stubs(answerFrom)
   const r = spawnSync(SH, [SCRIPT, '--foreground'], {
     encoding: 'utf8',
-    env: Object.assign({}, process.env, { PATH: s.dir + path.delimiter + process.env.PATH }),
+    env: Object.assign({}, process.env, {
+      PATH: s.dir + path.delimiter + process.env.PATH,
+      INPUTHOOK_DIR: path.join(s.dir, 'no-such-app'),
+      INPUTHOOK_MARKER: path.join(s.dir, 'no-such-marker'),
+      KILL: path.join(s.dir, 'kill'), // kill is a shell builtin; PATH can't stub it
+    }, extraEnv && extraEnv(s.dir)),
     input: 'stdin is a pipe here, like under run-parts',
   })
   const calls = fs.existsSync(s.log) ? fs.readFileSync(s.log, 'utf8').trim().split('\n') : []
@@ -121,4 +134,34 @@ test('autostart.ps1 -Remove -WhatIf shows the removal', { skip: !PS && 'no Power
   assert.equal(r.status, 0, r.stderr)
   assert.match(r.stdout, /rm -f \/var\/lib\/webosbrew\/init\.d\/customwebos-autostart/)
   assert.doesNotMatch(r.stdout, /chmod/)
+})
+
+// LG Input Hook's config server (port 1842, root command execution behind
+// a password) isn't needed once its library is injected; the hook stops it.
+function withInputHook(markerExists) {
+  return (dir) => {
+    fs.mkdirSync(path.join(dir, 'inputhook-app'))
+    if (markerExists) fs.writeFileSync(path.join(dir, 'inputhook-marker'), '')
+    return { INPUTHOOK_DIR: path.join(dir, 'inputhook-app'), INPUTHOOK_MARKER: path.join(dir, 'inputhook-marker') }
+  }
+}
+
+test('once LG Input Hook has injected, its config server is stopped', { skip: !SH && 'no sh' }, () => {
+  const { r, calls } = run(1, withInputHook(true))
+  assert.equal(r.status, 0, r.stderr)
+  const kill = calls.findIndex((c) => c === 'kill 4402')
+  assert.ok(kill > -1, calls.join('\n'))
+  assert.ok(kill > calls.findIndex((c) => c.includes('/launch ')), 'after CustomWebOS opens')
+  assert.ok(!calls.includes('kill 4483'), 'never the home service')
+})
+
+test('without LG Input Hook installed, nothing is stopped', { skip: !SH && 'no sh' }, () => {
+  const { calls } = run(1)
+  assert.ok(!calls.some((c) => c.startsWith('kill')), calls.join('\n'))
+})
+
+test('if LG Input Hook never injects, it gives up without stopping anything', { skip: !SH && 'no sh' }, () => {
+  const { r, calls } = run(1, withInputHook(false))
+  assert.equal(r.status, 0)
+  assert.ok(!calls.some((c) => c.startsWith('kill')), calls.join('\n'))
 })

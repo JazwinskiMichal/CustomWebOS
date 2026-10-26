@@ -48,7 +48,7 @@ Details and evidence are in `docs/m2-tracking.md`. Rules of thumb:
 
 In suggested order:
 
-1. ~~**Home button / power-on.**~~ **Done 2026-10-26:** both applied on the TV. Power-on shows CustomWebOS via our init.d hook, and Home opens it via LG Input Hook. See [`docs/home-button.md`](home-button.md), including B's rollback still to prove and its LAN config server. Original notes:
+1. ~~**Home button / power-on.**~~ **Done 2026-10-26:** both applied on the TV. Power-on shows CustomWebOS via our init.d hook, and Home opens it via LG Input Hook. Both rollbacks are proven, and the boot hook switches off LG Input Hook's LAN config server (port 1842). See [`docs/home-button.md`](home-button.md). Original notes:
    - Research first, writing nothing on the TV.
    - Fallback candidate: a `/var/lib/webosbrew/init.d/` script that waits for the bus, then closes and reopens CustomWebOS. That gives "power-on shows CustomWebOS" and also removes the stuck instance the TV reopens at boot.
    - Ship it as `scripts/autostart.sh` plus `autostart.ps1` (`-WhatIf`, `-Remove`), with a tested rollback.

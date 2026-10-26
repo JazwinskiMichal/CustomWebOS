@@ -72,6 +72,11 @@ SSH doesn't depend on the screen. Homebrew Channel's own `dropbear` (port 22, `w
   - **The C8's Magic Remote Home button is ID 773** (log: `lginput_uinput_send_button … uinput_code=773`).
   - **The owner confirmed:** from another app, Home opens CustomWebOS and LG's bar no longer appears.
   - After a reboot, the hook re-injected and the keybind was intact.
-  - **Still to prove:** B's rollback. Write `{}` to `keybinds.json` (it applies at once) and Home should open LG's bar again.
-- **Security cost of B:** its config server listens on **port 1842, all interfaces**, behind HTTP basic auth with a random 8-character password, regenerated when its service starts and shown in its UI. Through it, keybinds can be changed, including "Execute" as root. Anyone on the LAN who learns the password gets root on the TV.
+  - **Rollback proven:** with `{}` in `keybinds.json`, Home opened LG's bar again (owner-confirmed). The mapping was then restored.
+- **Config server switched off:**
+  - **The exposure:** LG Input Hook's service runs a config server on **port 1842** (`:::1842`, every interface). It sits behind HTTP basic auth with a random 8-character password, shown in its app, and can set any button to run a command as root.
+  - **Reach:** the TV has only a private IPv4 address and IPv6 link-local addresses. So the server was reachable from the LAN only, unless a router forwards port 1842. `ip6tables` is missing on this kernel, so a firewall couldn't have covered IPv6.
+  - **Fix:** the remap lives in the library injected into `lginput2`, and the Launch action runs `luna-send` itself, so the service isn't needed after boot. `scripts/autostart.sh` now waits for LG Input Hook's injection marker (`/tmp/inputhook`), then stops its service.
+  - **Verified after a reboot:** port 1842 is closed (the PC gets "connection refused"), and Home still opens CustomWebOS (owner-confirmed).
+  - **Caveat:** opening LG Input Hook's app starts the server again until the next boot.
 - **A gap in B's boot script:** it runs `luna-send` without `< /dev/null`, the trap noted in m2-tracking, and deletes itself if a reply contains `errorText`. It survived this reboot. If the Home remap is ever lost after a boot, check that `/var/lib/webosbrew/init.d/inputhook` still exists. Opening LG Input Hook once recreates it.

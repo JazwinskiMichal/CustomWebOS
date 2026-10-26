@@ -13,11 +13,21 @@
 # ssh) it prints nothing and still exits 0.
 #
 # Undo: rm /var/lib/webosbrew/init.d/customwebos-autostart && reboot
+# Then, if LG Input Hook is installed (it maps the Home button to
+# CustomWebOS, docs/home-button.md), it waits for the hook to be injected
+# and stops LG Input Hook's service: the remap lives in the injected
+# library, and the service's only remaining job is a config server on port
+# 1842 that can run commands as root. Opening LG Input Hook's app starts
+# it again until the next boot.
+#
 # --foreground runs it in the foreground (tests).
 
 APP='{"id":"org.jazwinski.customwebos.home"}'
 AM=luna://com.webos.applicationManager
 OUT=/tmp/customwebos-autostart.txt
+INPUTHOOK_DIR=${INPUTHOOK_DIR:-/media/developer/apps/usr/palm/applications/org.webosbrew.inputhook}
+INPUTHOOK_MARKER=${INPUTHOOK_MARKER:-/tmp/inputhook}   # written once it has injected
+KILL=${KILL:-kill}
 
 main() {
     i=0
@@ -30,7 +40,22 @@ main() {
     luna-send -n 1 "$AM/closeByAppId" "$APP" < /dev/null > /dev/null 2>&1
     sleep 2
     luna-send -n 1 "$AM/launch" "$APP" < /dev/null > "$OUT" 2>&1
+    stop_inputhook_server
     return 0
+}
+
+stop_inputhook_server() {
+    [ -d "$INPUTHOOK_DIR" ] || return 0
+    i=0
+    until [ -e "$INPUTHOOK_MARKER" ]; do
+        i=$((i + 1))
+        [ "$i" -ge 120 ] && return 0
+        sleep 2
+    done
+    sleep 5   # let its own boot script read the service's reply first
+    for pid in $(ps -ef | awk '$8 == "org.webosbrew.inputhook.service" {print $2}'); do
+        $KILL "$pid"
+    done
 }
 
 if [ "$1" = "--foreground" ]; then
