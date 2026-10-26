@@ -143,7 +143,8 @@ test('a long title stays on one line', async () => {
 })
 
 test('the date shows in Polish and updates at midnight', async () => {
-  const page = await browser.newPage({ viewport: { width: 1920, height: 1080 } })
+  // The TV's language; the PC running the tests may be set to another.
+  const page = await browser.newPage({ viewport: { width: 1920, height: 1080 }, locale: 'pl-PL' })
   try {
     await page.clock.install({ time: new Date(2026, 9, 25, 23, 59, 30) })
     await page.goto(server.url + '?mock=ok')
@@ -173,7 +174,7 @@ test('curated apps and All apps show masked logos', async () => {
 
 // --- Photo, glass, font, theme ---
 
-test('the configured photo fills the stage behind everything', async () => {
+test('the wallpaper fills the stage behind everything', async () => {
   const { page, close } = await openPreview()
   try {
     await page.waitForFunction(() => {
@@ -181,12 +182,12 @@ test('the configured photo fills the stage behind everything', async () => {
       return w && w.complete && w.naturalWidth > 0
     })
     const w = await page.locator('#wallpaper').evaluate((e) => ({ src: e.getAttribute('src'), box: e.getBoundingClientRect().toJSON() }))
-    assert.match(w.src, /assets\/wallpapers\/alpine\.jpg$/)
+    assert.match(w.src, /assets\/wallpapers\/morphogenesis-(day|night)\.jpg$/)
     assert.deepEqual([w.box.x, w.box.y, w.box.width, w.box.height], [0, 0, 1920, 1080])
   } finally { await close() }
 })
 
-test('the dock glass is the blurred photo, lined up with the background', async () => {
+test('the dock glass is the blurred wallpaper, lined up with the background', async () => {
   const { page, close } = await openPreview()
   try {
     await waitForServiceList(page)
@@ -195,17 +196,17 @@ test('the dock glass is the blurred photo, lined up with the background', async 
       return m && m.complete && m.naturalWidth > 0
     })
     const m = await page.locator('.dock .mat-img').evaluate((e) => ({ src: e.getAttribute('src'), box: e.getBoundingClientRect().toJSON() }))
-    assert.match(m.src, /assets\/wallpapers\/alpine-dock\.jpg$/)
+    assert.match(m.src, /assets\/wallpapers\/morphogenesis-(day|night)-dock\.jpg$/)
     assert.ok(Math.abs(m.box.x) <= 1 && Math.abs(m.box.y) <= 1, 'registered at the stage origin: ' + JSON.stringify(m.box))
     assert.equal(Math.round(m.box.width), 1920)
   } finally { await close() }
 })
 
-test('a missing photo leaves a dark, readable screen', async () => {
+test('a missing wallpaper at night leaves a dark, readable screen', async () => {
   const page = await browser.newPage({ viewport: { width: 1920, height: 1080 } })
   try {
     await page.route('**/assets/wallpapers/**', (r) => r.abort())
-    await page.goto(server.url + '?mock=ok')
+    await page.goto(server.url + '?mock=ok&theme=dark')
     await waitForServiceList(page)
     await page.waitForTimeout(200)
     const rgb = (c) => c.match(/\d+/g).slice(0, 3).map(Number)
@@ -725,4 +726,39 @@ test('perf mode steps focus and reports timings', async () => {
     assert.equal(await page.evaluate(() => window.__mock.launches.length), 0)
     assert.equal(await focusedIndex(page), 5)
   } finally { await page.close() }
+})
+
+// Day/night theme: a forced mode, and the switch at Warsaw's sunset.
+const themeState = (page) => page.evaluate(() => ({
+  cls: document.documentElement.className,
+  wall: document.getElementById('wallpaper').getAttribute('src'),
+  glass: Array.from(document.querySelectorAll('.mat-img'), (i) => i.getAttribute('src')),
+}))
+
+test('?theme=light shows the day wallpaper, glass and colours', async () => {
+  const page = await browser.newPage({ viewport: { width: 1920, height: 1080 } })
+  await page.goto(server.url + '?mock=ok&theme=light')
+  await page.waitForSelector('.dock .app-item')
+  const s = await themeState(page)
+  assert.equal(s.cls, 'theme-light')
+  assert.equal(s.wall, 'assets/wallpapers/morphogenesis-day.jpg')
+  assert.ok(s.glass.length >= 1 && s.glass.every((g) => g === 'assets/wallpapers/morphogenesis-day-dock.jpg'), s.glass.join())
+  await page.close()
+})
+
+test('Home switches to night at Warsaw sunset without reopening', async () => {
+  const page = await browser.newPage({ viewport: { width: 1920, height: 1080 } })
+  // 21 June 2026, sunset ~19:01 UTC; start two minutes before.
+  await page.clock.install({ time: new Date('2026-06-21T18:58:30Z') })
+  await page.goto(server.url + '?mock=ok')
+  await page.waitForSelector('.clock')
+  await page.clock.runFor(1000)
+  await page.waitForSelector('.dock .app-item')
+  assert.equal((await themeState(page)).cls, 'theme-light')
+  await page.clock.runFor(5 * 60 * 1000)
+  const s = await themeState(page)
+  assert.equal(s.cls, 'theme-dark')
+  assert.equal(s.wall, 'assets/wallpapers/morphogenesis-night.jpg')
+  assert.ok(s.glass.length >= 1 && s.glass.every((g) => g.endsWith('morphogenesis-night-dock.jpg')), s.glass.join())
+  await page.close()
 })

@@ -18,8 +18,8 @@
   unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C4, U+2113, U+2C60-2C7F, U+A720-A7FF;
 }
 
-/* Colour sets. Only the dark set is used for now; a later time-of-day
-   theme swaps the class on <html> (and the wallpaper name). */
+/* Colour sets: light by day, dark at night (main.js swaps the class on
+   <html> with the wallpaper at sunrise and sunset). */
 .theme-dark {
   --ink: #f5f3ee;
   --ink-dim: rgba(245, 243, 238, 0.76);
@@ -247,6 +247,12 @@ html, body {
   object-fit: contain;
   -webkit-filter: brightness(0) invert(1);
   filter: brightness(0) invert(1);
+}
+
+/* By day the ink is dark, so the icon is too. */
+.theme-light .icon img {
+  -webkit-filter: brightness(0);
+  filter: brightness(0);
 }
 
 .initials {

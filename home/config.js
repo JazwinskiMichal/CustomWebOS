@@ -1,10 +1,9 @@
 // CustomWebOS Home — the apps on the Home view, in order. Edit this file to
 // change them (there's deliberately no on-device editor). Ids come from the
 // TV's launch points; anything not installed is skipped. At most 9.
-// Background photo: a name from assets/wallpapers/ (<name>.jpg plus its
-// pre-blurred <name>-dock.jpg for the glass dock; record new photos in
-// assets/wallpapers/SOURCES.json).
-var HOME_WALLPAPER = 'alpine';
+// Where the TV is: Home switches to its night look at sunset and back at
+// sunrise, computed on the TV from these coordinates (no internet needed).
+var HOME_LOCATION = { name: 'Warsaw', lat: 52.23, lon: 21.01 };
 
 var HOME_APPS = [
   { id: 'netflix',                 title: 'Netflix' },

@@ -35,14 +35,8 @@ test('HOME_APPS starts with the planned curated order', () => {
   ])
 })
 
-test('config.js describes the wallpaper files the app loads', () => {
-  const src = fs.readFileSync(path.join(__dirname, '..', 'home', 'config.js'), 'utf8')
-  assert.match(src, /<name>-dock\.jpg/)
-  assert.doesNotMatch(src, /field-frost/)
-})
-
-test('config.js names a wallpaper', () => {
-  const { HOME_WALLPAPER } = loadConfig()
-  assert.equal(typeof HOME_WALLPAPER, 'string')
-  assert.ok(HOME_WALLPAPER.length > 0)
+test('config.js names the location for sunrise and sunset', () => {
+  const { HOME_LOCATION, HOME_WALLPAPER } = loadConfig()
+  assert.deepEqual({ ...HOME_LOCATION }, { name: 'Warsaw', lat: 52.23, lon: 21.01 })
+  assert.equal(HOME_WALLPAPER, undefined)
 })

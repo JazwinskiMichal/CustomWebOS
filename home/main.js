@@ -396,6 +396,25 @@ function perfParams(raw) {
   };
 }
 
+// The wallpaper (glass false) or its pre-blurred glass copy for a mode.
+function wallpaperSrc(mode, glass) {
+  return 'assets/wallpapers/morphogenesis-' + (mode === 'light' ? 'day' : 'night') +
+    (glass ? '-dock' : '') + '.jpg';
+}
+
+// A mode forced for checks on the TV: launch params {"theme": "light"|"dark"},
+// or, without launch params, a ?theme= query (dev server). Else null.
+function forcedTheme(raw, search) {
+  var parsed = null;
+  try { parsed = JSON.parse(raw); } catch (e) { parsed = null; }
+  var t = parsed && parsed.theme;
+  if (!t && typeof search === 'string') {
+    var m = /[?&]theme=([a-z]+)/.exec(search);
+    t = m && m[1];
+  }
+  return t === 'light' || t === 'dark' ? t : null;
+}
+
 // --- Browser runtime (guarded; does not execute when required from Node) ---
 
 function mountUI(doc) {
@@ -415,17 +434,41 @@ function mountUI(doc) {
 
   var lang = (typeof navigator !== 'undefined' && navigator.language) || '';
 
-  // The photo behind everything, and its pre-blurred copy for the glass
-  // dock (both from config.js's HOME_WALLPAPER). If either fails to load,
-  // the dark background colour and the translucent dock veil remain.
-  var wallName = typeof HOME_WALLPAPER !== 'undefined' ? HOME_WALLPAPER : 'alpine';
-  var dockSrc = 'assets/wallpapers/' + wallName + '-dock.jpg';
-  var dockMaterialBroken = false;
+  // Day or night: the theme class on <html>, the wallpaper behind everything
+  // and its pre-blurred glass copy all follow the sun at HOME_LOCATION (or
+  // a forced mode for checks). If an image fails to load, the background
+  // colour and the translucent veil remain; a broken glass image is
+  // remembered per mode, so the other mode still gets its glass.
+  var forced = forcedTheme(window.PalmSystem && window.PalmSystem.launchParams,
+    window.location && window.location.search);
+  var homeLocation = typeof HOME_LOCATION !== 'undefined' ? HOME_LOCATION : undefined;
+  var mode = null;
+  var glassBroken = { light: false, dark: false };
   var wallpaper = doc.getElementById('wallpaper');
-  if (wallpaper) {
-    wallpaper.onerror = function () { wallpaper.style.display = 'none'; };
-    wallpaper.src = 'assets/wallpapers/' + wallName + '.jpg';
+  if (wallpaper) wallpaper.onerror = function () { wallpaper.style.display = 'none'; };
+
+  function currentMode() {
+    return forced || themeFor(new Date(), homeLocation);
   }
+
+  // Switches everything at once, with no transition: fades over the glass
+  // drop frames on this TV (docs/tv-notes.md).
+  function applyMode(m) {
+    mode = m;
+    doc.documentElement.className = 'theme-' + m;
+    if (wallpaper) {
+      wallpaper.style.display = '';
+      wallpaper.src = wallpaperSrc(m, false);
+    }
+  }
+
+  applyMode(currentMode());
+  // Warm the other mode's images so the switch shows no blank frame.
+  (function () {
+    var other = mode === 'light' ? 'dark' : 'light';
+    new Image().src = wallpaperSrc(other, false);
+    new Image().src = wallpaperSrc(other, true);
+  })();
 
   function el(tag, className, text) {
     var e = doc.createElement(tag);
@@ -553,23 +596,28 @@ function mountUI(doc) {
   function appendDock(content, className) {
     var row = el('div', 'dock-row');
     var dock = el('div', className);
-    var mat = null;
-    if (!dockMaterialBroken) {
-      mat = el('div', 'mat');
-      var img = el('img', 'mat-img');
-      img.alt = '';
-      img.onerror = function () {
-        dockMaterialBroken = true;
-        if (mat.parentNode) mat.parentNode.removeChild(mat);
-      };
-      img.src = dockSrc;
-      mat.appendChild(img);
-      dock.appendChild(mat);
-    }
+    addGlass(dock);
     dock.appendChild(content);
     row.appendChild(dock);
     root.appendChild(row);
     dockEl = dock;
+  }
+
+  // Puts the current mode's glass (the pre-blurred wallpaper, clipped by the
+  // box) at the back of box, unless that image failed to load before.
+  function addGlass(box) {
+    var m = mode;
+    if (glassBroken[m]) return;
+    var mat = el('div', 'mat');
+    var img = el('img', 'mat-img');
+    img.alt = '';
+    img.onerror = function () {
+      glassBroken[m] = true;
+      if (mat.parentNode) mat.parentNode.removeChild(mat);
+    };
+    img.src = wallpaperSrc(m, true);
+    mat.appendChild(img);
+    box.appendChild(mat);
   }
 
   // Call once the dock's content is in place: its size decides where it
@@ -793,6 +841,13 @@ function mountUI(doc) {
     var now = new Date();
     if (clock) clock.textContent = formatClock(now);
     if (date) date.textContent = formatDate(now, lang);
+    // Sunrise or sunset since the last tick (or the TV's clock just synced):
+    // switch the whole look and redraw with the new glass.
+    var m = currentMode();
+    if (m !== mode) {
+      applyMode(m);
+      render();
+    }
     clearTimeout(clockTimer);
     clockTimer = setTimeout(tickClock, msToNextMinute(now));
   }
@@ -937,6 +992,8 @@ if (typeof module !== 'undefined' && module.exports) {
     sunTimesUtc: sunTimesUtc,
     FALLBACK_DAY: FALLBACK_DAY,
     themeFor: themeFor,
+    wallpaperSrc: wallpaperSrc,
+    forcedTheme: forcedTheme,
     msToNextMinute: msToNextMinute,
     PREFS_KEY: PREFS_KEY,
     loadPrefs: loadPrefs,

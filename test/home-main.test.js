@@ -451,3 +451,20 @@ test('themeFor uses fixed local hours without a usable location', () => {
   assert.equal(main.themeFor(new Date(2026, 5, 21, 6, 0), {lat: 'x'}), 'dark')
   assert.deepEqual(main.FALLBACK_DAY, {from: 420, to: 1140})
 })
+
+test('wallpaperSrc names the mode and glass files', () => {
+  assert.equal(main.wallpaperSrc('light', false), 'assets/wallpapers/morphogenesis-day.jpg')
+  assert.equal(main.wallpaperSrc('light', true), 'assets/wallpapers/morphogenesis-day-dock.jpg')
+  assert.equal(main.wallpaperSrc('dark', false), 'assets/wallpapers/morphogenesis-night.jpg')
+  assert.equal(main.wallpaperSrc('dark', true), 'assets/wallpapers/morphogenesis-night-dock.jpg')
+})
+
+test('forcedTheme reads a theme launch param, else a ?theme= query', () => {
+  assert.equal(main.forcedTheme('{"theme":"light"}', ''), 'light')
+  assert.equal(main.forcedTheme('{"theme":"dark","perf":{}}', '?theme=light'), 'dark')
+  assert.equal(main.forcedTheme(undefined, '?theme=dark'), 'dark')
+  assert.equal(main.forcedTheme('{}', '?x=1&theme=light'), 'light')
+  assert.equal(main.forcedTheme('{"theme":"blue"}', ''), null)
+  assert.equal(main.forcedTheme('not json', '?theme=pink'), null)
+  assert.equal(main.forcedTheme(undefined, undefined), null)
+})
