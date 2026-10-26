@@ -23,6 +23,9 @@ int main(void)
     assert(config_parse("# comment\n\nunknown=1\n  fps = 7  \r\npointer_scale=0.6", &c) == 0);
     assert(c.fps_max == 7 && fabs(c.pointer_scale - 0.6) < 1e-9);
 
+    assert(config_parse("pointer_scale=nan\n", &c) == 1 && fabs(c.pointer_scale - 0.51) < 1e-9);
+    assert(config_parse("pointer_scale=inf\n", &c) == 1);
+
     assert(config_parse("garbage\n", &c) == 1);
     return 0;
 }

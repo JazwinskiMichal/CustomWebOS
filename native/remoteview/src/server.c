@@ -31,7 +31,9 @@ static rv_config cfg;
 static session sess;
 static lginput *input;
 static pointer_state pstate;
-static char *pw_list[2]; /* plaintext password for rfbCheckPasswordByList, NULL-terminated */
+static uint8_t *stage; /* latest captured frame; guarded by stage_mu */
+static uint8_t *dirty; /* one flag per tile, guarded by stage_mu */
+static pthread_mutex_t stage_mu = PTHREAD_MUTEX_INITIALIZER;
 
 static struct {
     pthread_t th;
@@ -49,18 +51,20 @@ static void logf_(const char *fmt, ...)
     va_end(ap);
 }
 
-/* Copies the tiles of cur that differ from the framebuffer into it and marks them modified. */
+/* Copies the tiles of cur that differ from the staging frame into it and flags
+ * them dirty. Capture thread; never touches LibVNCServer. */
 static void publish_frame(const uint8_t *cur)
 {
-    int w = cfg.width, h = cfg.height, tx, ty, y;
+    int w = cfg.width, h = cfg.height, tx, ty, y, cols = (w + TILE - 1) / TILE;
 
+    pthread_mutex_lock(&stage_mu);
     for (ty = 0; ty < h; ty += TILE) {
         int th = ty + TILE > h ? h - ty : TILE;
         for (tx = 0; tx < w; tx += TILE) {
             int tw = tx + TILE > w ? w - tx : TILE, changed = 0;
             for (y = ty; y < ty + th; y++) {
                 size_t o = ((size_t)y * w + tx) * 4;
-                if (memcmp(cur + o, screen->frameBuffer + o, (size_t)tw * 4)) {
+                if (memcmp(cur + o, stage + o, (size_t)tw * 4)) {
                     changed = 1;
                     break;
                 }
@@ -69,11 +73,36 @@ static void publish_frame(const uint8_t *cur)
                 continue;
             for (y = ty; y < ty + th; y++) {
                 size_t o = ((size_t)y * w + tx) * 4;
-                memcpy(screen->frameBuffer + o, cur + o, (size_t)tw * 4);
+                memcpy(stage + o, cur + o, (size_t)tw * 4);
+            }
+            dirty[(ty / TILE) * cols + tx / TILE] = 1;
+        }
+    }
+    pthread_mutex_unlock(&stage_mu);
+}
+
+/* Main thread: moves dirty tiles from the staging frame into the framebuffer
+ * and marks them modified. All LibVNCServer calls stay on this thread. */
+static void flush_dirty(void)
+{
+    int w = cfg.width, h = cfg.height, tx, ty, y, cols = (w + TILE - 1) / TILE;
+
+    pthread_mutex_lock(&stage_mu);
+    for (ty = 0; ty < h; ty += TILE) {
+        int th = ty + TILE > h ? h - ty : TILE;
+        for (tx = 0; tx < w; tx += TILE) {
+            int tw = tx + TILE > w ? w - tx : TILE;
+            if (!dirty[(ty / TILE) * cols + tx / TILE])
+                continue;
+            dirty[(ty / TILE) * cols + tx / TILE] = 0;
+            for (y = ty; y < ty + th; y++) {
+                size_t o = ((size_t)y * w + tx) * 4;
+                memcpy(screen->frameBuffer + o, stage + o, (size_t)tw * 4);
             }
             rfbMarkRectAsModified(screen, tx, ty, tx + tw, ty + th);
         }
     }
+    pthread_mutex_unlock(&stage_mu);
 }
 
 /* Sleeps until deadline or a stop request; returns 1 on stop. */
@@ -95,7 +124,7 @@ static void *capture_main(void *arg)
 {
     uint8_t *cur = malloc((size_t)cfg.width * cfg.height * 4);
     int has_video = 0, fails = 0;
-    struct timespec next;
+    struct timespec next, now;
     long period_ns = 1000000000L / cfg.fps_max;
 
     (void)arg;
@@ -118,6 +147,9 @@ static void *capture_main(void *arg)
             next.tv_nsec -= 1000000000L;
             next.tv_sec++;
         }
+        clock_gettime(CLOCK_MONOTONIC, &now);
+        if (next.tv_sec < now.tv_sec || (next.tv_sec == now.tv_sec && next.tv_nsec < now.tv_nsec))
+            next = now; /* running behind: no burst, no spin */
         if (wait_or_stop(&next))
             break;
     }
@@ -189,17 +221,13 @@ static void apply(int actions)
     }
 }
 
-/* Reloads the password file; returns 1 if a non-empty password is set. */
-static int load_password(void)
+/* 1 if the password file exists and is non-empty (the default passwordCheck
+ * re-reads and decrypts it on every authentication). */
+static int have_password(void)
 {
-    free(pw_list[0]);
-    pw_list[0] = rfbDecryptPasswdFromFile(PASSWD_PATH);
-    if (pw_list[0] && !*pw_list[0]) {
-        free(pw_list[0]);
-        pw_list[0] = NULL;
-    }
-    screen->authPasswdData = pw_list[0] ? pw_list : NULL;
-    return pw_list[0] != NULL;
+    struct stat st;
+
+    return stat(PASSWD_PATH, &st) == 0 && st.st_size > 0;
 }
 
 /* Uncounts the client if it had authenticated. */
@@ -222,11 +250,13 @@ static enum rfbNewClientAction new_client(rfbClientPtr cl)
         logf_("refused %s: not a LAN address", cl->host);
         return RFB_CLIENT_REFUSE;
     }
-    if (!load_password()) {
+    if (!have_password()) {
         logf_("refused %s: no password set (run `remoteview --store-password`)", cl->host);
         return RFB_CLIENT_REFUSE;
     }
     cl->clientData = calloc(1, sizeof(int)); /* 0 until authenticated */
+    if (!cl->clientData)
+        return RFB_CLIENT_REFUSE;
     cl->clientGoneHook = client_gone;
     return RFB_CLIENT_ACCEPT;
 }
@@ -321,7 +351,9 @@ int server_run(const rv_config *config)
     if (!screen)
         return 1;
     screen->frameBuffer = calloc(1, (size_t)cfg.width * cfg.height * 4);
-    if (!screen->frameBuffer)
+    stage = calloc(1, (size_t)cfg.width * cfg.height * 4);
+    dirty = calloc(1, (size_t)((cfg.width + TILE - 1) / TILE) * ((cfg.height + TILE - 1) / TILE));
+    if (!screen->frameBuffer || !stage || !dirty)
         return 1;
     /* libyuv ARGB: bytes B,G,R,A in memory; alpha ignored. */
     screen->serverFormat.bitsPerPixel = 32;
@@ -333,11 +365,11 @@ int server_run(const rv_config *config)
     screen->serverFormat.greenShift = 8;
     screen->serverFormat.blueShift = 0;
     screen->desktopName = "LG TV";
-    screen->passwordCheck = rfbCheckPasswordByList;
+    screen->authPasswdData = (void *)PASSWD_PATH;
     screen->newClientHook = new_client;
     screen->ptrAddEvent = on_pointer;
     screen->kbdAddEvent = on_key;
-    if (!load_password())
+    if (!have_password())
         logf_("no password set; every client is refused until `remoteview --store-password`");
     rfbInitServer(screen);
     if (screen->listenSock == RFB_INVALID_SOCKET) {
@@ -349,7 +381,8 @@ int server_run(const rv_config *config)
     for (;;) {
         int sig;
 
-        rfbProcessEvents(screen, 100000);
+        rfbProcessEvents(screen, cap.running ? 1000000 / cfg.fps_max : 100000);
+        flush_dirty();
         scan_clients();
         if (input && lginput_poll(input) < 0)
             input_failed();

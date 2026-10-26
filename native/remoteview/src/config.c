@@ -1,5 +1,6 @@
 #include "config.h"
 
+#include <math.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -56,7 +57,7 @@ static int apply_line(char *line, rv_config *c)
         else
             c->fps_max = clampi(iv, 1, 30);
     } else if (!strcmp(key, "pointer_scale")) {
-        if (parse_dbl(val, &dv))
+        if (parse_dbl(val, &dv) || !isfinite(dv))
             return 1;
         c->pointer_scale = dv < 0.25 ? 0.25 : dv > 4 ? 4 : dv;
     }
