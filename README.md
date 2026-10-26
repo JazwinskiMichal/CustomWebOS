@@ -11,6 +11,7 @@ The home screen's look follows CleanFrame's dock, and its glass dock images (`ho
 - **Photos:** from [Unsplash](https://unsplash.com/license) — "Alpine glow" by Cristina Gottardi, "Misty coast" by Ganapathy Kumar, "Quiet cove" by Joshua Wordel. Pages in `home/assets/wallpapers/SOURCES.json`.
 - **App logos:** Netflix, YouTube, Prime Video, Max and Apple TV marks from [Simple Icons](https://simpleicons.org/) (CC0). Trademarks belong to their owners. Sources in `home/assets/icons/SOURCES.json`.
 - **Font:** [Manrope](https://github.com/googlefonts/manrope), SIL Open Font License 1.1 (`home/assets/fonts/OFL.txt`).
+- **Screen capture (remote view):** `native/remoteview/` builds the capture code of [hyperion-webos](https://github.com/webosbrew/hyperion-webos) 0.2.1 (MIT, `native/remoteview/third_party/LICENSE.hyperion-webos`) as a git submodule.
 
 ## Status
 

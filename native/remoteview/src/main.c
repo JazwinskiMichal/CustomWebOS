@@ -3,11 +3,15 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/stat.h>
+#include <time.h>
 #include <unistd.h>
 
+#include "capture.h"
 #include "keymap.h"
 #include "lginput.h"
 #include "pointer.h"
+#include "shutdown.h"
 
 #define TV_W 1920
 #define TV_H 1080
@@ -102,6 +106,70 @@ static int pair(void)
     return 0;
 }
 
+static double now_ms(void)
+{
+    struct timespec t;
+    clock_gettime(CLOCK_MONOTONIC, &t);
+    return t.tv_sec * 1000.0 + t.tv_nsec / 1e6;
+}
+
+/* Writes an ARGB frame (BGRA bytes in memory) as raw RGB24. */
+static int dump_rgb(const uint8_t *argb, int w, int h, const char *path)
+{
+    FILE *f = fopen(path, "wb");
+    int x, y;
+
+    if (!f)
+        return -1;
+    for (y = 0; y < h; y++)
+        for (x = 0; x < w; x++) {
+            const uint8_t *p = argb + ((size_t)y * w + x) * 4;
+            uint8_t rgb[3] = { p[2], p[1], p[0] };
+            fwrite(rgb, 1, 3, f);
+        }
+    return fclose(f);
+}
+
+/* Diagnostic: n times open, grab 5 frames, close. The last frame of the last
+ * cycle goes to /tmp/rv/frame.data as raw RGB24. */
+static int capture_test(int n, int w, int h)
+{
+    uint8_t *buf = malloc((size_t)w * h * 4);
+    int i, f, rc = 0;
+
+    if (!buf)
+        return 1;
+    shutdown_install(capture_close);
+    for (i = 1; i <= n && !shutdown_requested(); i++) {
+        int has_video = 0, ok = 0;
+        double t0;
+
+        if (capture_open(w, h, &has_video) != 0) {
+            printf("cycle %d: ui=0 video=0\n", i);
+            fflush(stdout);
+            rc = 1;
+            break;
+        }
+        memset(buf, 0, (size_t)w * h * 4);
+        t0 = now_ms();
+        for (f = 0; f < 5; f++)
+            ok += capture_frame(buf, w * 4) == 0;
+        printf("cycle %d: ui=1 video=%d ms=%.1f%s\n", i, has_video, (now_ms() - t0) / 5,
+               ok == 5 ? "" : " (frame errors)");
+        fflush(stdout);
+        if (ok != 5)
+            rc = 1;
+        if (i == n) {
+            mkdir("/tmp/rv", 0755);
+            if (dump_rgb(buf, w, h, "/tmp/rv/frame.data") < 0)
+                perror("frame.data");
+        }
+        capture_close();
+    }
+    free(buf);
+    return rc;
+}
+
 int main(int argc, char **argv)
 {
     if (argc > 1 && strcmp(argv[1], "--version") == 0) {
@@ -112,6 +180,14 @@ int main(int argc, char **argv)
         return pair();
     if (argc > 1 && strcmp(argv[1], "--input-test") == 0)
         return input_test(argc > 2 ? atof(argv[2]) : 1.0);
-    fprintf(stderr, "usage: remoteview --version | --pair | --input-test\n");
+    if (argc > 2 && strcmp(argv[1], "--capture-test") == 0) {
+        int w = 960, h = 540;
+        if (argc > 4 && strcmp(argv[3], "--size") == 0 && sscanf(argv[4], "%dx%d", &w, &h) != 2) {
+            fprintf(stderr, "bad --size\n");
+            return 2;
+        }
+        return capture_test(atoi(argv[2]), w, h);
+    }
+    fprintf(stderr, "usage: remoteview --version | --pair | --input-test | --capture-test N [--size WxH]\n");
     return 2;
 }

@@ -6,7 +6,8 @@
   Builds the Docker image customwebos-remoteview-build (cached after the first
   run) from native/remoteview/Dockerfile, then runs it with the repo mounted
   at /src.
-    default: cross-compiles into dist/native/remoteview/remoteview
+    default: cross-compiles into dist/native/remoteview/ (the binary and the two capture
+             backend .so files, which must stay beside it)
     -Test:   builds the unit tests with host gcc and runs ctest; the exit
              code is ctest's.
 
@@ -42,7 +43,7 @@ if ($Test) {
 } else {
     $inner = 'cmake -S native/remoteview -B dist/native/build-arm -DCMAKE_TOOLCHAIN_FILE=$TOOLCHAIN_FILE -DCMAKE_BUILD_TYPE=Release && ' +
              'cmake --build dist/native/build-arm && ' +
-             'mkdir -p dist/native/remoteview && cp dist/native/build-arm/remoteview dist/native/remoteview/remoteview'
+             'mkdir -p dist/native/remoteview && cp dist/native/build-arm/remoteview dist/native/build-arm/libgm_backend.so dist/native/build-arm/libdile_vt_backend.so dist/native/remoteview/'
 }
 
 $buildCmd = "docker build -t $image `"$srcDir`""
