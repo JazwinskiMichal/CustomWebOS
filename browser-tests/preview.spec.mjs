@@ -20,10 +20,11 @@ test.after(async () => {
 })
 
 // Opens the preview at the TV's 1920x1080 stage and waits for the first
-// render. The mock answers listApps after ~150 ms.
-async function openPreview(mode = 'ok') {
+// render. The mock answers listApps after ~150 ms. The day/night mode is
+// forced (night by default) so the checks don't depend on the time of day.
+async function openPreview(mode = 'ok', theme = 'dark') {
   const page = await browser.newPage({ viewport: { width: 1920, height: 1080 } })
-  await page.goto(server.url + '?mock=' + mode)
+  await page.goto(server.url + '?mock=' + mode + '&theme=' + theme)
   await page.waitForSelector('.clock')
   return { page, close: () => page.close() }
 }
@@ -33,7 +34,7 @@ async function openPreview(mode = 'ok') {
 async function openPastGrace(mode) {
   const page = await browser.newPage({ viewport: { width: 1920, height: 1080 } })
   await page.clock.install()
-  await page.goto(server.url + '?mock=' + mode)
+  await page.goto(server.url + '?mock=' + mode + '&theme=dark')
   await page.waitForSelector('.state-panel')
   await page.clock.runFor(30500)
   await page.waitForSelector('.state.error-title')
@@ -796,4 +797,17 @@ test('All apps keeps the clock without glass', async () => {
     await openAllApps(page)
     assert.equal(await page.locator('.top .mat').count(), 0)
   } finally { await close() }
+})
+
+test('before the script picks a mode the page is already dark, not white', async () => {
+  // JavaScript off stands in for the frames before main.js sets the theme class.
+  const ctx = await browser.newContext({ viewport: { width: 1920, height: 1080 }, javaScriptEnabled: false })
+  const page = await ctx.newPage()
+  try {
+    await page.goto(server.url + '?mock=ok')
+    const bg = await page.evaluate(() => getComputedStyle(document.body).backgroundColor)
+    // A transparent body shows the browser's white canvas, so it must be opaque.
+    assert.match(bg, /^rgb\(/, 'opaque first frame ' + bg)
+    for (const ch of bg.match(/\d+/g).slice(0, 3).map(Number)) assert.ok(ch < 60, 'dark first frame ' + bg)
+  } finally { await ctx.close() }
 })

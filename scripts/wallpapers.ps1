@@ -9,8 +9,8 @@
     morphogenesis-day.jpg, morphogenesis-night.jpg            1920x1080, centre crop
     morphogenesis-day-dock.jpg, morphogenesis-night-dock.jpg  the same, blurred and tinted:
                                                               the glass behind the dock and clock
-  The art is by Jakub Steiner (GNOME), CC BY-SA 3.0; the JPEGs stay CC BY-SA 3.0
-  (see home/assets/wallpapers/SOURCES.json and the README).
+  The source art's licence covers the JPEGs too: see
+  home/assets/wallpapers/SOURCES.json and the README.
 
   The glass tints are the knobs to tune on the TV: -DayTint/-NightTint (colour
   and percent). Rerun, then package and install.

@@ -278,3 +278,10 @@ test('wallpapers.ps1 -WhatIf prints the docker render without running it', { ski
   assert.match(r.stdout, /1920x1080/)
   assert.match(r.stdout, /-dock/)
 })
+
+test('perf.ps1 -Theme light -WhatIf forces the mode in the launch params', { skip: !PS && 'no PowerShell' }, () => {
+  const r = ps('perf.ps1', ['-TvHost', '192.0.2.1', '-Theme', 'light', '-WhatIf'])
+  assert.equal(r.status, 0, r.stderr)
+  assert.match(r.stdout, /"theme":"light"/)
+  assert.match(r.stdout, /"perf":\{/)
+})

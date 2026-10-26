@@ -19,7 +19,9 @@
 }
 
 /* Colour sets: light by day, dark at night (main.js swaps the class on
-   <html> with the wallpaper at sunrise and sunset). */
+   <html> with the wallpaper at sunrise and sunset). Dark is also the
+   default, so the frames before main.js picks a mode are never white. */
+:root,
 .theme-dark {
   --ink: #f5f3ee;
   --ink-dim: rgba(245, 243, 238, 0.76);
