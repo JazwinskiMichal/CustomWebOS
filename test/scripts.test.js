@@ -203,7 +203,7 @@ test('perf.ps1 -View all asks the app to open All apps first', { skip: !PS && 'n
 
 test('perf.ps1 waits for the bus to answer before relaunching the app', { skip: !PS && 'no PowerShell' }, () => {
   // A close or launch sent while luna-send can't get an answer is silently
-  // lost (docs/m2-tracking.md), so the script checks first.
+  // lost (docs/tv-log.md), so the script checks first.
   const out = ps('perf.ps1', ['-TvHost', '192.0.2.1', '-WhatIf']).stdout
   const ready = out.indexOf('getForegroundAppInfo')
   assert.ok(ready > -1, out)

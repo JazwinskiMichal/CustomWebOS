@@ -90,7 +90,7 @@ test('it gives up without launching if the bus never answers', { skip: !SH && 'n
 })
 
 test('every luna-send gets a stdin that is not the caller\'s pipe', { skip: !SH && 'no sh' }, () => {
-  // luna-send returns nothing (rc 0) when its stdin is a pipe (m2-tracking).
+  // luna-send returns nothing (rc 0) when its stdin is a pipe (tv-log).
   const { calls } = run(1)
   assert.ok(calls.length >= 3)
   for (const c of calls) assert.match(c, /^other /, c)

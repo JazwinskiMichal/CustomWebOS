@@ -13,7 +13,7 @@
   The remote script is piped over stdin: Windows PowerShell strips the
   double quotes the launch JSON needs from native-command arguments. luna-send
   output goes to files, never a pipe (it gets lost under timeout; see
-  docs/m2-tracking.md).
+  docs/tv-log.md).
 
 .PARAMETER TvHost
   TV's LAN IP or hostname.

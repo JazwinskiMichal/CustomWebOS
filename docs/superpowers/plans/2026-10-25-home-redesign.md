@@ -1,5 +1,7 @@
 # Home Screen Redesign Implementation Plan
 
+> **Status (2026-10-26): complete.** All 8 tasks are done, plus the post-merge review fixes. 0.4.2 is on the TV at 60 fps, and the owner accepted the look. Numbers are in [tv-log.md](../../tv-log.md); deferred minors are in [status.md](../../status.md).
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Replace the list UI of CustomWebOS Home with CleanFrame's look (full-screen photo, clock and Polish date, frosted dock of white logos, All apps grid) without it feeling slower than today on the LG C8.
@@ -64,7 +66,7 @@
 
 - [ ] Bump `home/appinfo.json` to `0.3.2`; `scripts/package.ps1`; `install.ps1 -TvHost 192.168.88.244 -Reboot`; after SSH is back, close+reopen the app if the TV reopened it.
 - [ ] Run `scripts/perf.ps1 -TvHost 192.168.88.244 -Action down -Steps 9` twice (today's Home list moves with Down). Home only; perf mode doesn't open All apps.
-- [ ] Record in `docs/m2-tracking.md` under a new "Home redesign baseline (0.3.2)" heading: ua, lang, firstPaintMs, appsShownMs, frames p50/p95/max/over33, dispatchMs p95, `datePl`, supports. **If `datePl` is exactly `niedziela, 25 października`, note that Chromium 53 Polish formatting works.**
+- [ ] Record in `docs/tv-log.md` under a new "Home redesign baseline (0.3.2)" heading: ua, lang, firstPaintMs, appsShownMs, frames p50/p95/max/over33, dispatchMs p95, `datePl`, supports. **If `datePl` is exactly `niedziela, 25 października`, note that Chromium 53 Polish formatting works.**
 - [ ] Commit `docs: home redesign perf baseline` (with the version bump).
 
 ## Part B — build
@@ -180,4 +182,4 @@
 - [ ] Bump to `0.4.0`; package; `install.ps1 -TvHost 192.168.88.244 -Reboot`; close+reopen the app if the TV reopened it.
 - [ ] `perf.ps1 -Action right -Steps 9` twice (dock). Compare with the Task 2 baseline and the bar (first paint ≤ 1000 ms, dispatch p95 ≤ 100 ms, frame p95 < 33 ms). If missed, apply the give-up order one step at a time (each a commit with its own re-measure), stopping at the first step that meets the bar.
 - [ ] Owner checks with the remote: the look against `cleanframe-dock.jpg`; logos crisp and white; TV icons in All apps (whitened vs initials — decide and record); Polish date; pointer hover/click on dock and grid; Back from All apps. The error screen's look is checked in the browser preview (`?mock=error`), not provoked on the TV.
-- [ ] Record numbers and decisions in `docs/m2-tracking.md` ("Home redesign 0.4.0"); commit `docs: 0.4.0 on-device results`.
+- [ ] Record numbers and decisions in `docs/tv-log.md` ("Home redesign 0.4.0"); commit `docs: 0.4.0 on-device results`.

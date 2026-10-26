@@ -14,11 +14,15 @@ The home screen's look follows CleanFrame's dock, and its glass dock images (`ho
 
 ## Status
 
-M1 foundation — repo skeleton, setup guide, and a minimal home-screen app that can launch installed apps. See the [design doc](docs/superpowers/specs/2026-10-24-customwebos-design.md) for what's planned beyond that.
+On the TV today:
+- A CleanFrame-style home screen: a photo, clock and Polish date, a glass dock of white logos, and All apps. It runs at 60 fps.
+- The TV opens it at power-on, and the Home button opens it.
+
+**Start at [docs/status.md](docs/status.md)** for the current state and next steps, and [docs/README.md](docs/README.md) for the map of all docs. The [design doc](docs/superpowers/specs/2026-10-24-customwebos-design.md) holds the overall vision and milestones.
 
 ## Setting it up
 
-Follow the [setup guide](docs/setup.md). It walks the whole path on an LG C8: baseline capture, rooting, Homebrew Channel, SSH, installing CustomWebOS as the Home-button target, and rollbacks for every step.
+Follow the [setup guide](docs/setup.md). It walks the whole path on an LG C8: baseline capture, rooting, Homebrew Channel, SSH, installing CustomWebOS, and rollbacks for every step. Power-on and the Home button are in [docs/home-button.md](docs/home-button.md). Development (preview, tests, install, measuring on the TV) is in [docs/development.md](docs/development.md).
 
 ## Licence
 

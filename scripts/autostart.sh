@@ -7,7 +7,7 @@
 # applicationManager answers, gives the TV a moment to restore its last app,
 # then closes and reopens CustomWebOS. Reopening also replaces an instance
 # the TV may have opened before the app's bus permissions were loaded,
-# which would otherwise stay stuck (docs/m2-tracking.md).
+# which would otherwise stay stuck (docs/tv-log.md).
 #
 # luna-send always gets /dev/null as stdin: with a pipe there (run-parts,
 # ssh) it prints nothing and still exits 0.

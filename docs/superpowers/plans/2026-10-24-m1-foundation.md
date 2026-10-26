@@ -1,5 +1,7 @@
 # CustomWebOS M1 Foundation Implementation Plan
 
+> **Status (2026-10-26): complete.** M1 shipped and is installed on the TV. Later work is tracked in [docs/status.md](../../status.md).
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Produce the first commit series of CustomWebOS — a new personal webOS platform repo — containing the design doc, legal/convention artifacts, a Michał-voiced setup guide, a minimal home-screen app skeleton (ES5, enough to launch Netflix via the remote), and PowerShell build/install wrappers. M1 ends at artifacts; device install is a separate authorised task.

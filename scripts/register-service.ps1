@@ -26,7 +26,7 @@
 .PARAMETER SystemWrapper
   Point Exec= at the stock /usr/bin/run-js-service instead of the bundled
   thirdparty_jail=off wrapper. Diagnostic for the fork-server hang in
-  docs/m2-tracking.md.
+  docs/tv-log.md.
 
 .PARAMETER DryRunOnTv
   Run register-service.sh on the TV with --dry-run: connects, prints what it

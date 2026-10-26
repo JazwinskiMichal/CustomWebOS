@@ -209,7 +209,7 @@ html, body {
 }
 
 /* Focus is an instant fill, no scale or fade: on the TV a 120 ms transition
-   over the glass dropped 6 of 32 frames per 9 moves (docs/m2-tracking.md). */
+   over the glass dropped 6 of 32 frames per 9 moves (docs/tv-log.md). */
 .app-item.focused {
   background: var(--focus-fill);
 }

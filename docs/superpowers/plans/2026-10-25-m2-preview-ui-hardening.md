@@ -1,5 +1,7 @@
 # M2 Day 1 — Preview Loop, First UI Slice, Hardening, Home-Button Spike
 
+> **Status (2026-10-26): complete.** Part A (Tasks 1-9) merged 2026-10-25. Task 10 was verified on the TV. Task 11 found no reboot-free upgrade: upgrades need `-Reboot` (see [tv-notes.md](../../tv-notes.md)). Task 12 is applied: power-on hook plus Home button via LG Input Hook ([home-button.md](../../home-button.md)).
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Make UI work possible without a TV round-trip, ship the first M2 home-screen slice (icons, curated Home + All apps, clock, remembered focus, Magic Remote pointer), close the M1-review hardening backlog, then — with device authorisation — verify on the TV, look for a reboot-free upgrade path, and spike the Home-button / power-on hook.
@@ -8,7 +10,7 @@
 
 **Tech Stack:** ES5 for everything under `home/` and `services/`; Node 22+ (`node --test`) for tooling; devDependencies `acorn` (ES5 parse check) and `playwright` (browser smoke); PowerShell 5.1-compatible scripts.
 
-**Spec:** `docs/superpowers/specs/2026-10-24-customwebos-design.md` (M2 sketch + non-goals) and `docs/m2-tracking.md` (on-device findings). UI behaviour is shaped by CleanFrame's interaction spec (`C:\Users\Lenovo\source\repos\CleanFrameLG\docs\interaction-behaviour.md`) — reference for shape, not source.
+**Spec:** `docs/superpowers/specs/2026-10-24-customwebos-design.md` (M2 sketch + non-goals) and `docs/tv-log.md` (on-device findings). UI behaviour is shaped by CleanFrame's interaction spec (`C:\Users\Lenovo\source\repos\CleanFrameLG\docs\interaction-behaviour.md`) — reference for shape, not source.
 
 ## Global Constraints
 
@@ -18,7 +20,7 @@
 - Preview never fakes device success: a launch in the browser reports `preview: launching requires the TV`.
 - Every script that touches the TV supports `-WhatIf`. Part B tasks need explicit device authorisation on the day, per AGENTS.md.
 - Clock is 24-hour `HH:MM`, local time.
-- Bump `home/appinfo.json` version for every TV install (0.3.0 for this slice); each install needs `install.ps1 -TvHost <ip> -Reboot` (see m2-tracking: upgrades break app → service calls until reboot).
+- Bump `home/appinfo.json` version for every TV install (0.3.0 for this slice); each install needs `install.ps1 -TvHost <ip> -Reboot` (see tv-log: upgrades break app → service calls until reboot).
 - `dev/` and `browser-tests/` are never packaged (`package.ps1` packages `home/` and the service dir only).
 
 ## Review Focus
@@ -190,8 +192,8 @@
   - **OK with the pointer visible:** check whether it sends both keydown 13 and `click`, which would launch twice.
   - **The `⋯` glyph** on the All apps row: confirm it renders; if not, use `…`.
   - **Resume:** does `visibilitychange` fire when returning to the already-running app?
-- [ ] **Icons:** confirm whether `file:///media/cryptofs/...` icons load inside the web app. If they don't, record it in `docs/m2-tracking.md` and choose a follow-up: either the service returns the icon as a data URL, or initials stay.
-- [ ] Record the results in `docs/m2-tracking.md`; commit `docs: 0.3.0 on-device results`.
+- [ ] **Icons:** confirm whether `file:///media/cryptofs/...` icons load inside the web app. If they don't, record it in `docs/tv-log.md` and choose a follow-up: either the service returns the icon as a data URL, or initials stay.
+- [ ] Record the results in `docs/tv-log.md`; commit `docs: 0.3.0 on-device results`.
 
 ### Task 11: Reboot-free upgrade investigation
 
@@ -200,7 +202,7 @@ Each step is a hypothesis: install a version bump without `-Reboot`, try one can
 - [ ] Candidate 1: `ls-control scan-volatile-dirs` (we already know `scan-services` doesn't help).
 - [ ] Candidate 2: re-run `register-service.sh` (rewrites the files and SIGHUPs the hub).
 - [ ] Candidate 3: restart WebAppMgr (find its upstart job name with `initctl list | grep -i webapp`). Only on the owner's say-so, because it closes every running web app.
-- [ ] If one works, make it the default post-install step in `install.ps1`, keep `-Reboot` as an option, update `scripts.test.js`, setup.md §4.3 and m2-tracking, and commit. If none works, record the negative results.
+- [ ] If one works, make it the default post-install step in `install.ps1`, keep `-Reboot` as an option, update `scripts.test.js`, setup.md §4.3 and tv-log, and commit. If none works, record the negative results.
 
 ### Task 12: Home button / power-on spike
 

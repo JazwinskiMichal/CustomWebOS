@@ -23,7 +23,7 @@ SSH doesn't depend on the screen. Homebrew Channel's own `dropbear` (port 22, `w
 - **What:** `scripts/autostart.sh`, installed as `/var/lib/webosbrew/init.d/customwebos-autostart`.
   - At boot it waits in the background until `applicationManager` answers.
   - It waits a few seconds more, so the TV finishes restoring its last app.
-  - Then it **closes and reopens** CustomWebOS. Reopening also replaces an instance the TV may have opened too early, which would otherwise stay stuck (see `docs/m2-tracking.md`).
+  - Then it **closes and reopens** CustomWebOS. Reopening also replaces an instance the TV may have opened too early, which would otherwise stay stuck (see `docs/tv-log.md`).
   - It never blocks the other hooks and gives up after 4 minutes.
 - **Install / remove:**
   - `scripts/autostart.ps1 -TvHost <tv-ip>` installs it.
@@ -79,4 +79,4 @@ SSH doesn't depend on the screen. Homebrew Channel's own `dropbear` (port 22, `w
   - **Fix:** the remap lives in the library injected into `lginput2`, and the Launch action runs `luna-send` itself, so the service isn't needed after boot. `scripts/autostart.sh` now waits for LG Input Hook's injection marker (`/tmp/inputhook`), then stops its service.
   - **Verified after a reboot:** port 1842 is closed (the PC gets "connection refused"), and Home still opens CustomWebOS (owner-confirmed).
   - **Caveat:** opening LG Input Hook's app starts the server again until the next boot.
-- **A gap in B's boot script:** it runs `luna-send` without `< /dev/null`, the trap noted in m2-tracking, and deletes itself if a reply contains `errorText`. It survived this reboot. If the Home remap is ever lost after a boot, check that `/var/lib/webosbrew/init.d/inputhook` still exists. Opening LG Input Hook once recreates it.
+- **A gap in B's boot script:** it runs `luna-send` without `< /dev/null`, the trap noted in tv-log, and deletes itself if a reply contains `errorText`. It survived this reboot. If the Home remap is ever lost after a boot, check that `/var/lib/webosbrew/init.d/inputhook` still exists. Opening LG Input Hook once recreates it.

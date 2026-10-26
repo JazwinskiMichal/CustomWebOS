@@ -1,6 +1,8 @@
-# M2 tracking — things discovered during the M1 on-device test
+# TV log
 
-These are findings from installing M1 on my LG C8 and running it on 2026-10-24. None of them block the M1 artifact bar being met (install + register + open worked), but they're the first things M2 should pick up.
+A dated log of on-device sessions on the LG C8, from the first install (2026-10-24) onwards. It's history: append new sessions at the end, and don't rewrite old entries. Correct them with a dated note, as done for the "bus dead for 5 minutes" entry. The lasting rules distilled from it are in [tv-notes.md](tv-notes.md).
+
+(This file was `docs/m2-tracking.md` until 2026-10-26.)
 
 ## The core webOS 4.4 permission wall
 

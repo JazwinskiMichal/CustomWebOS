@@ -38,7 +38,7 @@ The redesign must not paint 2 and 3 into a corner, but builds neither.
 - **Engine:** webOS 4.4 = Chromium 53 (LG's spec; UA `Chrome/53.0.2785.34`). Available: flexbox (use `-webkit-` prefixes as the current CSS does), CSS custom properties, transforms/transitions, `object-fit`, `-webkit-mask-image`, CSS `filter`, WOFF2, WebGL 1. **Not available:** CSS Grid, flex `gap`, `position: sticky`, `backdrop-filter`, `:focus-within`, ResizeObserver. Runtime JS stays **ES5** (AGENTS.md).
 - Stage is 1920×1080 (`<meta name="viewport" content="width=1920">`).
 - Input: LG remote keys (arrows, OK=13, Back=461 plus 27/8 as today) and the Magic Remote pointer (hover focuses, click opens), exactly as `home/main.js` handles them now.
-- Device work (installs, measurements) needs Michał's per-task go-ahead (AGENTS.md). Every app upgrade needs `install.ps1 -TvHost <ip> -Reboot`; after boot, if the TV reopened CustomWebOS itself, close and reopen it (see `docs/m2-tracking.md`).
+- Device work (installs, measurements) needs Michał's per-task go-ahead (AGENTS.md). Every app upgrade needs `install.ps1 -TvHost <ip> -Reboot`; after boot, if the TV reopened CustomWebOS itself, close and reopen it (see `docs/tv-log.md`).
 
 ## The screen
 
@@ -76,7 +76,7 @@ All colours (ink, glass veil, focus fill, shadows) come from CSS custom properti
 - **Baseline first** (Claude's call): before changing code, measure today's 0.3.1 list on the TV the same way, so "slower than today" has numbers. CleanFrame's look has only ever run on a Samsung (Tizen), never on webOS 4.4, so expect to need the fallback order below.
 - **The bar** (Claude's call, numbers can be tuned after the baseline): first paint within 1 s of launch; a focus move visibly responds within 100 ms; while holding Right across the dock, 95% of frames under 33 ms (30 fps).
 - **If the TV misses the bar, give things up in this order** (Michał's order): (1) focus animations, (2) the Manrope web font (fall back to the TV's system font), (3) the frosted glass (plain dark translucent dock instead), (4) last, a smaller or lower-quality photo.
-- **Measure on the TV before calling it done:** time from launch to first paint, and smoothness while holding Right across the dock and moving through All apps (e.g. a `requestAnimationFrame` frame-time log for a few seconds, read back over SSH/console). Record numbers in `docs/m2-tracking.md`.
+- **Measure on the TV before calling it done:** time from launch to first paint, and smoothness while holding Right across the dock and moving through All apps (e.g. a `requestAnimationFrame` frame-time log for a few seconds, read back over SSH/console). Record numbers in `docs/tv-log.md`.
 
 ## How it's built (Claude's call, not Michał's)
 

@@ -714,7 +714,7 @@ function mountUI(doc) {
   function requestApps(attempt) {
     function retry(reason) {
       // Once the service has answered, a failed refresh (slow bus after
-      // boot, see m2-tracking) keeps the list on screen and retries quietly.
+      // boot, see tv-log) keeps the list on screen and retries quietly.
       var delay = retryDelayMs(attempt);
       retryDueAt = nowMs() + delay;
       lastFailure = reason;

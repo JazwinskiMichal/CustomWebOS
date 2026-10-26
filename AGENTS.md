@@ -4,6 +4,12 @@ CustomWebOS is a personal webOS platform anchored by a home-screen replacement f
 
 These conventions apply to everyone (and every agent) working on this repo.
 
+## Before you start
+
+- Read [`docs/status.md`](docs/status.md) for the current state and next steps, and [`docs/README.md`](docs/README.md) for the map of docs. The repo is the source of truth; nothing important lives only in someone's notes.
+- Before any TV work, read [`docs/tv-notes.md`](docs/tv-notes.md). The traps there cost hours: `luna-send` needs `< /dev/null` and file output, every install needs `-Reboot`, BusyBox `timeout -t N`.
+- When something lands, update `docs/status.md`. Log on-device sessions in `docs/tv-log.md`, and lift lasting rules into `docs/tv-notes.md`.
+
 ## Device-access authority
 
 Tasks that touch the TV — SSH sessions, `ares-install`, applying or removing an autostart hook, running a rollback drill, modifying anything under `/var/lib/webosbrew/` — require **explicit per-task authorisation** from the repo owner. Repo- and browser-only work (editing docs, authoring scripts, running unit tests on the dev machine) does not.

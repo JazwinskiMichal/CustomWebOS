@@ -97,7 +97,7 @@ test('focus moves along the dock without rebuilding it', async () => {
 
 test('focus changes without animation', async () => {
   // On the TV the 120 ms scale/fade dropped 6 of 32 frames per 9 moves
-  // (p95 67-83 ms); without it, 0 of 44 (docs/m2-tracking.md).
+  // (p95 67-83 ms); without it, 0 of 44 (docs/tv-log.md).
   const { page, close } = await openPreview()
   try {
     await waitForServiceList(page)
