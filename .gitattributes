@@ -3,3 +3,4 @@
 *.sh text eol=lf
 services/*/run-js-service text eol=lf
 *.png binary
+native/**/*.sh text eol=lf

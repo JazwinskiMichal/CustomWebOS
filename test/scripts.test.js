@@ -221,3 +221,15 @@ test('perf.ps1 gives every luna-send /dev/null as stdin', { skip: !PS && 'no Pow
     assert.equal(l.split('< /dev/null').length, l.split('luna-send').length, l)
   }
 })
+
+test('build-native.ps1 -WhatIf prints docker build and run, builds nothing', { skip: !PS && 'no PowerShell' }, () => {
+  const native = path.join(DIST, 'native')
+  const before = fs.existsSync(native) ? fs.readdirSync(native) : null
+  const r = ps('build-native.ps1', ['-WhatIf'])
+  assert.equal(r.status, 0, r.stderr)
+  assert.match(r.stdout, /docker build/)
+  assert.match(r.stdout, /customwebos-remoteview-build/)
+  assert.match(r.stdout, /dist[\/]native[\/]remoteview/)
+  const after = fs.existsSync(native) ? fs.readdirSync(native) : null
+  assert.deepEqual(after, before)
+})
