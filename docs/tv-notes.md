@@ -54,3 +54,4 @@ Lasting facts and rules for the target TV. Read this before touching it. The evi
 - **`ares-package` minifies `main.js`;** the output stays ES5.
 - **`listLaunchPoints` lists the browser twice;** the app de-duplicates by id.
 - **The service process survives `/quit`** and keeps running old code; `install.ps1` kills it after installing.
+- **Screen capture: a leaked `DILE_VT` context lasts until reboot.** A capture process killed without releasing it (e.g. hyperion-webos under `timeout -t`, which sends SIGTERM) leaves every later `DILE_VT_Create` failing. Stop capture tools with SIGINT (`timeout -s INT -t N`), and make our own capture code release on every exit path.

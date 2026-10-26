@@ -110,6 +110,17 @@ Installed with `-Reboot`. All apps measured for the first time with `scripts/per
 - One 50 ms frame in one dock run didn't repeat in two more runs; p95 stayed at 16.7 ms.
 - The launch-note pill (review fix) shows only when a launch fails, so it wasn't provoked on the TV; the browser suite checks its colours.
 
+## Remote view spike: screen capture (2026-10-26)
+
+For the [remote view design](superpowers/specs/2026-10-26-remote-view-design.md). Ran hyperion-webos 0.2.1's release binary and its `libdile_vt` / `libgm` backends from `/tmp/hwspike` (owner's go-ahead), as `hyperion-webos -a 127.0.0.1 -b libdile_vt -u libgm -x 960 -y 540 -s -r -d -v`, and pulled the `--dump-frames` output back as PNGs. Removed afterwards.
+
+- **Everything captures:** CustomWebOS home, live TV, Netflix **full-screen playback** (no DRM blackout), HDMI 1 with the PS5, and LG's no-signal screen.
+- **Speed and cost at 960×540:** ~13 fps with video + UI (~35 ms/frame converting), ~30 fps UI-only; ~11 MB RSS, ~47% CPU.
+- **`DILE_VT` leaks on SIGTERM.** The first run was stopped by `timeout -t` (SIGTERM); hyperion-webos only cleans up on SIGINT. Every later `DILE_VT_Create` (and `CreateEx`, quirk 1) failed with "Failed to get DILE_VT context" until a `reboot`. After it, runs stopped with `timeout -s INT` re-acquired the context every time.
+- `DILE_VT` reports scale-up to 3840×2160, scale-down to 320×240, 60 Hz source, framerate divider 2.
+- Resources: 2 cores, ~650 MB RAM available, 600 MB swap, 1.6 GB free in `/media/developer`; `/tmp` is RAM-backed. `/dev/uinput` exists.
+- Apps can be opened over SSH with `luna-send -n 1 luna://com.webos.applicationManager/launch '{"id":"netflix"}' < /dev/null` (`com.webos.app.hdmi1` for HDMI 1).
+
 ## Repo-side progress (no device access)
 
 Done on 2026-10-24, all covered by `node --test`:
