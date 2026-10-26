@@ -242,17 +242,14 @@ In the one clean measurement (2026-10-25) the bus answered at 38 s after boot; t
 
 Rollback: `pwsh scripts/register-service.ps1 -TvHost <tv-ip> -Unregister`, then reboot.
 
-### §4.4 Autostart hook — pick one
+### §4.4 Power-on and the Home button
 
-Making CustomWebOS the destination when you press the Magic Remote's Home button is a webOS-side configuration. There's more than one way to do it, each with its own tradeoffs and its own rollback. Pick one at install time rather than committing to one in the repo.
+There is no supported "set as Home" on webOS 4.4: no Homebrew Channel toggle, and no `applicationManager` default-app method. LG's Home bar lives inside the compiled surface manager. The findings, both workable candidates and their rollbacks are in [`docs/home-button.md`](home-button.md). In short:
 
-Candidates in current webosbrew-community practice (verify against <https://www.webosbrew.org/pages/autostart> or the Hbchannel repo at the time you're installing — these move):
+- **Power-on → CustomWebOS:** our own boot hook. Install it with `pwsh scripts/autostart.ps1 -TvHost <tv-ip>`; remove it with `-Remove`, or `rm /var/lib/webosbrew/init.d/customwebos-autostart && reboot`. Add `-WhatIf` to either to see the commands.
+- **Home button → CustomWebOS:** only through the third-party LG Input Hook app, which remaps buttons by injecting into LG's input daemon. See the costs in `home-button.md` before choosing it.
 
-- **Hbchannel's own "set as Home" option** if your Hbchannel version exposes one in Settings. Rollback: flip the same toggle off.
-- **`luna-send` default-launchpoint override via an init.d script.** Add a script under `/var/lib/webosbrew/init.d/` that calls `luna-send -n 1 luna://com.webos.applicationManager/setDefaultLaunchpoint` with the CustomWebOS id. Rollback: delete the init.d script, reboot; LG's native home comes back.
-- **webosbrew's `webos-remote` / `autostart-apps` pattern** for the Hbchannel apps that already handle this cleanly. Rollback: uninstall the autostart-apps package or clear its config.
-
-**Before you apply any of them, write the rollback down.** The guarantee you want: if CustomWebOS misbehaves after you set it as home, you can get back to LG's native home with telnet (not SSH, in case CustomWebOS crashes the whole display) and a known set of commands. Keep that recovery sheet in `.local/webos/`.
+**Before you apply either, write the rollback down** in `.local/webos/recovery.md`. SSH (dropbear from Homebrew Channel's startup) comes up at boot independently of what's on screen. If a startup hook crashes a boot, Homebrew Channel's failsafe turns telnet on for the next boot.
 
 ---
 
