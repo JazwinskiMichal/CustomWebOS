@@ -58,8 +58,20 @@ SSH doesn't depend on the screen. Homebrew Channel's own `dropbear` (port 22, `w
 - **Replacing or patching LG's launcher:** the surface manager is a compiled binary on the read-only root filesystem. Bind-mount tricks would risk the TV's main UI for little gain over B.
 - **`setDefaultLaunchpoint` / an Hbchannel "Home" toggle:** they don't exist on 4.4 (see Findings).
 
-## Status
+## Status: both applied (2026-10-26)
 
-- [x] Research and recovery check (2026-10-26).
-- [ ] A: built and dry-run tested in the repo; apply with the owner watching, verify a power-on, run the undo once, re-apply.
-- [ ] B: only if the owner wants the Home button itself.
+- [x] Research and recovery check.
+- [x] **A applied and kept.**
+  - Live TV was put in front, then the TV rebooted. At 44 s the hook launched CustomWebOS (`caller_id: com.webos.lunasend-…` in the SAM log), and it was in front at 79 s.
+  - That instance reached its service (the service process was started by its call), so it isn't one of the stuck early ones.
+  - **Rollback proven:** after `autostart.ps1 -Remove` and a reboot from Live TV, Live TV stayed in front and nothing launched CustomWebOS. The hook was then re-installed.
+- [x] **B applied and kept:**
+  1. Installed LG Input Hook 1.5.1 through Homebrew Channel's own service, so the hash was checked and the service elevated: `luna://org.webosbrew.hbchannel.service/install` with `ipkUrl` and `ipkHash` from `repo.webosbrew.org/api/apps/org.webosbrew.inputhook/releases/latest.json`.
+  2. Opened it once: it injected into `lginput2` and `tvservice` and wrote `/var/lib/webosbrew/init.d/inputhook`.
+  3. Wrote `/home/root/.config/lginputhook/keybinds.json` = `{"773":{"action":"launch","id":"org.jazwinski.customwebos.home"}}`. Its UI's **Launch App** action needs no shell command. The hook reloads the file as soon as it changes.
+  - **The C8's Magic Remote Home button is ID 773** (log: `lginput_uinput_send_button … uinput_code=773`).
+  - **The owner confirmed:** from another app, Home opens CustomWebOS and LG's bar no longer appears.
+  - After a reboot, the hook re-injected and the keybind was intact.
+  - **Still to prove:** B's rollback. Write `{}` to `keybinds.json` (it applies at once) and Home should open LG's bar again.
+- **Security cost of B:** its config server listens on **port 1842, all interfaces**, behind HTTP basic auth with a random 8-character password, regenerated when its service starts and shown in its UI. Through it, keybinds can be changed, including "Execute" as root. Anyone on the LAN who learns the password gets root on the TV.
+- **A gap in B's boot script:** it runs `luna-send` without `< /dev/null`, the trap noted in m2-tracking, and deletes itself if a reply contains `errorText`. It survived this reboot. If the Home remap is ever lost after a boot, check that `/var/lib/webosbrew/init.d/inputhook` still exists. Opening LG Input Hook once recreates it.
