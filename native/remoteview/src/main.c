@@ -1,8 +1,10 @@
+#include <errno.h>
 #include <signal.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/resource.h>
 #include <sys/stat.h>
 #include <time.h>
 #include <unistd.h>
@@ -189,6 +191,8 @@ static int serve(void)
     text[n] = '\0';
     if (config_parse(text, &cfg))
         fprintf(stderr, "remoteview: ignored bad lines in %s\n", CONFIG_PATH);
+    if (setpriority(PRIO_PROCESS, 0, 10) != 0)
+        fprintf(stderr, "remoteview: setpriority failed: %s\n", strerror(errno));
     return server_run(&cfg);
 }
 

@@ -28,6 +28,10 @@ if(REMOTEVIEW_HOST_TESTS)
   add_test(NAME test_lanfilter COMMAND test_lanfilter)
   add_executable(test_config test/test_config.c src/config.c)
   add_test(NAME test_config COMMAND test_config)
+  add_executable(test_governor test/test_governor.c src/governor.c)
+  add_test(NAME test_governor COMMAND test_governor)
+  add_executable(test_cpustat test/test_cpustat.c src/cpustat.c)
+  add_test(NAME test_cpustat COMMAND test_cpustat)
 else()
   # Capture comes from hyperion-webos' unicapture and its two backends; the
   # flatbuffers/hyperion client parts of that project are not built.
@@ -42,7 +46,7 @@ else()
   pkg_check_modules(PMLOG REQUIRED PmLogLib)
 
   add_executable(remoteview src/main.c src/keymap.c src/pointer.c src/ws.c src/ssap.c src/lginput.c
-    src/shutdown.c src/capture.c src/session.c src/lanfilter.c src/config.c src/server.c
+    src/shutdown.c src/capture.c src/session.c src/lanfilter.c src/config.c src/governor.c src/cpustat.c src/server.c
     ${HW}/src/unicapture.c ${HW}/src/converter.c ${HW}/src/log.c ${HW}/src/utils.c)
   target_compile_definitions(remoteview PRIVATE REMOTEVIEW_VERSION="${REMOTEVIEW_VERSION}")
   set(LIBVNC_ROOT /opt/libvnc CACHE PATH "Static LibVNCServer install (see Dockerfile)")

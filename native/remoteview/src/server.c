@@ -7,6 +7,7 @@
 #include <pthread.h>
 #include <rfb/rfb.h>
 #include <signal.h>
+#include <stdatomic.h>
 #include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -17,6 +18,8 @@
 #include <unistd.h>
 
 #include "capture.h"
+#include "cpustat.h"
+#include "governor.h"
 #include "keymap.h"
 #include "lanfilter.h"
 #include "lginput.h"
@@ -25,6 +28,8 @@
 
 #define TILE 64
 #define CONFIG_DIR "/home/root/.config/customwebos"
+#define GOV_PERIOD_S 2
+#define GOV_LOG_S 30
 
 static rfbScreenInfoPtr screen;
 static rv_config cfg;
@@ -41,6 +46,15 @@ static struct {
     pthread_cond_t cv;
     int running, stop;
 } cap;
+
+/* Current capture rate: written by the main thread (capture_start, governor),
+ * read by the capture thread every frame and by the main loop timeout. */
+static _Atomic int fps_now = 10;
+
+static struct {
+    char prev[1024]; /* /proc/self/stat at the last sample; empty = none */
+    double prev_t, last_log_t;
+} gov;
 
 /* Logs to syslog (never a file on flash). Also used for LibVNCServer's own log. */
 static void logf_(const char *fmt, ...)
@@ -125,7 +139,6 @@ static void *capture_main(void *arg)
     uint8_t *cur = malloc((size_t)cfg.width * cfg.height * 4);
     int has_video = 0, fails = 0;
     struct timespec next, now;
-    long period_ns = 1000000000L / cfg.fps_max;
 
     (void)arg;
     if (!cur || capture_open(cfg.width, cfg.height, &has_video) != 0) {
@@ -142,7 +155,7 @@ static void *capture_main(void *arg)
         } else if (fails++ == 0) {
             logf_("capture_frame failed");
         }
-        next.tv_nsec += period_ns;
+        next.tv_nsec += 1000000000L / atomic_load(&fps_now);
         if (next.tv_nsec >= 1000000000L) {
             next.tv_nsec -= 1000000000L;
             next.tv_sec++;
@@ -162,6 +175,8 @@ static void capture_start(void)
 {
     if (cap.running)
         return;
+    atomic_store(&fps_now, cfg.fps_max);
+    gov.prev[0] = '\0'; /* first sample of the session only sets the baseline */
     cap.stop = 0;
     if (pthread_create(&cap.th, NULL, capture_main, NULL) == 0)
         cap.running = 1;
@@ -180,6 +195,64 @@ static void capture_stop(void)
     pthread_mutex_unlock(&cap.mu);
     pthread_join(cap.th, NULL);
     cap.running = 0;
+}
+
+/* Monotonic seconds. */
+static double mono_s(void)
+{
+    struct timespec t;
+
+    clock_gettime(CLOCK_MONOTONIC, &t);
+    return t.tv_sec + t.tv_nsec / 1e9;
+}
+
+/* Reads /proc/self/stat (whole process, both threads) into buf; 0 on success. */
+static int read_self_stat(char *buf, size_t n)
+{
+    FILE *f = fopen("/proc/self/stat", "r");
+    size_t got;
+
+    if (!f)
+        return -1;
+    got = fread(buf, 1, n - 1, f);
+    fclose(f);
+    buf[got] = '\0';
+    return got ? 0 : -1;
+}
+
+/* Main loop, every pass: while capturing, every 2 s measures the process CPU
+ * and lets the governor adjust fps; logs changes, and the CPU every 30 s. */
+static void governor_tick(void)
+{
+    char cur[sizeof gov.prev];
+    double t, frac;
+    int old, next;
+
+    if (!cap.running) {
+        gov.prev[0] = '\0';
+        return;
+    }
+    t = mono_s();
+    if (gov.prev[0] && t - gov.prev_t < GOV_PERIOD_S)
+        return;
+    if (read_self_stat(cur, sizeof cur) != 0)
+        return;
+    if (!gov.prev[0]) {
+        gov.last_log_t = t;
+    } else if ((frac = cpustat_fraction(gov.prev, cur, t - gov.prev_t, sysconf(_SC_CLK_TCK))) >= 0) {
+        old = atomic_load(&fps_now);
+        next = governor_next(old, cfg.fps_max, frac);
+        if (next != old) {
+            atomic_store(&fps_now, next);
+            logf_("fps %d -> %d (cpu %.2f)", old, next, frac);
+            gov.last_log_t = t;
+        } else if (t - gov.last_log_t >= GOV_LOG_S) {
+            logf_("fps %d steady (cpu %.2f)", old, frac);
+            gov.last_log_t = t;
+        }
+    }
+    memcpy(gov.prev, cur, sizeof cur);
+    gov.prev_t = t;
 }
 
 /* Opens the TV input channel with a fresh, unsynced pointer. */
@@ -381,7 +454,8 @@ int server_run(const rv_config *config)
     for (;;) {
         int sig;
 
-        rfbProcessEvents(screen, cap.running ? 1000000 / cfg.fps_max : 100000);
+        rfbProcessEvents(screen, cap.running ? 1000000 / atomic_load(&fps_now) : 100000);
+        governor_tick();
         flush_dirty();
         scan_clients();
         if (input && lginput_poll(input) < 0)
