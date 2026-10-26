@@ -11,7 +11,7 @@ Hand-off notes, so work can continue on another machine. Last updated 2026-10-25
   - steady 60 fps (measured; see `docs/m2-tracking.md`)
 - **The owner accepted the look on the TV.**
 - **A post-merge code review ran on the redesign.** It found no critical issues. Its two important findings are fixed on `main` (commit `f8dfb55`), and the rest are listed under "Small open items" below.
-- **Those fixes are not on the TV yet; it still runs 0.4.1.**
+- **The TV runs 0.4.2,** with those fixes. All apps was measured on 2026-10-26: 60 fps, 0 slow frames (`docs/m2-tracking.md`).
 - **`main` holds everything.**
   - Design: [`specs/2026-10-25-home-redesign-design.md`](superpowers/specs/2026-10-25-home-redesign-design.md)
   - Plan: [`plans/2026-10-25-home-redesign.md`](superpowers/plans/2026-10-25-home-redesign.md) (all 8 tasks done)
@@ -48,11 +48,6 @@ Details and evidence are in `docs/m2-tracking.md`. Rules of thumb:
 
 In suggested order:
 
-0. **Install the review fixes and measure All apps (TV, needs the owner's go-ahead).**
-   - Set `home/appinfo.json` to 0.4.2, then run `scripts/package.ps1` and `scripts/install.ps1 -TvHost <tv-ip> -Reboot`.
-   - Run `scripts/perf.ps1 -TvHost <tv-ip> -Action down -Steps 9 -View all` twice. The design asked for All apps to be measured, and it never has been. The bar is p95 frame < 33 ms.
-   - Check that a failed launch's note (now a dark pill above the dock) is readable on the photo.
-   - Record the results in `docs/m2-tracking.md`.
 1. **Home button / power-on (Task 12 of [`plans/2026-10-25-m2-preview-ui-hardening.md`](superpowers/plans/2026-10-25-m2-preview-ui-hardening.md)).**
    - Research first, writing nothing on the TV.
    - Fallback candidate: a `/var/lib/webosbrew/init.d/` script that waits for the bus, then closes and reopens CustomWebOS. That gives "power-on shows CustomWebOS" and also removes the stuck instance the TV reopens at boot.

@@ -92,6 +92,22 @@ Dock layout, white logos, photo with pre-blurred glass, Manrope, Polish date. Me
 - Editing the installed `style.css` in place under `/media/developer/apps/usr/palm/applications/org.jazwinski.customwebos.home/` and relaunching (perf.ps1 does that) takes effect without a reinstall or reboot. A quick loop for visual experiments; the committed build was then installed normally.
 - **Owner check, 0.4.1:** "its all looking very good" — look, logos, All apps, date, pointer, Back and speed all accepted.
 
+## 0.4.2: review fixes, All apps measured (2026-10-26)
+
+Installed with `-Reboot`. All apps measured for the first time with `scripts/perf.ps1 -TvHost 192.168.88.244 -Action down -Steps 9 -View all` (opens All apps, then 9 row moves 80 ms apart):
+
+| | All apps run 1 | All apps run 2 | dock run 1 | dock run 2 | dock run 3 |
+|---|---|---|---|---|---|
+| first render (ms) | 307 | 261 | 437 | 238 | 216 |
+| app list shown (ms) | 1324 (first after boot) | 453 | 581 | 331 | 337 |
+| frame p95 / max (ms) | 16.7 / 16.7 | 16.7 / 16.7 | 16.7 / 50 | 16.7 / 16.7 | 16.7 / 16.7 |
+| frames over 33 ms | 0 of 44 | 0 of 44 | 1 of 42 | 0 of 43 | 0 of 43 |
+| one focus step, p95 (ms) | 1.8 | 1.8 | 3.1 | 2.2 | 2.3 |
+
+- All apps, with its whitened TV icons, masked logos and grid scrolling, holds 60 fps. It meets the bar.
+- One 50 ms frame in one dock run didn't repeat in two more runs; p95 stayed at 16.7 ms.
+- The launch-note pill (review fix) shows only when a launch fails, so it wasn't provoked on the TV; the browser suite checks its colours.
+
 ## Repo-side progress (no device access)
 
 Done on 2026-10-24, all covered by `node --test`:
