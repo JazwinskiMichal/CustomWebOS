@@ -148,6 +148,47 @@ function formatClock(date) {
   return pad2(date.getHours()) + ':' + pad2(date.getMinutes());
 }
 
+// Sunrise and sunset for a UTC calendar day at lat/lon (east positive), in
+// minutes after 00:00 UTC: the NOAA "sunrise equation", good to a minute or
+// two at these latitudes. Polar day/night is clamped (not relevant here).
+function sunTimesUtc(year, month, day, lat, lon) {
+  var rad = Math.PI / 180;
+  var jd0 = Date.UTC(year, month - 1, day) / 86400000 + 2440587.5;
+  var n = Math.ceil(jd0 - 2451545 + 0.0008);
+  var jStar = n - lon / 360;
+  var m = (357.5291 + 0.98560028 * jStar) % 360;
+  var c = 1.9148 * Math.sin(m * rad) + 0.02 * Math.sin(2 * m * rad) + 0.0003 * Math.sin(3 * m * rad);
+  var lambda = (m + c + 180 + 102.9372) % 360;
+  var transit = 2451545 + jStar + 0.0053 * Math.sin(m * rad) - 0.0069 * Math.sin(2 * lambda * rad);
+  var sinDecl = Math.sin(lambda * rad) * Math.sin(23.4397 * rad);
+  var cosDecl = Math.cos(Math.asin(sinDecl));
+  var cosW = (Math.sin(-0.833 * rad) - Math.sin(lat * rad) * sinDecl) / (Math.cos(lat * rad) * cosDecl);
+  var w = Math.acos(Math.max(-1, Math.min(1, cosW))) / rad;
+  function minutesOf(jd) {
+    var f = jd + 0.5 - Math.floor(jd + 0.5);
+    return f * 1440;
+  }
+  return { rise: minutesOf(transit - w / 360), set: minutesOf(transit + w / 360) };
+}
+
+// Local minutes of the day used when the sun can't be computed.
+var FALLBACK_DAY = { from: 7 * 60, to: 19 * 60 };
+
+// 'light' between sunrise and sunset at loc, else 'dark'. Without a usable
+// location, or with a clock that isn't synced yet (the TV can report an old
+// year just after boot), fixed local hours decide instead.
+function themeFor(date, loc) {
+  var usable = loc && typeof loc.lat === 'number' && typeof loc.lon === 'number' &&
+    !isNaN(loc.lat) && !isNaN(loc.lon) && date.getFullYear() >= 2026;
+  if (!usable) {
+    var local = date.getHours() * 60 + date.getMinutes();
+    return local >= FALLBACK_DAY.from && local < FALLBACK_DAY.to ? 'light' : 'dark';
+  }
+  var t = sunTimesUtc(date.getUTCFullYear(), date.getUTCMonth() + 1, date.getUTCDate(), loc.lat, loc.lon);
+  var now = date.getUTCHours() * 60 + date.getUTCMinutes();
+  return now >= t.rise && now < t.set ? 'light' : 'dark';
+}
+
 // The date under the clock, in the TV's language: built-in tables rather
 // than toLocaleDateString, which depends on the TV's ICU build. English for
 // en*, Polish (genitive months) for everything else.
@@ -893,6 +934,9 @@ if (typeof module !== 'undefined' && module.exports) {
     LAUNCH_GUARD_MS: LAUNCH_GUARD_MS,
     shouldLaunch: shouldLaunch,
     formatClock: formatClock,
+    sunTimesUtc: sunTimesUtc,
+    FALLBACK_DAY: FALLBACK_DAY,
+    themeFor: themeFor,
     msToNextMinute: msToNextMinute,
     PREFS_KEY: PREFS_KEY,
     loadPrefs: loadPrefs,

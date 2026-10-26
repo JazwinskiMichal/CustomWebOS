@@ -409,3 +409,45 @@ test('a failed app list shows loading during the grace period, then the error', 
   assert.equal(main.failureView(29999), 'loading')
   assert.equal(main.failureView(30000), 'error')
 })
+
+// Day/night theme: sunrise and sunset in Warsaw (minutes after 00:00 UTC).
+const WAW = {lat: 52.23, lon: 21.01}
+const near = (actual, expected, what) =>
+  assert.ok(Math.abs(actual - expected) <= 5, what + ': ' + actual + ' vs ' + expected)
+
+test('sunTimesUtc gives Warsaw sunrise and sunset at midsummer', () => {
+  const t = main.sunTimesUtc(2026, 6, 21, WAW.lat, WAW.lon)
+  near(t.rise, 134, 'rise 02:14 UTC')
+  near(t.set, 1141, 'set 19:01 UTC')
+})
+
+test('sunTimesUtc gives Warsaw sunrise and sunset at midwinter', () => {
+  const t = main.sunTimesUtc(2026, 12, 21, WAW.lat, WAW.lon)
+  near(t.rise, 403, 'rise 06:43 UTC')
+  near(t.set, 865, 'set 14:25 UTC')
+})
+
+test('sunTimesUtc has no jump across the clock change (it works in UTC)', () => {
+  const before = main.sunTimesUtc(2026, 3, 28, WAW.lat, WAW.lon)
+  const after = main.sunTimesUtc(2026, 3, 30, WAW.lat, WAW.lon)
+  assert.ok(Math.abs(after.set - before.set) < 5)
+})
+
+test('themeFor follows the sun in Warsaw', () => {
+  assert.equal(main.themeFor(new Date(Date.UTC(2026, 5, 21, 12, 0)), WAW), 'light')
+  assert.equal(main.themeFor(new Date(Date.UTC(2026, 5, 21, 20, 0)), WAW), 'dark')
+  assert.equal(main.themeFor(new Date(Date.UTC(2026, 11, 21, 15, 0)), WAW), 'dark')
+  assert.equal(main.themeFor(new Date(Date.UTC(2026, 11, 21, 7, 0)), WAW), 'light')
+})
+
+test('themeFor uses fixed local hours while the clock is unsynced', () => {
+  assert.equal(main.themeFor(new Date(2020, 0, 1, 12, 0), WAW), 'light')
+  assert.equal(main.themeFor(new Date(2020, 0, 1, 22, 0), WAW), 'dark')
+})
+
+test('themeFor uses fixed local hours without a usable location', () => {
+  assert.equal(main.themeFor(new Date(2026, 5, 21, 6, 0), undefined), 'dark')
+  assert.equal(main.themeFor(new Date(2026, 5, 21, 7, 0), undefined), 'light')
+  assert.equal(main.themeFor(new Date(2026, 5, 21, 6, 0), {lat: 'x'}), 'dark')
+  assert.deepEqual(main.FALLBACK_DAY, {from: 420, to: 1140})
+})
