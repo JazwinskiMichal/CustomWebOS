@@ -108,7 +108,7 @@ if (-not (Test-Path -LiteralPath $KeyPath)) {
 # No BOM on piped input: on a UTF-8 console (code page 65001) Windows
 # PowerShell still writes one unless the console input encoding is BOM-less too.
 $OutputEncoding = New-Object System.Text.UTF8Encoding $false
-[Console]::InputEncoding = $OutputEncoding
+try { [Console]::InputEncoding = $OutputEncoding } catch { }
 
 if ($SetPassword) {
     $secure = Read-Host -Prompt 'VNC password' -AsSecureString
