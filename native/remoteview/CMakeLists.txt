@@ -57,6 +57,8 @@ else()
   target_link_libraries(remoteview ${LIBVNC_ROOT}/lib/libvncserver.a jpeg z yuv dl pthread rt ${PMLOG_LDFLAGS})
   # The backends call log_printf/getticks_us from the executable.
   set_target_properties(remoteview PROPERTIES ENABLE_EXPORTS ON)
+  # Ship libjpeg.so.8 beside the binary (the TV only has .so.62).
+  set_target_properties(remoteview PROPERTIES BUILD_RPATH "\$ORIGIN" INSTALL_RPATH "\$ORIGIN")
 
   add_library(gm_backend SHARED ${HW}/src/backends/libgm.c)
   target_include_directories(gm_backend PRIVATE ${HW}/src ${HW}/src/backends)

@@ -3,8 +3,10 @@
   Build the CustomWebOS home app .ipk using LG's ares-package.
 
 .DESCRIPTION
-  Validates home/appinfo.json, ensures dist/ exists, then calls:
-      ares-package home/ -o dist/
+  Validates home/appinfo.json, stages home/, the service and the remote view
+  daemon (from scripts/build-native.ps1: bin/remoteview, its two capture
+  backends, libjpeg.so.8 and its licence) into dist/stage/, then calls:
+      ares-package dist/stage/home dist/stage/<service> -o dist/
   Prints the resulting .ipk filename on stdout when the real run completes.
 
 .PARAMETER WhatIf
@@ -38,14 +40,28 @@ try {
     throw "home/appinfo.json is not valid JSON: $($_.Exception.Message)"
 }
 
-$sources = @($homeDir)
+# ares-package packages whole directories, so the daemon is staged next to
+# the service as bin/ (installed at <service dir>/bin/, where the boot hook
+# looks for it).
+$stageDir   = Join-Path $distDir 'stage'
+$nativeDir  = Join-Path $repoRoot 'dist/native/remoteview'
+$nativeFiles = @('remoteview', 'libdile_vt_backend.so', 'libgm_backend.so', 'libjpeg.so.8', 'LICENSE.libjpeg-turbo')
+$stageHome  = Join-Path $stageDir 'home'
+$sources = @($stageHome)
+$stageService = $null
 if (Test-Path -LiteralPath $serviceDir) {
-    $sources += $serviceDir
+    $stageService = Join-Path $stageDir (Split-Path -Leaf $serviceDir)
+    $sources += $stageService
 }
 
 $cmd = "ares-package " + (($sources | ForEach-Object { '"' + $_ + '"' }) -join ' ') + " -o `"$distDir`""
 
 if (-not $PSCmdlet.ShouldProcess($distDir, 'ares-package')) {
+    Write-Output "would stage: $homeDir to $stageHome"
+    if ($stageService) {
+        Write-Output "would stage: $serviceDir to $stageService"
+        foreach ($f in $nativeFiles) { Write-Output "would stage: $(Join-Path $nativeDir $f) to $(Join-Path $stageService "bin/$f")" }
+    }
     Write-Output "would run: $cmd"
     foreach ($s in $sources) { Write-Output "source: $s" }
     Write-Output "output: $distDir"
@@ -54,6 +70,23 @@ if (-not $PSCmdlet.ShouldProcess($distDir, 'ares-package')) {
 
 if (-not (Test-Path -LiteralPath $distDir)) {
     New-Item -ItemType Directory -Path $distDir | Out-Null
+}
+
+if ($stageService) {
+    foreach ($f in $nativeFiles) {
+        if (-not (Test-Path -LiteralPath (Join-Path $nativeDir $f))) {
+            throw "dist/native/remoteview/$f is missing: run scripts/build-native.ps1 first"
+        }
+    }
+}
+if (Test-Path -LiteralPath $stageDir) { Remove-Item -LiteralPath $stageDir -Recurse -Force }
+New-Item -ItemType Directory -Path $stageDir | Out-Null
+Copy-Item -LiteralPath $homeDir -Destination $stageHome -Recurse
+if ($stageService) {
+    Copy-Item -LiteralPath $serviceDir -Destination $stageService -Recurse
+    $stageBin = Join-Path $stageService 'bin'
+    New-Item -ItemType Directory -Path $stageBin | Out-Null
+    foreach ($f in $nativeFiles) { Copy-Item -LiteralPath (Join-Path $nativeDir $f) -Destination $stageBin }
 }
 
 Write-Output "running: $cmd"

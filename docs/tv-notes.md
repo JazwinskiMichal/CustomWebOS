@@ -60,3 +60,10 @@ Lasting facts and rules for the target TV. Read this before touching it. The evi
 - **Plain syslog is dropped.** PmLogDaemon doesn't put `syslog()`/`logger` lines in `/var/log/messages` at any level. Native daemons should write their log to stderr and have their hook send it to a file in `/tmp`.
 - **Capture buffers are uncached memory.** Converting straight out of `DILE_VT`/libgm buffers is 10–15× slower than copying them out with `memcpy` first. Captured frames come out as bytes R,G,B,A.
 - **`libjpeg.so.8` isn't on the TV** (only `libjpeg.so.62`). Native code built with the buildroot toolchain must ship its own copy.
+
+## Remote view (VNC)
+
+- **Where it lives:** `<service dir>/bin/remoteview` (service dir = `/media/developer/apps/usr/palm/services/org.jazwinski.customwebos.home.service/`), with its capture backends and `libjpeg.so.8` beside it; the binary finds them through RPATH `$ORIGIN`. `ares-package` on Windows drops exec bits, so the boot hook runs `chmod 755` on it.
+- **Boot hook:** `init.d/customwebos-remoteview` runs it at `nice -n 10` and restarts it after it exits (5 s, doubling to 300 s). Its log, with the daemon's stdout and stderr, is `/tmp/remoteview.log` (one old generation, `.log.1`, past 256 KB). Stop the daemon with SIGINT only (see the `DILE_VT` note above); `remoteview.ps1 -Remove` does.
+- **Cost:** 960×540, about 12 fps within 0.45 of a core, about 17 MB; 0 CPU when idle. Use TightVNC as the viewer: it picks Tight+JPEG, far cheaper here than UltraVNC's ZRLE.
+- **Password:** VNC uses only the first 8 characters.

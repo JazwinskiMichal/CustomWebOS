@@ -6,8 +6,9 @@
   Builds the Docker image customwebos-remoteview-build (cached after the first
   run) from native/remoteview/Dockerfile, then runs it with the repo mounted
   at /src.
-    default: cross-compiles into dist/native/remoteview/ (the binary and the two capture
-             backend .so files, which must stay beside it)
+    default: cross-compiles into dist/native/remoteview/ (the binary, the two capture
+             backend .so files and libjpeg.so.8 with its licence, which must stay beside it;
+             the binary finds them through RPATH $ORIGIN)
     -Test:   builds the unit tests with host gcc and runs ctest; the exit
              code is ctest's.
 
@@ -43,7 +44,10 @@ if ($Test) {
 } else {
     $inner = 'cmake -S native/remoteview -B dist/native/build-arm -DCMAKE_TOOLCHAIN_FILE=$TOOLCHAIN_FILE -DCMAKE_BUILD_TYPE=Release && ' +
              'cmake --build dist/native/build-arm && ' +
-             'mkdir -p dist/native/remoteview && cp dist/native/build-arm/remoteview dist/native/build-arm/libgm_backend.so dist/native/build-arm/libdile_vt_backend.so dist/native/remoteview/'
+             'mkdir -p dist/native/remoteview && cp dist/native/build-arm/remoteview dist/native/build-arm/libgm_backend.so dist/native/build-arm/libdile_vt_backend.so dist/native/remoteview/ && ' +
+             'SR=$(dirname $TOOLCHAIN_FILE)/../../arm-webos-linux-gnueabi/sysroot && ' +
+             'cp -L $SR/usr/lib/libjpeg.so.8 dist/native/remoteview/libjpeg.so.8 && ' +
+             'cp $SR/usr/share/doc/libjpeg-turbo/LICENSE.md dist/native/remoteview/LICENSE.libjpeg-turbo'
 }
 
 $buildCmd = "docker build -t $image `"$srcDir`""

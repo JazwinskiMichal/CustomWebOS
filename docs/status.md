@@ -28,16 +28,15 @@ From the [overall design](superpowers/specs/2026-10-24-customwebos-design.md):
 
 Two more projects were agreed on 2026-10-25 (see Next steps): a Home Assistant connection with plugins, and overlays (M4).
 
-**Remote view (VNC), in progress** on branch `feat/remote-view` (not merged): see the TV's screen on the PC and control it with mouse and keyboard ([design](superpowers/specs/2026-10-26-remote-view-design.md), [plan](superpowers/plans/2026-10-26-remote-view.md)). Tasks 1–5 of 8 are done and were tested on the TV from `/tmp` with a test password: live TV, Netflix and the home screen at 960×540, about 12 fps within half a CPU core and about 17 MB; correct colours; mouse, keys, and Home launching CustomWebOS. Nothing is installed on the TV yet; only the pairing key is in `/home/root/.config/customwebos/`.
+**Remote view (VNC), in progress** on branch `feat/remote-view` (not merged): see the TV's screen on the PC and control it with mouse and keyboard ([design](superpowers/specs/2026-10-26-remote-view-design.md), [plan](superpowers/plans/2026-10-26-remote-view.md)). Tasks 1–7 of 8 are done (7: packaging into the `.ipk`, `scripts/remoteview.sh` boot hook, `scripts/remoteview.ps1`, version 0.5.0) and were tested on the TV from `/tmp` with a test password: live TV, Netflix and the home screen at 960×540, about 12 fps within half a CPU core and about 17 MB; correct colours; mouse, keys, and Home launching CustomWebOS. Nothing of it is installed on the TV yet (the `.ipk` and the hook come with Task 8); only the pairing key is in `/home/root/.config/customwebos/`.
 
 ## Next steps
 
 In suggested order. Each new piece of work starts with a design (`docs/superpowers/specs/`).
 
-0. **Finish remote view** (plan Tasks 6–8, ledger in `.superpowers/sdd/2026-10-26-remote-view/progress.md`):
-   - Task 6: toast on the TV when a viewer connects and when the last one leaves.
-   - Task 7: package into the `.ipk`, plus a boot hook. The package must ship `libjpeg.so.8` (the TV only has `.so.62`), and the hook sends stderr to a small `/tmp` log (this TV drops plain syslog).
-   - Task 8: on-TV acceptance with the owner's own password (`scripts/remoteview.ps1 -SetPassword`). Re-check the first click after the cursor was hidden, and that repeated connects don't grow open handles (libgm keeps `/dev/lg/gfx0` open).
+0. **Finish remote view** (plan Task 8, ledger in `.superpowers/sdd/2026-10-26-remote-view/progress.md`):
+   - Tasks 6 and 7 are done (toast on connect/disconnect; `.ipk` with `bin/remoteview`, its backends and `libjpeg.so.8`, plus the boot hook logging to `/tmp/remoteview.log`).
+   - Task 8: on-TV acceptance, with a reboot-install of the 0.5.0 `.ipk` (`scripts/install.ps1 -Reboot`), `scripts/remoteview.ps1` (hook, `-Pair`) and the owner's own password (`-SetPassword`), connecting with TightVNC (development.md). Re-check the first click after the cursor was hidden, and that repeated connects don't grow open handles (libgm keeps `/dev/lg/gfx0` open).
    - Then the whole-branch review and merge.
 1. **Time-of-day theme:** after a set hour, a dark wallpaper and colours, "similar to macOS".
    - Light and dark colour sets already exist (`.theme-dark` / `.theme-light` on `<html>`, `home/style.css`).

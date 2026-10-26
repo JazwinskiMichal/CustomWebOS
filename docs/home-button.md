@@ -80,3 +80,11 @@ SSH doesn't depend on the screen. Homebrew Channel's own `dropbear` (port 22, `w
   - **Verified after a reboot:** port 1842 is closed (the PC gets "connection refused"), and Home still opens CustomWebOS (owner-confirmed).
   - **Caveat:** opening LG Input Hook's app starts the server again until the next boot.
 - **A gap in B's boot script:** it runs `luna-send` without `< /dev/null`, the trap noted in tv-log, and deletes itself if a reply contains `errorText`. It survived this reboot. If the Home remap is ever lost after a boot, check that `/var/lib/webosbrew/init.d/inputhook` still exists. Opening LG Input Hook once recreates it.
+
+## Remote view hook
+
+Not part of the Home/power-on work, but it is a boot hook with its own rollback. `scripts/remoteview.ps1` installs `/var/lib/webosbrew/init.d/customwebos-remoteview`, which starts the remote view daemon in the background at each boot.
+
+- **Remove:** `scripts/remoteview.ps1 -TvHost <tv-ip> -Remove` (also stops the running daemon).
+- **Undo by hand:** `rm /var/lib/webosbrew/init.d/customwebos-remoteview && reboot`.
+- Keep that command in `.local/webos/recovery.md` too.

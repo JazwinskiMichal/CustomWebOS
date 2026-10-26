@@ -34,6 +34,10 @@ test('package.ps1 -WhatIf names ares-package, both sources and dist/, builds not
   assert.match(r.stdout, /home/)
   assert.match(r.stdout, /services[\\/]org\.jazwinski\.customwebos\.home\.service/)
   assert.match(r.stdout, /dist/)
+  assert.match(r.stdout, /bin[\\/]remoteview/)
+  assert.match(r.stdout, /libdile_vt_backend\.so/)
+  assert.match(r.stdout, /libgm_backend\.so/)
+  assert.match(r.stdout, /bin[\\/]libjpeg\.so\.8/)
   const after = fs.existsSync(DIST) ? fs.readdirSync(DIST) : []
   assert.deepEqual(after, before)
 })
@@ -172,13 +176,13 @@ test('register-service.sh rejects unknown arguments', { skip: !SH && 'no sh' }, 
 })
 
 test('shell files that run on the TV are LF-only', () => {
-  for (const f of ['scripts/register-service.sh', `services/${SVC}/run-js-service`]) {
+  for (const f of ['scripts/register-service.sh', 'scripts/remoteview.sh', `services/${SVC}/run-js-service`]) {
     assert.ok(!fs.readFileSync(path.join(ROOT, f), 'utf8').includes('\r'), f + ' has CRLF')
   }
 })
 
 test('PowerShell scripts get -WhatIf from SupportsShouldProcess, not a hand-rolled switch', () => {
-  for (const f of ['package.ps1', 'install.ps1', 'register-service.ps1']) {
+  for (const f of ['package.ps1', 'install.ps1', 'register-service.ps1', 'remoteview.ps1']) {
     const src = fs.readFileSync(path.join(SCRIPTS, f), 'utf8')
     assert.match(src, /\[CmdletBinding\([^)]*SupportsShouldProcess/, f)
     assert.doesNotMatch(src, /\[switch\]\$WhatIf/, f)
@@ -232,4 +236,35 @@ test('build-native.ps1 -WhatIf prints docker build and run, builds nothing', { s
   assert.match(r.stdout, /dist[\/]native[\/]remoteview/)
   const after = fs.existsSync(native) ? fs.readdirSync(native) : null
   assert.deepEqual(after, before)
+})
+
+test('remoteview.ps1 -WhatIf installs the hook over ssh', { skip: !PS && 'no PowerShell' }, () => {
+  const r = ps('remoteview.ps1', ['-TvHost', '192.0.2.1', '-WhatIf'])
+  assert.equal(r.status, 0, r.stderr)
+  assert.match(r.stdout, /customwebos-remoteview/)
+  assert.match(r.stdout, /tr -d/)
+  assert.match(r.stdout, /chmod 755/)
+  assert.match(r.stdout, /-p 22022/)
+  assert.doesNotMatch(r.stdout, /^running:/m)
+})
+
+test('remoteview.ps1 -Remove -WhatIf stops with SIGINT', { skip: !PS && 'no PowerShell' }, () => {
+  const r = ps('remoteview.ps1', ['-TvHost', '192.0.2.1', '-Remove', '-WhatIf'])
+  assert.equal(r.status, 0, r.stderr)
+  assert.match(r.stdout, /kill -INT/)
+  assert.match(r.stdout, /rm -f \/var\/lib\/webosbrew\/init\.d\/customwebos-remoteview/)
+})
+
+test('remoteview.ps1 -SetPassword -WhatIf names --store-password and asks nothing', { skip: !PS && 'no PowerShell' }, () => {
+  const r = ps('remoteview.ps1', ['-TvHost', '192.0.2.1', '-SetPassword', '-WhatIf'])
+  assert.equal(r.status, 0, r.stderr)
+  assert.match(r.stdout, /--store-password/)
+  assert.match(r.stdout, /password\.txt/)
+  assert.doesNotMatch(r.stdout, /VNC password:/)
+})
+
+test('remoteview.ps1 -Pair -WhatIf names --pair', { skip: !PS && 'no PowerShell' }, () => {
+  const r = ps('remoteview.ps1', ['-TvHost', '192.0.2.1', '-Pair', '-WhatIf'])
+  assert.equal(r.status, 0, r.stderr)
+  assert.match(r.stdout, /remoteview --pair/)
 })
