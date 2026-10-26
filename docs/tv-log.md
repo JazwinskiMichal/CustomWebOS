@@ -204,3 +204,19 @@ Versions 0.1.1 → 0.1.5 are on-device-test iterations. 0.1.5 is the current `ma
 - **Live TV, 15 fps cap:** 15 → 12, then 12 fps steady at 0.45–0.47 of a core (about 0.24 encoding, 0.22 capture), VmHWM 16.6 MB.
 - **Home key.** A network `HOME` button press opens LG's home bar, because it skips LG Input Hook. The daemon now launches CustomWebOS instead (`ssap://system.launcher/launch`); owner: "indeed its working now".
 - **Cleanup:** test server stopped; `/tmp/rv`, `/tmp/hwspike` and the test password removed. Only `remoteview.client-key` stays in `/home/root/.config/customwebos/`.
+
+## Remote view: installed and accepted (2026-10-26)
+
+CustomWebOS 0.5.0, then 0.5.1, installed with `install.ps1`. The `customwebos-remoteview` hook installed with `scripts/remoteview.ps1`, then rebooted. Viewer: TightVNC.
+
+- **Boot:** the hook started the daemon (log in `/tmp/remoteview.log`). Idle: 1.2 MB, listening on 5900.
+- **No password set:** a connection got the RFB greeting and was then refused. Same PID 60 s later; the hook started the daemon only once.
+- **Password:** the owner set it with `-SetPassword` (stored mode 600). Pairing key from Task 2 reused.
+- **Wrong password ×3:** "auth FAILED" each time, no capture opened, no toast.
+- **Right password:** Tight encoding, capture opened with video, and the Polish toast "Zdalny podgląd: połączono" (owner: "i saw the toast with correct locale"). The owner checked the first click, the arrows, Enter, Esc, Home, and the HDMI input (PS5) with no stutter on the TV: "everything looks correct".
+- **The screensaver still starts with a viewer connected:** `tvpowerd … "Screen Saver"` at 18:15 local, with one viewer established.
+- **Leak found and fixed:** every session leaked one `/dev/mem` handle (fds 22 → 23 → 24 idle). The cause is hyperion-webos's `libdile_vt.c`, whose `capture_cleanup` never unmaps the 10 frame-buffer mappings or closes `/dev/mem` (~5 MB of address space per session on a 32-bit process). It's now built from our fixed copy in `native/remoteview/backends/`. After the fix: 21 fds idle / 26 connected, and VmSize steady at ~164 / ~178 MB, over 10 reconnects in a row, with video every time.
+- **Two viewers at once** both worked; when one left, the other kept the picture and capture stayed open.
+- **A clean SIGINT exits 130** and the hook restarts it (5 s, then 10 s). One exit 139 happened only because the backend `.so` was overwritten in place under the running daemon (not a code path in use).
+- **Upgrade path:** reinstalling the same version is refused by opkg, so 0.5.1 was installed with `install.ps1 -Reboot` while the daemon ran. After the reboot the fixed backend was in place (checksum matches), and reconnecting gave video.
+- **Idle cost after a session:** 2 CPU ticks in 60 s (~0.03% of a core), 7.2 MB, one thread, 21 fds.
