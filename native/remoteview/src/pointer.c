@@ -5,6 +5,7 @@
 
 #define CORNER_SLAM 3000
 
+/* Deltas are differences of rounded absolute positions so rounding never accumulates. */
 static int round_scaled(int d, double scale)
 {
     double v = d * scale;
@@ -42,8 +43,8 @@ int pointer_update(pointer_state *s, int x, int y, int mask, char *out, size_t n
             return -1;
         s->synced = 1;
     } else if (x != s->x || y != s->y) {
-        if (put(out, n, &used, mv, round_scaled(x - s->x, s->scale),
-                round_scaled(y - s->y, s->scale)))
+        if (put(out, n, &used, mv, round_scaled(x, s->scale) - round_scaled(s->x, s->scale),
+                round_scaled(y, s->scale) - round_scaled(s->y, s->scale)))
             return -1;
     }
     s->x = x;
