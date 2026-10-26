@@ -91,7 +91,7 @@ $OutputEncoding = New-Object System.Text.UTF8Encoding $false
 # On a UTF-8 console (code page 65001) Windows PowerShell still writes a BOM
 # unless the console input encoding is BOM-less too; sh on the TV then
 # fails the first line.
-[Console]::InputEncoding = $OutputEncoding
+try { [Console]::InputEncoding = $OutputEncoding } catch { }
 
 Write-Output "running: $cmd"
 $body | & ssh @sshArgs

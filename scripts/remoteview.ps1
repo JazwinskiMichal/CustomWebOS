@@ -116,6 +116,7 @@ if ($SetPassword) {
     try { $plain = [Runtime.InteropServices.Marshal]::PtrToStringBSTR($bstr) }
     finally { [Runtime.InteropServices.Marshal]::ZeroFreeBSTR($bstr) }
     if (-not $plain) { throw 'The password is empty.' }
+    if ($plain -match '[^ -~]') { throw 'The password has non-ASCII characters; viewers encode those differently, so it could never be typed. Use ASCII only.' }
     if ($plain.Length -gt 8) {
         Write-Warning 'VNC uses only the first 8 characters of the password; viewers accept anything that starts with them.'
     }

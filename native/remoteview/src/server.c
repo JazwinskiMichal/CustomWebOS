@@ -9,6 +9,8 @@
 #include <signal.h>
 #include <stdatomic.h>
 #include <stdarg.h>
+#include <netinet/in.h>
+#include <netinet/tcp.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -338,6 +340,25 @@ static enum rfbNewClientAction new_client(rfbClientPtr cl)
     if (!have_password()) {
         logf_("refused %s: no password set (run `remoteview --store-password`)", cl->host);
         return RFB_CLIENT_REFUSE;
+    }
+    /* A viewer that drops off the network (lid shut, Wi-Fi gone) never sends FIN;
+     * detect it so capture is released within ~30 s. A failure here is not fatal. */
+    {
+        int on = 1, idle = 15, intvl = 5, cnt = 3, bad = 0;
+
+        bad |= setsockopt(cl->sock, SOL_SOCKET, SO_KEEPALIVE, &on, sizeof on) < 0;
+        bad |= setsockopt(cl->sock, IPPROTO_TCP, TCP_KEEPIDLE, &idle, sizeof idle) < 0;
+        bad |= setsockopt(cl->sock, IPPROTO_TCP, TCP_KEEPINTVL, &intvl, sizeof intvl) < 0;
+        bad |= setsockopt(cl->sock, IPPROTO_TCP, TCP_KEEPCNT, &cnt, sizeof cnt) < 0;
+#ifdef TCP_USER_TIMEOUT
+        {
+            unsigned int ms = 20000;
+
+            bad |= setsockopt(cl->sock, IPPROTO_TCP, TCP_USER_TIMEOUT, &ms, sizeof ms) < 0;
+        }
+#endif
+        if (bad)
+            logf_("keepalive setup failed for %s: %s", cl->host, strerror(errno));
     }
     cl->clientData = calloc(1, sizeof(int)); /* 0 until authenticated */
     if (!cl->clientData)

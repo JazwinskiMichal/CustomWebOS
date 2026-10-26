@@ -1,10 +1,16 @@
 #include "toast.h"
 
+#include <errno.h>
 #include <pthread.h>
+#include <signal.h>
+#include <spawn.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/wait.h>
+
+extern char **environ;
 
 #define LOCALE_TMP "/tmp/remoteview-locale.json"
 #define LOCALE_CMD "luna-send -n 1 luna://com.webos.settingsservice/getSystemSettings " \
@@ -12,6 +18,39 @@
 
 static pthread_once_t lang_once = PTHREAD_ONCE_INIT;
 static char lang_buf[16] = "en";
+
+/* Runs cmd via /bin/sh and waits. posix_spawn with an empty signal mask and default
+ * handlers, so the child can be stopped and system()'s SIGINT/SIGQUIT ignoring is avoided.
+ * Skips silently if the spawn fails. */
+static void run_sh(const char *cmd)
+{
+    posix_spawnattr_t attr;
+    sigset_t none, def;
+    char *argv[4];
+    pid_t pid;
+    int st;
+
+    argv[0] = "sh";
+    argv[1] = "-c";
+    argv[2] = (char *)cmd;
+    argv[3] = NULL;
+    if (posix_spawnattr_init(&attr) != 0)
+        return;
+    sigemptyset(&none);
+    sigemptyset(&def);
+    sigaddset(&def, SIGTERM);
+    sigaddset(&def, SIGINT);
+    sigaddset(&def, SIGHUP);
+    sigaddset(&def, SIGQUIT);
+    sigaddset(&def, SIGCHLD);
+    posix_spawnattr_setsigmask(&attr, &none);
+    posix_spawnattr_setsigdefault(&attr, &def);
+    posix_spawnattr_setflags(&attr, POSIX_SPAWN_SETSIGMASK | POSIX_SPAWN_SETSIGDEF);
+    if (posix_spawn(&pid, "/bin/sh", NULL, &attr, argv, environ) == 0)
+        while (waitpid(pid, &st, 0) < 0 && errno == EINTR)
+            ;
+    posix_spawnattr_destroy(&attr);
+}
 
 /* Reads the UI locale into lang_buf; keeps "en" on any failure. Runs once per process. */
 static void read_lang(void)
@@ -21,7 +60,7 @@ static void read_lang(void)
     size_t n, i = 0;
     const char *p;
 
-    (void)system(LOCALE_CMD);
+    run_sh(LOCALE_CMD);
     f = fopen(LOCALE_TMP, "r");
     if (!f)
         return;
@@ -48,7 +87,7 @@ static void *toast_thread(void *arg)
 
     pthread_once(&lang_once, read_lang);
     if (toast_command(cmd, sizeof cmd, (int)(intptr_t)arg, lang_buf) >= 0)
-        (void)system(cmd);
+        run_sh(cmd);
     return NULL;
 }
 

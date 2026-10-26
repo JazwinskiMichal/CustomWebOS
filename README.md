@@ -12,6 +12,7 @@ The home screen's look follows CleanFrame's dock, and its glass dock images (`ho
 - **App logos:** Netflix, YouTube, Prime Video, Max and Apple TV marks from [Simple Icons](https://simpleicons.org/) (CC0). Trademarks belong to their owners. Sources in `home/assets/icons/SOURCES.json`.
 - **Font:** [Manrope](https://github.com/googlefonts/manrope), SIL Open Font License 1.1 (`home/assets/fonts/OFL.txt`).
 - **Screen capture (remote view):** `native/remoteview/` builds the capture code of [hyperion-webos](https://github.com/webosbrew/hyperion-webos) 0.2.1 (MIT, `native/remoteview/third_party/LICENSE.hyperion-webos`) as a git submodule.
+- **Pairing manifest (remote view):** `native/remoteview/src/pairing_manifest.h` embeds the `pairing.json` of [lgtv2](https://github.com/hobbyquaker/lgtv2) (MIT).
 - **VNC server and JPEG:** `native/remoteview/` links [LibVNCServer](https://github.com/LibVNC/libvncserver) 0.9.14 (GPL-2.0, statically) and ships [libjpeg-turbo](https://libjpeg-turbo.org/) (BSD-style and IJG licences) as `libjpeg.so.8`, taken from the webOS buildroot toolchain's sysroot. Its licence text ships beside it as `bin/LICENSE.libjpeg-turbo`.
 
 ## Status
@@ -28,4 +29,4 @@ Follow the [setup guide](docs/setup.md). It walks the whole path on an LG C8: ba
 
 ## Licence
 
-[MIT](LICENSE), except `native/remoteview/` (the remote view daemon), which is [GPL-2.0](native/remoteview/LICENSE) because it links LibVNCServer. The rest of the repo does not link it.
+[MIT](LICENSE), except `native/remoteview/` (the remote view daemon), which is [GPL-2.0](native/remoteview/LICENSE) because it links LibVNCServer. The exceptions are `native/remoteview/backends/libdile_vt.c` (a modified copy of hyperion-webos's backend, with its licence beside it) and `native/remoteview/third_party/`, which keep their MIT licences. The rest of the repo does not link it.

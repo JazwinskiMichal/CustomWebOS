@@ -117,7 +117,7 @@ static double now_ms(void)
     return t.tv_sec * 1000.0 + t.tv_nsec / 1e6;
 }
 
-/* Writes an ARGB frame (BGRA bytes in memory) as raw RGB24. */
+/* Writes a frame (bytes R,G,B,A in memory) as raw RGB24. */
 static int dump_rgb(const uint8_t *argb, int w, int h, const char *path)
 {
     FILE *f = fopen(path, "wb");
