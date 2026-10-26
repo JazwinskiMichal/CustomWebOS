@@ -4,7 +4,7 @@
 
 **Goal:** A password-protected VNC server on the LG C8, started at boot, that shows the whole screen (video + UI) and takes mouse and keyboard input, costing nothing while nobody is connected.
 
-**Architecture:** One native C daemon, `remoteview`, built in Docker with the webOS buildroot toolchain. LibVNCServer serves RFB; hyperion-webos's `unicapture` backends (`libdile_vt`, `libgm`) capture and composite; a uinput device injects input. Pure logic (session state, key and pointer mapping, LAN filter, fps governor, config, toast command) lives in small host-testable C files; TV-only glue stays thin. It ships inside the existing `.ipk`, and an `init.d` hook supervises it.
+**Architecture:** One native C daemon, `remoteview`, built in Docker with the webOS buildroot toolchain. LibVNCServer serves RFB; hyperion-webos's `unicapture` backends (`libdile_vt`, `libgm`) capture and composite; input goes through LG's second-screen API (`ws://127.0.0.1:3000`, pointer socket), which the TV treats like a phone remote. Pure logic (session state, key and pointer mapping, LAN filter, fps governor, config, toast command) lives in small host-testable C files; TV-only glue stays thin. It ships inside the existing `.ipk`, and an `init.d` hook supervises it.
 
 **Tech Stack:** C99; CMake; Docker (`ubuntu:24.04` with the `openlgtv/buildroot-nc4` toolchain); LibVNCServer 0.9.14 (GPL-2.0, static, no TLS/websockets); hyperion-webos 0.2.1 `unicapture` + libyuv (MIT/BSD, git submodule); host unit tests with plain `assert` run by `ctest` in Docker and wrapped by `node --test`; PowerShell scripts with `-WhatIf`.
 
@@ -23,7 +23,7 @@
 - Licences: `native/remoteview/` is **GPL-2.0** with its own `LICENSE`; the README says which part is GPL; the rest of the repo stays MIT. Upstream credit in `README.md` only (AGENTS.md).
 - Scripts PowerShell-first; every script that reaches the TV has `-WhatIf` via `SupportsShouldProcess` (`test/scripts.test.js` enforces it). TV shell files are LF-only.
 - Device work needs Michał's go-ahead **per task**. TV at `192.168.88.244`, SSH port 22022, key `~/.ssh/id_ed25519_lgtv`. Installs: `scripts/install.ps1 -TvHost 192.168.88.244 -Reboot`. Stop any capture process on the TV with SIGINT (`timeout -s INT -t N`), never plain `timeout -t`.
-- Paths on the TV: binary and backends in the installed service dir under `bin/`; password `/home/root/.config/customwebos/remoteview.passwd` (mode 600); optional config `/home/root/.config/customwebos/remoteview.conf`; boot hook `/var/lib/webosbrew/init.d/customwebos-remoteview`.
+- Paths on the TV: binary and backends in the installed service dir under `bin/`; password `/home/root/.config/customwebos/remoteview.passwd` (mode 600); optional config `/home/root/.config/customwebos/remoteview.conf`; pairing key `/home/root/.config/customwebos/remoteview.client-key` (mode 600); boot hook `/var/lib/webosbrew/init.d/customwebos-remoteview`.
 
 ## Review Focus
 
@@ -58,32 +58,65 @@
 - [ ] **Step 4: Run** `npm test`. Expected: PASS, including `test_smoke`. Also run `scripts/build-native.ps1`; expect `dist/native/remoteview/remoteview`. `file` on it says `ELF 32-bit LSB executable, ARM, EABI5`.
 - [ ] **Step 5: Commit** `build: remoteview toolchain and native test harness`.
 
-### Task 2: Input — key map, pointer, uinput (risk 1, on the TV)
+### Task 2: Input — LG second-screen API (risk 1, on the TV)
+
+> **Revised 2026-10-26.** The first version (uinput, commit `d1e9697`) ran on the TV and did nothing: `surface-manager` opens `event0`–`event5` at start and never opens new devices. Michał then ran a pairing test from the PC against `ws://<tv>:3000`: after he accepted the prompt, `getPointerInputSocket` + text `move`/`button` messages moved the cursor and the dock focus. This task replaces uinput with that path. Spike script for reference: `C:\Users\user\AppData\Local\Temp\claude\spike\ws\pair-test.mjs`; pairing manifest: `pairing.json` from lgtv2 (MIT, `https://raw.githubusercontent.com/hobbyquaker/lgtv2/master/pairing.json`).
 
 **Files:**
-- Create: `native/remoteview/src/keymap.{c,h}`, `src/pointer.{c,h}`, `src/uinput.{c,h}` (TV-only), `test/test_keymap.c`, `test/test_pointer.c`
-- Modify: `src/main.c` (`--input-test` mode), `CMakeLists.txt`
+- Delete: `native/remoteview/src/uinput.{c,h}`
+- Modify: `src/keymap.{c,h}`, `src/pointer.{c,h}`, `test/test_keymap.c`, `test/test_pointer.c`, `src/main.c` (`--pair`, `--input-test` over the new path), `CMakeLists.txt`
+- Create: `src/ws.{c,h}` (WebSocket client framing, pure), `src/ssap.{c,h}` (second-screen messages, pure), `src/pairing_manifest.h` (lgtv2's `pairing.json` as a C string, MIT notice beside it), `src/lginput.{c,h}` (TV-only: sockets, handshake), `test/test_ws.c`, `test/test_ssap.c`
 
 **Interfaces:**
-- Produces: `int keymap_lookup(uint32_t keysym, int *linux_key, int *needs_shift)` returns 1 if mapped, 0 if not.
-- Produces: `typedef struct { int type, code, value; } pointer_event;` (linux `input_event` fields), `typedef struct { int x, y; int buttons; } pointer_state;` and `int pointer_update(pointer_state *s, int x, int y, int mask, pointer_event out[], int max)`. It returns the number of events: an `ABS` move when x/y changed, then `BTN_LEFT`/`BTN_RIGHT` press/release for each changed mask bit (bit 0 left, bit 2 right).
-- Produces: `int uinput_open(int width, int height)` returns an fd (one virtual device with `EV_KEY` for every mapped key + `BTN_LEFT`/`BTN_RIGHT`, `EV_ABS` 0..width-1 / 0..height-1, `EV_SYN`); `void uinput_key(int fd, int key, int down)`; `void uinput_pointer(int fd, const pointer_event *ev, int n)`; `void uinput_close(int fd)`.
+- Produces: `const char *keymap_button(uint32_t keysym)` returns `"LEFT"`/`"RIGHT"`/`"UP"`/`"DOWN"`/`"ENTER"`/`"BACK"`/`"HOME"` or NULL; `int keymap_text(uint32_t keysym, char out[2])` returns 1 and the character for printable ASCII 0x20–0x7e, else 0.
+- Produces: `typedef struct { int x, y, buttons, synced; double scale; } pointer_state;` and `int pointer_update(pointer_state *s, int x, int y, int mask, char *out, size_t n)`, which writes zero or more pointer-socket messages back to back into `out` and returns the bytes written (-1 if `n` is too small). Each message is `type:<t>\n` + `key:value\n` lines + `\n`.
+- Produces: `int ws_frame_text(const char *payload, size_t len, const uint8_t mask[4], uint8_t *out, size_t outsz)` (client frames are masked, FIN set, opcode 1; 7-bit, 16-bit and 64-bit lengths) returns the frame length or -1; `int ws_parse(const uint8_t *buf, size_t len, int *opcode, size_t *off, size_t *plen)` returns the whole frame's length, 0 if incomplete, -1 if invalid (server frames are unmasked); `int ws_handshake_request(char *out, size_t n, const char *host, int port, const char *path, const char *key_b64)`.
+- Produces: `int ssap_register_msg(char *out, size_t n, const char *client_key)` (`client_key` NULL → no `client-key` field); `int ssap_request_msg(char *out, size_t n, const char *id, const char *uri, const char *payload_json)` (`payload_json` NULL → no payload); `int ssap_find_string(const char *json, const char *key, char *out, size_t n)` returns 1 if `"key":"value"` was found and copied; `int ssap_url_path(const char *url, char *path, size_t n)` (`ws://h:p/resources/x/netinput.pointer.sock` → `/resources/x/netinput.pointer.sock`).
+- Produces (TV-only): `lginput *lginput_open(const char *key_path)` connects to `127.0.0.1:3000`, registers with the stored key, opens the pointer socket; NULL with a syslog reason on any failure. `int lginput_pointer(lginput *, const char *msgs, size_t len)` (one WebSocket frame per message), `int lginput_text(lginput *, const char *text)` (`ssap://com.webos.service.ime/insertText` with `{"text":..,"replace":false}`), `void lginput_close(lginput *)`, `int lginput_pair(const char *key_path)` (register without a key, wait up to 60 s for `registered`, write the key with mode 600, return 0).
+- Key path on the TV: `/home/root/.config/customwebos/remoteview.client-key`.
 
 - [ ] **Step 1: Write failing tests.**
-  - `test_keymap.c`, the spec's mapping with linux codes: `0xff51→KEY_LEFT(105)`, `0xff52→KEY_UP(103)`, `0xff53→KEY_RIGHT(106)`, `0xff54→KEY_DOWN(108)`, `0xff0d→KEY_ENTER(28)`, `0xff1b→KEY_BACK(158)`, `0xff08→KEY_BACK(158)`, `0xff50→KEY_HOMEPAGE(172)`; `'a'→KEY_A(30)` with no shift; `'A'→KEY_A` with shift; `'1'→KEY_1(2)`; `' '→KEY_SPACE(57)`; unmapped `0xffbe` (F1) returns 0.
-  - `test_pointer.c`: a move from (0,0) to (10,20) gives exactly 1 ABS event; mask 0→1 gives a move (if any) + `BTN_LEFT` down; mask 1→0 gives `BTN_LEFT` up; mask 0→4 gives `BTN_RIGHT` down; the same position with the same mask gives 0 events.
-- [ ] **Step 2: Run** `scripts/build-native.ps1 -Test`. Expected: the two tests FAIL to build (missing symbols).
-- [ ] **Step 3: Implement** keymap (a static table; ASCII letters, digits and space via a computed range), pointer, uinput (`/dev/uinput`, `UI_SET_EVBIT`/`UI_SET_KEYBIT`/`UI_SET_ABSBIT`, `UI_DEV_CREATE`). Add `remoteview --input-test`: it opens uinput at 1920×1080, waits 2 s, moves the pointer to 4 corners and the centre (1 s apart), left-clicks at the centre, then presses Right, Right, Left, Enter, Esc, Home 1 s apart, and closes.
-- [ ] **Step 4: Run** `-Test`. Expected: PASS.
-- [ ] **Step 5 (on the TV; needs Michał's go-ahead):** build, then `scp` the binary to `/tmp/rv/` and run `chmod +x` and `/tmp/rv/remoteview --input-test` with CustomWebOS open and Michał watching. Record in `docs/tv-log.md` whether:
-  - a cursor appears and follows the corners;
-  - the centre click opens the tile;
-  - Right/Left/Enter move and open;
-  - Esc goes Back;
-  - Home opens CustomWebOS.
+  - `test_keymap.c`:
+    - Buttons: `0xff51→"LEFT"`, `0xff52→"UP"`, `0xff53→"RIGHT"`, `0xff54→"DOWN"`, `0xff0d→"ENTER"`, `0xff1b→"BACK"`, `0xff08→"BACK"`, `0xff50→"HOME"`, and `0xffbe` → NULL.
+    - Text: `'a'` → 1 and `"a"`, `'A'` → `"A"`, `'?'` → `"?"`, and `0xff0d` → 0.
+  - `test_pointer.c` (scale 1.0):
+    - The first update at (100,50) writes `type:move\ndx:-3000\ndy:-3000\ndown:0\n\n` then `type:move\ndx:100\ndy:50\ndown:0\n\n`.
+    - The next at (110,50) writes only `type:move\ndx:10\ndy:0\ndown:0\n\n`.
+    - The same position and mask writes nothing (returns 0).
+    - Mask 0→1 writes `type:click\n\n`; mask 1→0 writes nothing; mask 0→4 writes `type:button\nname:BACK\n\n`.
+    - Mask bit 3 (wheel up) writes `type:scroll\ndx:0\ndy:-1\n\n`; bit 4 writes `dy:1`.
+    - With scale 2.0, a move of +10 writes `dx:20`.
+    - Too small a buffer returns -1.
+  - `test_ws.c`:
+    - Frames a 5-byte payload with mask `{1,2,3,4}` → bytes `81 85 01 02 03 04` + the masked payload.
+    - A 200-byte payload uses the 126 + 16-bit length form.
+    - `ws_parse` handles an unmasked server text frame `81 03 'a' 'b' 'c'` → opcode 1, off 2, plen 3, returns 5.
+    - A truncated frame returns 0.
+    - The handshake request contains `GET /path HTTP/1.1`, `Upgrade: websocket`, `Sec-WebSocket-Key: <key>`, `Sec-WebSocket-Version: 13`.
+  - `test_ssap.c`:
+    - The register message with key `"abc"` contains `"type":"register"`, `"client-key":"abc"` and `"pairingType":"PROMPT"`; without a key it has no `client-key`.
+    - The request message contains `"uri":"ssap://x/y"`.
+    - `ssap_find_string` extracts `socketPath` from the spike's real response (`{"type":"response","id":"ptr","payload":{"socketPath":"ws://192.168.88.244:3000/resources/da557d6155080484091c2520f5f5d24037ea8004/netinput.pointer.sock","returnValue":true}}`).
+    - `ssap_url_path` of that URL gives `/resources/da557d6155080484091c2520f5f5d24037ea8004/netinput.pointer.sock`.
+    - A missing key returns 0.
+- [ ] **Step 2: Run** `scripts/build-native.ps1 -Test`. Expected: the new and changed tests FAIL.
+- [ ] **Step 3: Implement.**
+  - **Handshake:** `lginput` checks only for `HTTP/1.1 101` (a local, trusted endpoint; no SHA-1 accept check).
+  - **Mask bytes** come from `/dev/urandom`.
+  - **`--pair`** calls `lginput_pair` on the key path and prints `accept the prompt on the TV` and then `paired` or the failure.
+  - **`--input-test`** opens `lginput` and runs `pointer_update` from a fresh state through the 4 corners and the centre (1 s apart). It clicks at the centre, then sends RIGHT, RIGHT, LEFT, ENTER, BACK, HOME 1 s apart, printing one line per action, and closes on exit including SIGINT.
+  - **Removal:** remove uinput and its keymap capability helpers.
+- [ ] **Step 4: Run** `-Test`. Expected: PASS. `build-native.ps1` links the ARM binary.
+- [ ] **Step 5 (on the TV; controller, with Michał's go-ahead and watching):**
+  1. `scp` the binary to `/tmp/rv/`.
+  2. Run `/tmp/rv/remoteview --pair`; Michał accepts the prompt.
+  3. Run `--input-test` with CustomWebOS open.
   
-  If the pointer doesn't show, retry with a relative (`REL_X`/`REL_Y`) device that snaps to the corner first; keep the variant that works. **If neither pointer nor keys reach webOS, stop and take it back to Michał** (spec fallback: `com.webos.service.networkinput/getPointerInputSocket`). Adjust keymap codes to what the TV honours, and update the test.
-- [ ] **Step 6: Commit** `feat(remoteview): keyboard and pointer input via uinput`, plus the tv-log entry. Lift lasting facts into `tv-notes.md`.
+  Record in `docs/tv-log.md`:
+  - whether the cursor lands near each corner and the centre (if it overshoots or undershoots, note the factor; it becomes the default `pointer_scale` in Task 4's config);
+  - whether the click opens the tile;
+  - whether the buttons act.
+- [ ] **Step 6: Commit** `feat(remoteview): input via LG second-screen pointer socket`, plus the tv-log entry and the lasting facts in `tv-notes.md`.
 
 ### Task 3: Capture — open, frame, close without leaks (risk 2, on the TV)
 
@@ -116,8 +149,8 @@
 **Interfaces:**
 - Produces: `typedef struct { int clients; } session;` (zero-initialised), `typedef enum { SA_NONE=0, SA_OPEN_CAPTURE=1, SA_CLOSE_CAPTURE=2, SA_TOAST_START=4, SA_TOAST_END=8 } session_action;` with `int session_client_added(session *s)` and `int session_client_gone(session *s)` (bitmask of actions; only *authenticated* clients are added), and `int session_clients(const session *s)`.
 - Produces: `int lan_allowed(uint32_t ipv4_host_order)`, 1 for 10/8, 172.16/12, 192.168/16, 169.254/16, 127/8.
-- Produces: `typedef struct { int width, height, fps_max; } rv_config;` and `int config_parse(const char *text, rv_config *out)`. Defaults 960, 540, 10. Keys `width=`, `height=`, `fps=`, `#` comments. Clamps width 320..1920, height 240..1080, fps 1..30. Unknown keys are ignored; returns the count of bad lines.
-- Consumes: Task 2 `keymap_lookup`, `pointer_update`, `uinput_*`; Task 3 `capture_*`, `shutdown_install`.
+- Produces: `typedef struct { int width, height, fps_max; double pointer_scale; } rv_config;` and `int config_parse(const char *text, rv_config *out)`. Defaults 960, 540, 10, and `pointer_scale` from Task 2's on-TV result (1.0 if none was found). Keys `width=`, `height=`, `fps=`, `pointer_scale=`, `#` comments. Clamps width 320..1920, height 240..1080, fps 1..30, pointer_scale 0.25..4. Unknown keys are ignored; returns the count of bad lines.
+- Consumes: Task 2 `keymap_button`, `keymap_text`, `pointer_update`, `lginput_*`; Task 3 `capture_*`, `shutdown_install`.
 
 - [ ] **Step 1: Write failing tests.**
   - `test_session.c`: the first add → `SA_OPEN_CAPTURE|SA_TOAST_START`; a second add → `SA_NONE`; one gone with 2 → `SA_NONE`; the last gone → `SA_CLOSE_CAPTURE|SA_TOAST_END`; gone at 0 → `SA_NONE` (no underflow).
@@ -130,8 +163,8 @@
   - The session is counted on auth success (`clientGoneHook` for removal).
   - On `SA_OPEN_CAPTURE` start a capture thread that paces at the current fps and marks dirty rects by diffing against the last frame in 64×64 tiles. On `SA_CLOSE_CAPTURE` stop the thread and `capture_close()`.
   - The main loop is `rfbProcessEvents` with a 100 ms timeout, so it sleeps when idle.
-  - `kbdAddEvent`/`ptrAddEvent` go to uinput.
-  - `shutdown_install` cleanup closes capture, then uinput, then the server.
+  - On `SA_OPEN_CAPTURE` also `lginput_open` (NULL → viewing still works, input is dropped and logged once). Reset the `pointer_state` (`synced=0`, `scale` from config) per session. `ptrAddEvent` → `pointer_update` → `lginput_pointer`; `kbdAddEvent` (key down only) → `keymap_button` → a `type:button` message, else `keymap_text` → `lginput_text`. On `SA_CLOSE_CAPTURE` also `lginput_close`.
+  - `shutdown_install` cleanup closes capture, then lginput, then the server.
   - Add `remoteview --store-password` (reads one line from stdin, writes the passwd file with mode 600, max 8 chars, warns if longer).
 - [ ] **Step 4: Run** `-Test`. Expected: PASS. Build ARM, expect a clean link.
 - [ ] **Step 5: Commit** `feat(remoteview): VNC server with auth, LAN filter and on-demand capture`.
@@ -183,7 +216,7 @@
 - Modify: `scripts/package.ps1` (stage the service + `bin/` into `dist/stage/` and package from there), `test/scripts.test.js`, `home/appinfo.json` (version bump to 0.5.0), `README.md` (GPL note for `native/remoteview/`, credits for LibVNCServer and hyperion-webos), `docs/development.md` (build-native, remoteview.ps1, loop table), `docs/home-button.md` (rollback list), `docs/status.md`, `docs/tv-notes.md`, `docs/README.md` (map)
 
 **Interfaces:**
-- Produces: `scripts/remoteview.ps1 -TvHost <ip> [-Remove] [-SetPassword] [-WhatIf]`:
+- Produces: `scripts/remoteview.ps1 -TvHost <ip> [-Remove] [-SetPassword] [-Pair] [-WhatIf]`. `-Pair` runs `<service dir>/bin/remoteview --pair` over SSH and tells Michał to accept the prompt on the TV.
   - default: install the hook (same stdin + `tr -d '\015'` pattern as `autostart.ps1`);
   - `-Remove`: delete the hook and stop the running daemon with SIGINT;
   - `-SetPassword`: `Read-Host -AsSecureString`, save it to `.local/remoteview/password.txt` (create the dir) and pipe it to `<service dir>/bin/remoteview --store-password` over SSH.
@@ -195,6 +228,7 @@
     - `remoteview.ps1 -WhatIf installs the hook over ssh` (matches `customwebos-remoteview`, `tr -d`, `chmod 755`, `-p 22022`);
     - `remoteview.ps1 -Remove -WhatIf stops with SIGINT` (`kill -INT` or `-s INT`, `rm -f`);
     - `remoteview.ps1 -SetPassword -WhatIf names --store-password and asks nothing` (no prompt in WhatIf);
+    - `remoteview.ps1 -Pair -WhatIf names --pair`;
     - `package.ps1 -WhatIf stages bin/remoteview and the two backends` (`bin[\\/]remoteview`, `libdile_vt_backend.so`, `libgm_backend.so`).
   - `remoteview-hook.test.js` (sh with stub `remoteview`, `sleep`, `logger` on PATH, `--foreground`, like `autostart.test.js`):
     - `a missing binary exits 0 without looping`;
@@ -214,7 +248,7 @@
 **Files:**
 - Modify: `docs/tv-log.md`, `docs/status.md`
 
-- [ ] **Step 1:** `scripts/install.ps1 -TvHost 192.168.88.244 -Reboot`, then `scripts/remoteview.ps1 -TvHost 192.168.88.244` (hook) and reboot. **Before any password is set**, a viewer is refused, and `pidof remoteview` shows the same PID 60 s later (no crash loop). Then `scripts/remoteview.ps1 -TvHost 192.168.88.244 -SetPassword` (Michał types it). Expected: `pidof remoteview` returns a PID; idle CPU ≈ 0 over 60 s.
+- [ ] **Step 1:** `scripts/install.ps1 -TvHost 192.168.88.244 -Reboot`, then `scripts/remoteview.ps1 -TvHost 192.168.88.244` (hook) and reboot. **Before any password is set**, a viewer is refused, and `pidof remoteview` shows the same PID 60 s later (no crash loop). Then `scripts/remoteview.ps1 -TvHost 192.168.88.244 -SetPassword` (Michał types it) and `-Pair` (Michał accepts on the TV; skip if Task 2's key is still in place). Expected: `pidof remoteview` returns a PID; idle CPU ≈ 0 over 60 s.
 - [ ] **Step 2:** Connect TigerVNC to `192.168.88.244:5900` and check:
   - the wrong password, three times in a row, is refused each time, with no toast;
   - with a viewer connected and the TV left idle on the home screen, LG's screensaver still appears;

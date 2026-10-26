@@ -36,7 +36,7 @@ Michał wants to see and control his TV from his PC **at any time**, "like real 
 
 - **TV:** LG C8, webOS 4.4.3, kernel 4.4.84 armv7l, **2 cores**, load average ~10 at idle (normal here). **~650 MB RAM available** of 3 GB, 600 MB swap. `/media/developer` has 1.6 GB free. `/tmp` is RAM-backed. Measured 2026-10-26.
 - **Capture APIs** (reverse-engineered, present on this TV): `libdile_vt` (video layer, webOS 3/4) and `libgm` (UI layer, webOS 3/4). Both need root. `libvtcapture`/`libhalgal` are for webOS 5+ and are not used.
-- **Input:** `/dev/uinput` exists (misc 223, root-only). Not yet exercised (see Open risks).
+- **Input:** uinput does **not** work: `surface-manager` opens `event0`–`event5` at start and never opens devices created later (tested 2026-10-26). LG's second-screen API does work: `ws://<tv>:3000`, register with a client key (one-time "allow" prompt on the TV), then `ssap://com.webos.service.networkinput/getPointerInputSocket` returns a WebSocket that takes text messages (`type:move dx dy`, `type:click`, `type:scroll`, `type:button name:<NAME>`). The cursor moved and the dock focus shifted.
 - **Network:** home LAN only; the TV is at a DHCP address (not in git; `.local/webos/recovery.md`).
 - **Repo rules (AGENTS.md):** PowerShell-first scripts with `-WhatIf` for anything reaching the TV; private state in `.local/`; device work needs Michał's per-task go-ahead; upstream credit in the README only. TV web code is ES5 — not relevant here, the server is native.
 - **Public MIT repo.** Third-party code shipped must have compatible licences with their texts beside it.
@@ -64,7 +64,7 @@ Ran hyperion-webos 0.2.1's prebuilt binary (MIT, webosbrew) from `/tmp` with `--
 1. listens on TCP 5900 (RFB protocol) as root;
 2. on the first authenticated client, opens the UI capture (`libgm`) and video capture (`libdile_vt`), composites them (video under UI, as hyperion-webos's unicapture does), and serves frames;
 3. on the last client disconnecting, **closes both captures** and goes back to only listening;
-4. turns VNC pointer and key events into input events through a uinput virtual device.
+4. turns VNC pointer and key events into LG remote input through the second-screen API's pointer socket (see Input mapping).
 
 **RFB via LibVNCServer (Michał: "gpl is fine").** It brings compressing encodings (Tight/ZRLE), changed-region updates, multiple clients and VNC authentication. LibVNCServer is GPL-2.0, so the daemon binary is GPL-2.0 while the rest of the repo stays MIT: the daemon's directory carries its own GPL-2.0 `LICENSE`, the README says which part is GPL, and the source sits in the public repo (which meets the source-offer duty). Link it statically or ship the `.so` in the `.ipk`, the builder's choice.
 
@@ -87,10 +87,13 @@ Capture and compositing reuse hyperion-webos's `unicapture` backends for `libdil
 
 **Toast.** On the first client connecting: an LG toast ("Remote view started" — wording to taste, Polish or English per the TV's language like the home screen's date), and one on the last client leaving. Via `luna://com.webos.notification/createToast`, with `luna-send`'s `< /dev/null` rule (tv-notes.md) if shelling out.
 
+**Input path (decided 2026-10-26 after the uinput test failed; Michał ran the pairing test).** The daemon connects to `ws://127.0.0.1:3000` (local only), registers with a client key stored on the TV (`/home/root/.config/customwebos/remoteview.client-key`, mode 600), and opens the pointer socket. It holds both connections only while a viewer is connected. Pairing is a one-time setup step: the TV shows LG's "allow" prompt, and Michał accepts it with the remote.
+
 **Input mapping (Claude's call; tune on the TV).**
-- Mouse movement and left click → the TV's pointer (a uinput relative or absolute pointer; webOS shows a cursor for USB mice).
-- Arrow keys → arrows, Enter → OK, Esc or Backspace → Back, Home key → Home (which LG Input Hook already maps to CustomWebOS), other printable keys → typed characters in text fields.
-- Right click → Back is a nice-to-have.
+- Mouse movement → relative `move` messages. VNC gives absolute positions, so the daemon tracks where the cursor should be, snaps it to the top-left (one large negative move) when a session starts, and scales by a calibration factor in the config (default 1.0, tuned on the TV). Left click → `click`. Wheel → `scroll`.
+- Arrow keys → `UP`/`DOWN`/`LEFT`/`RIGHT`, Enter → `ENTER`, Esc or Backspace → `BACK`, Home key → `HOME` (LG Input Hook maps Home to CustomWebOS).
+- Other printable keys → typed text via `ssap://com.webos.service.ime/insertText` on the main connection.
+- Right click → `BACK` is a nice-to-have.
 
 **Packaging and start-up.** The daemon and the two backends ship inside the existing CustomWebOS `.ipk` (~1 MB). A boot hook in `/var/lib/webosbrew/init.d/` starts it, installed and removed by a script in the style of `scripts/autostart.ps1` (`-TvHost`, `-WhatIf`, `-Remove`). Undo goes into `home-button.md`'s rollback list and the private recovery sheet: `rm /var/lib/webosbrew/init.d/<hook> && reboot`.
 
@@ -98,7 +101,7 @@ Capture and compositing reuse hyperion-webos's `unicapture` backends for `libdil
 
 ## Open risks (first tasks of the plan, on the TV)
 
-1. **Input via uinput** is untested: does webOS 4.4 show and move a cursor for a uinput pointer, and do uinput keys reach apps (including Netflix and the HDMI input's overlays)? Fallback: LG's own network-input pointer socket (`com.webos.service.networkinput/getPointerInputSocket`, used by phone remote apps).
+1. **Input** — resolved 2026-10-26: uinput is ignored by `surface-manager`; the second-screen pointer socket works (cursor and focus moved). Still to tune on the TV: the move scale and whether keys reach Netflix and HDMI.
 2. **Repeated open/close of `DILE_VT`** across many connect/disconnect cycles, with clean shutdown, must keep working without a reboot (the spike only showed a few cycles).
 3. **Frame rate after encoding** at 960×540 and 1280×720 against the budget above.
 

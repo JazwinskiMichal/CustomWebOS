@@ -165,3 +165,9 @@ Versions 0.1.1 → 0.1.5 are on-device-test iterations. 0.1.5 is the current `ma
 - 0.1.3 — switch to `WebOSServiceBridge` (LG canonical) with `PalmServiceBridge` fallback. No functional change in the end.
 - 0.1.4 — declare `requiredPermissions` in `appinfo.json`. No effect on consumer webOS 4.4.
 - 0.1.5 — remove `listLaunchPoints` call entirely; use a hardcoded fallback list of common streaming apps. Fix misleading "Could not list installed apps" error header → "Error:".
+
+## Remote view: input paths (2026-10-26)
+
+- **uinput doesn't reach webOS.** A uinput device (`remoteview`, became `event6`, `mouse3`) was created and every event written, but nothing happened on screen. `surface-manager-starfish` holds `event0`–`event5` (CHECK INPUT, LGE RCU, Bluetooth-audio-source, two LGE M-RCU Builtin, LGE Simple Premium) and never opened `event6`. No udevd runs; the kernel hotplug helper is `/mnt/lg/bin/hotplug`.
+- **The raw network-input socket is binary.** `luna://com.webos.service.networkinput/getPointerInputSocket` (from SSH) returns `/tmp/netinput.pointer.sock`, served by `/usr/sbin/network-input-service` (its own `UInputWriter`). Text messages make it log "packet too large, shutting down socket".
+- **The second-screen API works.** From the PC: `ws://192.168.88.244:3000`, `register` with lgtv2's signed `pairing.json` → "allow" prompt on the TV, accepted by the owner → `client-key` (saved in `.local/webos/`). `ssap://com.webos.service.networkinput/getPointerInputSocket` → `ws://…:3000/resources/<hash>/netinput.pointer.sock`; text messages `type:move\ndx:20\ndy:0\ndown:0\n\n` and `type:button\nname:RIGHT\n\n` moved the cursor and the dock focus.
