@@ -149,7 +149,7 @@
 **Interfaces:**
 - Produces: `typedef struct { int clients; } session;` (zero-initialised), `typedef enum { SA_NONE=0, SA_OPEN_CAPTURE=1, SA_CLOSE_CAPTURE=2, SA_TOAST_START=4, SA_TOAST_END=8 } session_action;` with `int session_client_added(session *s)` and `int session_client_gone(session *s)` (bitmask of actions; only *authenticated* clients are added), and `int session_clients(const session *s)`.
 - Produces: `int lan_allowed(uint32_t ipv4_host_order)`, 1 for 10/8, 172.16/12, 192.168/16, 169.254/16, 127/8.
-- Produces: `typedef struct { int width, height, fps_max; double pointer_scale; } rv_config;` and `int config_parse(const char *text, rv_config *out)`. Defaults 960, 540, 10, and `pointer_scale` from Task 2's on-TV result (1.0 if none was found). Keys `width=`, `height=`, `fps=`, `pointer_scale=`, `#` comments. Clamps width 320..1920, height 240..1080, fps 1..30, pointer_scale 0.25..4. Unknown keys are ignored; returns the count of bad lines.
+- Produces: `typedef struct { int width, height, fps_max; double pointer_scale; } rv_config;` and `int config_parse(const char *text, rv_config *out)`. Defaults 960, 540, 10, and `pointer_scale` 0.51 (Task 2's on-TV result). Keys `width=`, `height=`, `fps=`, `pointer_scale=`, `#` comments. Clamps width 320..1920, height 240..1080, fps 1..30, pointer_scale 0.25..4. Unknown keys are ignored; returns the count of bad lines.
 - Consumes: Task 2 `keymap_button`, `keymap_text`, `pointer_update`, `lginput_*`; Task 3 `capture_*`, `shutdown_install`.
 
 - [ ] **Step 1: Write failing tests.**

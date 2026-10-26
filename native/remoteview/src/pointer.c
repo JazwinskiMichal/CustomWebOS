@@ -3,7 +3,9 @@
 #include <stdarg.h>
 #include <stdio.h>
 
-#define CORNER_SLAM 3000
+#define CORNER_SLAM 2400
+/* The TV clamps or drops large single moves (tv-log 2026-10-26); 30 per axis is tested. */
+#define MOVE_STEP 30
 
 /* Deltas are differences of rounded absolute positions so rounding never accumulates. */
 static int round_scaled(int d, double scale)
@@ -27,9 +29,26 @@ static int put(char *out, size_t n, size_t *used, const char *fmt, ...)
     return 0;
 }
 
+static int clamp_step(int d)
+{
+    return d > MOVE_STEP ? MOVE_STEP : d < -MOVE_STEP ? -MOVE_STEP : d;
+}
+
+/* Splits a move into messages of at most MOVE_STEP per axis. */
+static int put_move(char *out, size_t n, size_t *used, int dx, int dy)
+{
+    while (dx || dy) {
+        int sx = clamp_step(dx), sy = clamp_step(dy);
+        if (put(out, n, used, "type:move\ndx:%d\ndy:%d\ndown:0\n\n", sx, sy))
+            return -1;
+        dx -= sx;
+        dy -= sy;
+    }
+    return 0;
+}
+
 int pointer_update(pointer_state *s, int x, int y, int mask, char *out, size_t n)
 {
-    static const char mv[] = "type:move\ndx:%d\ndy:%d\ndown:0\n\n";
     size_t used = 0;
     int rising = mask & ~s->buttons;
 
@@ -38,12 +57,12 @@ int pointer_update(pointer_state *s, int x, int y, int mask, char *out, size_t n
     out[0] = '\0';
 
     if (!s->synced) {
-        if (put(out, n, &used, mv, -CORNER_SLAM, -CORNER_SLAM) ||
-            put(out, n, &used, mv, round_scaled(x, s->scale), round_scaled(y, s->scale)))
+        if (put_move(out, n, &used, -CORNER_SLAM, -CORNER_SLAM) ||
+            put_move(out, n, &used, round_scaled(x, s->scale), round_scaled(y, s->scale)))
             return -1;
         s->synced = 1;
     } else if (x != s->x || y != s->y) {
-        if (put(out, n, &used, mv, round_scaled(x, s->scale) - round_scaled(s->x, s->scale),
+        if (put_move(out, n, &used, round_scaled(x, s->scale) - round_scaled(s->x, s->scale),
                 round_scaled(y, s->scale) - round_scaled(s->y, s->scale)))
             return -1;
     }

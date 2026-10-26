@@ -1,6 +1,7 @@
 #include <signal.h>
 #include <stdint.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
 
@@ -30,7 +31,7 @@ static int wait_s(int s)
 
 static int send_update(lginput *in, pointer_state *ps, int x, int y, int mask)
 {
-    char out[512];
+    char out[8192];
     int n = pointer_update(ps, x, y, mask, out, sizeof out);
 
     if (n < 0)
@@ -39,18 +40,19 @@ static int send_update(lginput *in, pointer_state *ps, int x, int y, int mask)
 }
 
 /* Diagnostic: drives the pointer and buttons through the second-screen API,
- * one line per action. */
-static int input_test(void)
+ * one line per action. Targets sit 100 px in from the corners, matching the
+ * circles of the calibration page (native/remoteview/calib/). */
+static int input_test(double scale)
 {
     static const int pts[][2] = {
-        { 0, 0 }, { TV_W - 1, 0 }, { TV_W - 1, TV_H - 1 }, { 0, TV_H - 1 },
+        { 100, 100 }, { TV_W - 100, 100 }, { TV_W - 100, TV_H - 100 }, { 100, TV_H - 100 },
         { TV_W / 2, TV_H / 2 },
     };
     static const struct { const char *name; uint32_t sym; } keys[] = {
         { "RIGHT", 0xff53 }, { "RIGHT", 0xff53 }, { "LEFT", 0xff51 },
         { "ENTER", 0xff0d }, { "BACK", 0xff1b }, { "HOME", 0xff50 },
     };
-    pointer_state ps = { 0, 0, 0, 0, 1.0 };
+    pointer_state ps = { 0, 0, 0, 0, scale };
     lginput *in;
     int i;
 
@@ -67,16 +69,13 @@ static int input_test(void)
     fflush(stdout);
 
     for (i = 0; i < 5; i++) {
-        printf("move %d,%d\n", pts[i][0], pts[i][1]);
+        printf("move+click %d,%d\n", pts[i][0], pts[i][1]);
         fflush(stdout);
-        if (send_update(in, &ps, pts[i][0], pts[i][1], 0) < 0 || wait_s(1))
+        if (send_update(in, &ps, pts[i][0], pts[i][1], 0) < 0 || wait_s(1) ||
+            send_update(in, &ps, ps.x, ps.y, 1) < 0 || send_update(in, &ps, ps.x, ps.y, 0) < 0 ||
+            wait_s(1))
             goto done;
     }
-    puts("click");
-    fflush(stdout);
-    if (send_update(in, &ps, ps.x, ps.y, 1) < 0 || send_update(in, &ps, ps.x, ps.y, 0) < 0 ||
-        wait_s(1))
-        goto done;
     for (i = 0; i < 6; i++) {
         const char *b = keymap_button(keys[i].sym);
         printf("button %s\n", keys[i].name);
@@ -112,7 +111,7 @@ int main(int argc, char **argv)
     if (argc > 1 && strcmp(argv[1], "--pair") == 0)
         return pair();
     if (argc > 1 && strcmp(argv[1], "--input-test") == 0)
-        return input_test();
+        return input_test(argc > 2 ? atof(argv[2]) : 1.0);
     fprintf(stderr, "usage: remoteview --version | --pair | --input-test\n");
     return 2;
 }

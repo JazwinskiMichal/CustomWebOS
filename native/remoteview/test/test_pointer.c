@@ -28,10 +28,32 @@ int main(void)
     pointer_state s = { 0, 0, 0, 0, 1.0 };
     char small[8];
 
-    check(&s, 100, 50, 0,
-          "type:move\ndx:-3000\ndy:-3000\ndown:0\n\n"
-          "type:move\ndx:100\ndy:50\ndown:0\n\n");
+    /* First update: corner slam then a move to (100,50), every step at most 30 per axis. */
+    {
+        char o[8192];
+        const char *p;
+        int n = pointer_update(&s, 100, 50, 0, o, sizeof o), msgs = 0, dy = 0;
+        assert(n > 0);
+        assert(sum_dx(o) == -2400 + 100);
+        for (p = o; (p = strstr(p, "type:move\ndx:")) != NULL; p += 13) {
+            int dx = atoi(p + 13);
+            const char *q = strstr(p, "dy:");
+            assert(dx >= -30 && dx <= 30);
+            assert(atoi(q + 3) >= -30 && atoi(q + 3) <= 30);
+            dy += atoi(q + 3);
+            msgs++;
+        }
+        assert(dy == -2400 + 50);
+        assert(msgs == 80 + 4);
+        /* The slam alone must not fit a small buffer. */
+        s.synced = 0;
+        assert(pointer_update(&s, 100, 50, 0, o, 512) == -1);
+        s.synced = 0;
+        assert(pointer_update(&s, 100, 50, 0, o, sizeof o) == n);
+    }
     check(&s, 110, 50, 0, "type:move\ndx:10\ndy:0\ndown:0\n\n");
+    check(&s, 150, 50, 0, "type:move\ndx:30\ndy:0\ndown:0\n\ntype:move\ndx:10\ndy:0\ndown:0\n\n");
+    check(&s, 110, 50, 0, "type:move\ndx:-30\ndy:0\ndown:0\n\ntype:move\ndx:-10\ndy:0\ndown:0\n\n");
     check(&s, 110, 50, 0, "");
     check(&s, 110, 50, 1, "type:click\n\n");
     check(&s, 110, 50, 0, "");
@@ -49,7 +71,7 @@ int main(void)
     /* Rounding must not accumulate per delta: totals follow round(x*scale). */
     {
         pointer_state f = { 0, 0, 0, 0, 0.4 };
-        char o[256];
+        char o[8192];
         int i, total = 0;
         assert(pointer_update(&f, 0, 0, 0, o, sizeof o) > 0);
         for (i = 1; i <= 10; i++) {

@@ -13,7 +13,9 @@ typedef struct { int x, y, buttons, synced; double scale; } pointer_state;
  * relative moves, so the first update slams the cursor into the top-left
  * corner and then moves to (x, y).
  * Mask bit 0 click, bit 2 BACK button, bit 3 scroll up, bit 4 scroll down;
- * all act on press only. Returns the bytes written, or -1 if n is too small. */
+ * all act on press only. Moves are split into steps of at most 30 per axis,
+ * so a full-screen jump needs a few KB of buffer.
+ * Returns the bytes written, or -1 if n is too small. */
 int pointer_update(pointer_state *s, int x, int y, int mask, char *out, size_t n);
 
 #endif

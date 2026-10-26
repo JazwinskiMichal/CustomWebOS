@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<!-- Pointer calibration page: swapped in for the home app's index.html during
+     on-TV tests (see listen.mjs). ES5 only. -->
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+  html, body { margin: 0; height: 100%; background: #000; color: #fff; font: 28px sans-serif; overflow: hidden; }
+  .t { position: absolute; width: 80px; height: 80px; margin: -40px 0 0 -40px; border: 4px solid #f33; border-radius: 50%; box-sizing: border-box; }
+  .t.hit { border-color: #3f3; background: rgba(60, 255, 60, .3); }
+  .t span { position: absolute; top: 84px; left: -60px; width: 200px; text-align: center; font-size: 22px; }
+  #pos { position: absolute; left: 50%; top: 40%; transform: translateX(-50%); -webkit-transform: translateX(-50%); }
+</style>
+</head>
+<body>
+<div id="pos">pointer: -</div>
+<script>
+(function () {
+  var W = 1920, H = 1080, LOG = '__LOG__';
+  var targets = [[100, 100], [W - 100, 100], [W - 100, H - 100], [100, H - 100], [W / 2, H / 2]];
+  var sx = W / window.innerWidth, sy = H / window.innerHeight;
+  var els = [], i;
+
+  for (i = 0; i < targets.length; i++) {
+    var d = document.createElement('div');
+    d.className = 't';
+    d.style.left = (targets[i][0] / sx) + 'px';
+    d.style.top = (targets[i][1] / sy) + 'px';
+    d.appendChild(document.createElement('span'));
+    document.body.appendChild(d);
+    els.push(d);
+  }
+
+  function screen(e) { return [Math.round(e.clientX * sx), Math.round(e.clientY * sy)]; }
+
+  function send(q) {
+    if (LOG.charAt(0) === '_') return;
+    var x = new XMLHttpRequest();
+    x.open('GET', LOG + '?' + q);
+    x.send();
+  }
+
+  document.addEventListener('mousemove', function (e) {
+    var p = screen(e);
+    document.getElementById('pos').textContent = 'pointer: ' + p[0] + ', ' + p[1];
+  });
+
+  document.addEventListener('click', function (e) {
+    var p = screen(e), best = 0, bd = 1e9, j, dx, dy;
+    for (j = 0; j < targets.length; j++) {
+      dx = p[0] - targets[j][0]; dy = p[1] - targets[j][1];
+      if (dx * dx + dy * dy < bd) { bd = dx * dx + dy * dy; best = j; }
+    }
+    dx = p[0] - targets[best][0]; dy = p[1] - targets[best][1];
+    if (Math.abs(dx) <= 40 && Math.abs(dy) <= 40) els[best].className = 't hit';
+    els[best].firstChild.textContent = p[0] + ',' + p[1] + ' (' + (dx >= 0 ? '+' : '') + dx + ',' + (dy >= 0 ? '+' : '') + dy + ')';
+    send('x=' + p[0] + '&y=' + p[1] + '&target=' + best + '&dx=' + dx + '&dy=' + dy +
+         '&vw=' + window.innerWidth + '&vh=' + window.innerHeight);
+  });
+}());
+</script>
+</body>
+</html>
