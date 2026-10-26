@@ -220,3 +220,5 @@ CustomWebOS 0.5.0, then 0.5.1, installed with `install.ps1`. The `customwebos-re
 - **A clean SIGINT exits 130** and the hook restarts it (5 s, then 10 s). One exit 139 happened only because the backend `.so` was overwritten in place under the running daemon (not a code path in use).
 - **Upgrade path:** reinstalling the same version is refused by opkg, so 0.5.1 was installed with `install.ps1 -Reboot` while the daemon ran. After the reboot the fixed backend was in place (checksum matches), and reconnecting gave video.
 - **Idle cost after a session:** 2 CPU ticks in 60 s (~0.03% of a core), 7.2 MB, one thread, 21 fds.
+- **0.5.2, after the final review:** TCP keepalive on viewer sockets. A viewer whose packets were silently dropped mid-session (two temporary `iptables` DROP rules on the TV, removed afterwards) was detected and capture closed after **28 s**.
+- **Rollback proven:** `scripts/remoteview.ps1 -Remove` stopped the daemon (exit 130), the hook's loop logged "stopped", port 5900 closed, and the hook file was gone. After a reboot nothing started (no process, no port, no log). The hook was then reinstalled, and after a reboot the daemon was back on 5900.

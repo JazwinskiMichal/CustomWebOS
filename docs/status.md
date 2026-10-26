@@ -4,7 +4,7 @@ Where CustomWebOS stands and what's next. Last updated **2026-10-26**. Update it
 
 ## On the TV now
 
-- **CustomWebOS 0.5.1** is the home screen:
+- **CustomWebOS 0.5.2** is the home screen:
   - a full-screen photo, clock and Polish date
   - a frosted-glass dock of white logos for the curated apps
   - an All apps grid
@@ -12,8 +12,8 @@ Where CustomWebOS stands and what's next. Last updated **2026-10-26**. Update it
   - the owner accepted the look
 - **Power-on opens CustomWebOS,** via our `init.d` hook.
 - **The Home button opens CustomWebOS** (LG Input Hook, Home = ID 773). LG Input Hook's LAN config server is stopped after boot.
-- **Remote view (VNC):** connect TightVNC to `<tv>:5900` with the owner's password to see and control the TV, including live TV, Netflix and HDMI. It runs at 960×540, about 12 fps within half a CPU core and about 17 MB; idle it costs nothing. Started by the `customwebos-remoteview` boot hook; its log is `/tmp/remoteview.log`. Set up with [development.md](development.md); details in [tv-notes.md](tv-notes.md). It's on branch `feat/remote-view` until merged.
-- **Rollbacks for all three are in [home-button.md](home-button.md).** The power-on and Home ones are proven; the remote view one (`rm` the hook, reboot) hasn't been run yet.
+- **Remote view (VNC):** connect TightVNC to `<tv>:5900` with the owner's password to see and control the TV, including live TV, Netflix and HDMI. It runs at 960×540, about 12 fps within half a CPU core and about 17 MB; idle it costs nothing. Started by the `customwebos-remoteview` boot hook; its log is `/tmp/remoteview.log`. Set up with [development.md](development.md); details in [tv-notes.md](tv-notes.md).
+- **All three mechanisms have proven rollbacks:** [home-button.md](home-button.md).
 
 ## Milestones
 
@@ -33,7 +33,10 @@ Two more projects were agreed on 2026-10-25 (see Next steps): a Home Assistant c
 
 In suggested order. Each new piece of work starts with a design (`docs/superpowers/specs/`).
 
-0. **Merge remote view:** whole-branch review of `feat/remote-view`, then merge. Afterwards: offer the DILE_VT cleanup fix (`native/remoteview/backends/libdile_vt.c`) upstream to hyperion-webos; the persistent "someone is watching" badge comes with M4.
+0. **Remote view follow-ups** (small, none blocking):
+   - Offer the DILE_VT cleanup fix (`native/remoteview/backends/libdile_vt.c`) upstream to hyperion-webos.
+   - The persistent "someone is watching" badge comes with M4; the toast is temporary.
+   - Parked minors with reasons: the log rotates only at restart; pointer drift after using the Magic Remote mid-session; `pointer_scale` above 1.2 can drop big moves; capture-library waits have no time limit (not seen on this TV).
 1. **Time-of-day theme:** after a set hour, a dark wallpaper and colours, "similar to macOS".
    - Light and dark colour sets already exist (`.theme-dark` / `.theme-light` on `<html>`, `home/style.css`).
    - Each wallpaper needs its `-dock.jpg` glass image; three photos ship, see `home/assets/wallpapers/`.
