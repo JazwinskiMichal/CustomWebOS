@@ -132,6 +132,18 @@ static int ws_send(wsconn *c, const char *text, size_t len)
     return 0;
 }
 
+/* Answers the ping whose payload sits at c->buf + off. */
+static void answer_ping(wsconn *c, size_t off, size_t plen)
+{
+    uint8_t mask[4], pong[140];
+    int n;
+
+    random_bytes(mask, 4);
+    n = ws_frame_pong(c->buf + off, plen > 125 ? 125 : plen, mask, pong, sizeof pong);
+    if (n > 0)
+        send_all(c->fd, pong, (size_t)n);
+}
+
 /* Reads the next text frame into out (NUL-terminated), answering pings.
  * Gives up after timeout_s seconds. Returns 0, or -1. */
 static int ws_recv(wsconn *c, char *out, size_t outsz, int timeout_s)
@@ -151,12 +163,7 @@ static int ws_recv(wsconn *c, char *out, size_t outsz, int timeout_s)
         if (flen > 0) {
             int done = 0;
             if (op == 9) {
-                uint8_t mask[4], pong[140];
-                int n;
-                random_bytes(mask, 4);
-                n = ws_frame_pong(c->buf + off, plen > 125 ? 125 : plen, mask, pong, sizeof pong);
-                if (n > 0)
-                    send_all(c->fd, pong, (size_t)n);
+                answer_ping(c, off, plen);
             } else if (op == 8) {
                 fail("TV closed the connection");
                 return -1;
@@ -401,6 +408,46 @@ int lginput_text(lginput *l, const char *text)
     if (n < 0 || ws_send(&l->ssap, req, (size_t)n) < 0)
         return -1;
     return await(&l->ssap, "\"id\":\"txt\"", IO_TIMEOUT_S, msg, sizeof msg);
+}
+
+/* Reads whatever is available on c without blocking, answers pings and drops
+ * the rest. Returns 0, or -1 if the socket closed or sent garbage. */
+static int conn_poll(wsconn *c)
+{
+    for (;;) {
+        int flen, op;
+        size_t off, plen;
+        ssize_t r;
+
+        while ((flen = ws_parse(c->buf, c->len, &op, &off, &plen)) > 0) {
+            if (op == 9)
+                answer_ping(c, off, plen);
+            else if (op == 8)
+                return -1;
+            memmove(c->buf, c->buf + flen, c->len - (size_t)flen);
+            c->len -= (size_t)flen;
+        }
+        if (flen < 0 || c->len == sizeof c->buf)
+            return -1;
+        r = recv(c->fd, c->buf + c->len, sizeof c->buf - c->len, MSG_DONTWAIT);
+        if (r > 0)
+            c->len += (size_t)r;
+        else if (r == 0)
+            return -1;
+        else if (errno == EINTR)
+            continue;
+        else
+            return (errno == EAGAIN || errno == EWOULDBLOCK) ? 0 : -1;
+    }
+}
+
+int lginput_poll(lginput *l)
+{
+    if (conn_poll(&l->ssap) < 0 || conn_poll(&l->ptr) < 0) {
+        fail("TV closed the input connection");
+        return -1;
+    }
+    return 0;
 }
 
 void lginput_close(lginput *l)

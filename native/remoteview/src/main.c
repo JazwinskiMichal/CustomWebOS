@@ -10,7 +10,9 @@
 #include "capture.h"
 #include "keymap.h"
 #include "lginput.h"
+#include "config.h"
 #include "pointer.h"
+#include "server.h"
 #include "shutdown.h"
 
 #define TV_W 1920
@@ -170,6 +172,26 @@ static int capture_test(int n, int w, int h)
     return rc;
 }
 
+/* Reads the optional config file (defaults when missing) and runs the VNC
+ * server. Serve mode blocks the termination signals itself and shuts down from
+ * its main loop; shutdown_install is for the diagnostics only. */
+static int serve(void)
+{
+    rv_config cfg;
+    char text[2048];
+    size_t n = 0;
+    FILE *f = fopen(CONFIG_PATH, "r");
+
+    if (f) {
+        n = fread(text, 1, sizeof text - 1, f);
+        fclose(f);
+    }
+    text[n] = '\0';
+    if (config_parse(text, &cfg))
+        fprintf(stderr, "remoteview: ignored bad lines in %s\n", CONFIG_PATH);
+    return server_run(&cfg);
+}
+
 int main(int argc, char **argv)
 {
     if (argc > 1 && strcmp(argv[1], "--version") == 0) {
@@ -188,6 +210,11 @@ int main(int argc, char **argv)
         }
         return capture_test(atoi(argv[2]), w, h);
     }
-    fprintf(stderr, "usage: remoteview --version | --pair | --input-test | --capture-test N [--size WxH]\n");
-    return 2;
+    if (argc > 1 && strcmp(argv[1], "--store-password") == 0)
+        return server_store_password();
+    if (argc > 1) {
+        fprintf(stderr, "usage: remoteview [--version | --pair | --store-password | --input-test [scale] | --capture-test N [--size WxH]]\n");
+        return 2;
+    }
+    return serve();
 }

@@ -24,6 +24,10 @@ int lginput_button(lginput *l, const char *name);
 /* Types text into the focused field via the IME service. Returns 0, or -1. */
 int lginput_text(lginput *l, const char *text);
 
+/* Non-blocking keepalive: reads what is available on both sockets, answers
+ * pings and discards everything else. Returns 0, or -1 if a socket closed. */
+int lginput_poll(lginput *l);
+
 void lginput_close(lginput *l);
 
 /* Registers without a key and waits up to 60 s for the on-screen prompt to be

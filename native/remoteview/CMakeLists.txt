@@ -22,6 +22,12 @@ if(REMOTEVIEW_HOST_TESTS)
   add_test(NAME test_ssap COMMAND test_ssap)
   add_executable(test_shutdown test/test_shutdown.c src/shutdown.c)
   add_test(NAME test_shutdown COMMAND test_shutdown)
+  add_executable(test_session test/test_session.c src/session.c)
+  add_test(NAME test_session COMMAND test_session)
+  add_executable(test_lanfilter test/test_lanfilter.c src/lanfilter.c)
+  add_test(NAME test_lanfilter COMMAND test_lanfilter)
+  add_executable(test_config test/test_config.c src/config.c)
+  add_test(NAME test_config COMMAND test_config)
 else()
   # Capture comes from hyperion-webos' unicapture and its two backends; the
   # flatbuffers/hyperion client parts of that project are not built.
@@ -36,11 +42,12 @@ else()
   pkg_check_modules(PMLOG REQUIRED PmLogLib)
 
   add_executable(remoteview src/main.c src/keymap.c src/pointer.c src/ws.c src/ssap.c src/lginput.c
-    src/shutdown.c src/capture.c
+    src/shutdown.c src/capture.c src/session.c src/lanfilter.c src/config.c src/server.c
     ${HW}/src/unicapture.c ${HW}/src/converter.c ${HW}/src/log.c ${HW}/src/utils.c)
   target_compile_definitions(remoteview PRIVATE REMOTEVIEW_VERSION="${REMOTEVIEW_VERSION}")
-  target_include_directories(remoteview PRIVATE ${HW}/src ${PMLOG_INCLUDE_DIRS})
-  target_link_libraries(remoteview yuv dl pthread rt ${PMLOG_LDFLAGS})
+  set(LIBVNC_ROOT /opt/libvnc CACHE PATH "Static LibVNCServer install (see Dockerfile)")
+  target_include_directories(remoteview PRIVATE ${HW}/src ${PMLOG_INCLUDE_DIRS} ${LIBVNC_ROOT}/include)
+  target_link_libraries(remoteview ${LIBVNC_ROOT}/lib/libvncserver.a jpeg z yuv dl pthread rt ${PMLOG_LDFLAGS})
   # The backends call log_printf/getticks_us from the executable.
   set_target_properties(remoteview PROPERTIES ENABLE_EXPORTS ON)
 

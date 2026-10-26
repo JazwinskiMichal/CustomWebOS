@@ -9,4 +9,6 @@ RUN wget -q -O /tmp/sdk.tar.gz https://github.com/openlgtv/buildroot-nc4/release
  && rm /tmp/sdk.tar.gz \
  && /opt/arm-webos-linux-gnueabi_sdk-buildroot/relocate-sdk.sh
 ENV TOOLCHAIN_FILE=/opt/arm-webos-linux-gnueabi_sdk-buildroot/share/buildroot/toolchainfile.cmake
+# LibVNCServer 0.9.14, static, for the TV. zlib and libjpeg come from the toolchain sysroot.
+RUN wget -q -O /tmp/lvnc.tar.gz https://github.com/LibVNC/libvncserver/archive/refs/tags/LibVNCServer-0.9.14.tar.gz  && mkdir /tmp/lvnc && tar -xzf /tmp/lvnc.tar.gz -C /tmp/lvnc --strip-components=1  && cmake -S /tmp/lvnc -B /tmp/lvnc/build -DCMAKE_TOOLCHAIN_FILE=$TOOLCHAIN_FILE -DCMAKE_BUILD_TYPE=Release       -DCMAKE_INSTALL_PREFIX=/opt/libvnc -DBUILD_SHARED_LIBS=OFF       -DWITH_OPENSSL=OFF -DWITH_GNUTLS=OFF -DWITH_WEBSOCKETS=OFF -DWITH_SYSTEMD=OFF -DWITH_GCRYPT=OFF       -DWITH_EXAMPLES=OFF -DWITH_TESTS=OFF -DWITH_SDL=OFF -DWITH_GTK=OFF -DWITH_PNG=OFF -DWITH_FFMPEG=OFF       -DWITH_IPv6=OFF -DWITH_THREADS=ON  && cmake --build /tmp/lvnc/build -j2 && cmake --install /tmp/lvnc/build  && rm -rf /tmp/lvnc /tmp/lvnc.tar.gz
 WORKDIR /src
