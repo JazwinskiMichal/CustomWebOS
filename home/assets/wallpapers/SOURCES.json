@@ -1,26 +1,10 @@
 [
   {
-    "id": "alpine",
-    "name": "Alpine glow",
-    "credit": "Cristina Gottardi",
-    "source": "https://unsplash.com/photos/CSpjU6hYo_0",
-    "licence": "Unsplash License",
-    "dock": "assets/wallpapers/alpine-dock.jpg: pre-blurred, tinted derivative of the photo for the glass dock (see README credits)"
-  },
-  {
-    "id": "misty",
-    "name": "Misty coast",
-    "credit": "Ganapathy Kumar",
-    "source": "https://unsplash.com/photos/n4VMQZIkgDg",
-    "licence": "Unsplash License",
-    "dock": "assets/wallpapers/misty-dock.jpg: pre-blurred, tinted derivative of the photo for the glass dock (see README credits)"
-  },
-  {
-    "id": "cove",
-    "name": "Quiet cove",
-    "credit": "Joshua Wordel",
-    "source": "https://unsplash.com/photos/1L_5PT7EKzU",
-    "licence": "Unsplash License",
-    "dock": "assets/wallpapers/cove-dock.jpg: pre-blurred, tinted derivative of the photo for the glass dock (see README credits)"
+    "id": "morphogenesis",
+    "name": "Morphogenesis",
+    "credit": "Jakub Steiner (GNOME)",
+    "source": "https://gitlab.gnome.org/GNOME/gnome-backgrounds/-/tree/0e0489d8366c5ba813f82f4c5aefb36831f3a155/backgrounds",
+    "licence": "CC BY-SA 3.0",
+    "files": "morphogenesis-day.jpg (from morphogenesis-l.svg), morphogenesis-night.jpg (from morphogenesis-d.svg), and their -dock.jpg blurred, tinted glass versions; rendered by scripts/wallpapers.ps1"
   }
 ]

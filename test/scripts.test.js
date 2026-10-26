@@ -268,3 +268,13 @@ test('remoteview.ps1 -Pair -WhatIf names --pair', { skip: !PS && 'no PowerShell'
   assert.equal(r.status, 0, r.stderr)
   assert.match(r.stdout, /remoteview --pair/)
 })
+
+test('wallpapers.ps1 -WhatIf prints the docker render without running it', { skip: !PS && 'no PowerShell' }, () => {
+  const r = ps('wallpapers.ps1', ['-WhatIf'])
+  assert.equal(r.status, 0, r.stderr)
+  assert.match(r.stdout, /docker/)
+  assert.match(r.stdout, /morphogenesis-l\.svg/)
+  assert.match(r.stdout, /morphogenesis-d\.svg/)
+  assert.match(r.stdout, /1920x1080/)
+  assert.match(r.stdout, /-dock/)
+})

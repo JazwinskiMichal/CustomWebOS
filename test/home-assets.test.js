@@ -33,22 +33,29 @@ test('every bundled logo has a source record', () => {
   }
 })
 
-test('the configured wallpaper and its dock material are bundled', () => {
-  const name = config().HOME_WALLPAPER
-  assert.ok(fs.existsSync(path.join(WALLS, name + '.jpg')), name + '.jpg')
-  assert.ok(fs.existsSync(path.join(WALLS, name + '-dock.jpg')), name + '-dock.jpg')
+const WALL_FILES = ['morphogenesis-day', 'morphogenesis-night']
+
+test("both modes' wallpapers and glass images are bundled within budget", () => {
+  for (const stem of WALL_FILES) {
+    for (const [file, max] of [[stem + '.jpg', 600 * 1024], [stem + '-dock.jpg', 120 * 1024]]) {
+      const buf = fs.readFileSync(path.join(WALLS, file))
+      assert.ok(buf[0] === 0xff && buf[1] === 0xd8, file + ' is not a JPEG')
+      assert.ok(buf.length <= max, file + ' is ' + buf.length + ' bytes')
+    }
+  }
+  const jpgs = fs.readdirSync(WALLS).filter((n) => n.endsWith('.jpg')).sort()
+  assert.deepEqual(jpgs, WALL_FILES.flatMap((s) => [s + '-dock.jpg', s + '.jpg']).sort())
 })
 
-test('every bundled photo has its photographer and photo page recorded', () => {
+test('the wallpaper source and licence are recorded', () => {
   const sources = JSON.parse(fs.readFileSync(path.join(WALLS, 'SOURCES.json'), 'utf8'))
-  const photos = fs.readdirSync(WALLS).filter((n) => /\.jpg$/.test(n) && !/-dock\.jpg$/.test(n))
-  assert.ok(photos.length >= 1)
-  for (const f of photos) {
-    const id = f.replace(/\.jpg$/, '')
-    const rec = sources.find((s) => s.id === id)
-    assert.ok(rec && rec.credit && /^https:\/\/unsplash\.com\/photos\//.test(rec.source), 'no record for ' + f)
-    assert.ok(fs.existsSync(path.join(WALLS, id + '-dock.jpg')), id + '-dock.jpg')
-  }
+  assert.equal(sources.length, 1)
+  const rec = sources[0]
+  assert.equal(rec.id, 'morphogenesis')
+  assert.match(rec.credit, /Jakub Steiner/)
+  assert.equal(rec.licence, 'CC BY-SA 3.0')
+  assert.ok(rec.source.startsWith('https://gitlab.gnome.org/GNOME/gnome-backgrounds'))
+  assert.match(fs.readFileSync(path.join(WALLS, 'LICENSE.CC-BY-SA-3.0.txt'), 'utf8'), /Attribution-ShareAlike 3\.0/)
 })
 
 test('licence texts sit beside the font and the icons', () => {
@@ -59,7 +66,7 @@ test('licence texts sit beside the font and the icons', () => {
   assert.match(fs.readFileSync(path.join(ICONS, 'SIMPLE-ICONS-LICENSE.txt'), 'utf8'), /CC0/)
 })
 
-test('the README credits the photos, icons and font', () => {
+test('the README credits the wallpaper, icons and font', () => {
   const readme = fs.readFileSync(path.join(ROOT, 'README.md'), 'utf8')
-  for (const name of ['Simple Icons', 'Manrope', 'Unsplash']) assert.ok(readme.includes(name), name)
+  for (const name of ['Simple Icons', 'Manrope', 'Morphogenesis', 'CC BY-SA 3.0']) assert.ok(readme.includes(name), name)
 })
