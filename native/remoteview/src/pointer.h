@@ -1,19 +1,19 @@
 #ifndef REMOTEVIEW_POINTER_H
 #define REMOTEVIEW_POINTER_H
 
-/* Fields mirror linux struct input_event (type/code/value), except the move
- * event: a move is ONE event {EV_ABS, code = x, value = y}, which
- * uinput_pointer() expands into ABS_X + ABS_Y + SYN. Button events are plain
- * {EV_KEY, BTN_LEFT or BTN_RIGHT, 1 or 0}. */
-typedef struct { int type, code, value; } pointer_event;
+#include <stddef.h>
 
-typedef struct { int x, y; int buttons; } pointer_state;
+/* x, y: last VNC position; buttons: last mask; synced: 0 until the first
+ * update has pinned the TV cursor; scale: TV cursor units per VNC pixel. */
+typedef struct { int x, y, buttons, synced; double scale; } pointer_state;
 
-/* Turns a VNC pointer message (x, y, button mask) into input events: an ABS
- * move if x/y changed, then BTN_LEFT/BTN_RIGHT press/release for each changed
- * mask bit (bit 0 left, bit 2 right). Returns the number of events written
- * to out (at most max). */
-int pointer_update(pointer_state *s, int x, int y, int mask,
-                   pointer_event out[], int max);
+/* Turns a VNC pointer message (x, y, button mask) into zero or more
+ * pointer-socket messages written back to back into out
+ * ("type:<t>\n" + "key:value\n" lines + "\n"). The pointer socket only takes
+ * relative moves, so the first update slams the cursor into the top-left
+ * corner and then moves to (x, y).
+ * Mask bit 0 click, bit 2 BACK button, bit 3 scroll up, bit 4 scroll down;
+ * all act on press only. Returns the bytes written, or -1 if n is too small. */
+int pointer_update(pointer_state *s, int x, int y, int mask, char *out, size_t n);
 
 #endif

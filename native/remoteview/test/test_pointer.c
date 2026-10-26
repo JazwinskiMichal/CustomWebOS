@@ -1,34 +1,37 @@
 #undef NDEBUG
 #include <assert.h>
-#include <linux/input.h>
+#include <string.h>
 #include "../src/pointer.h"
+
+static void check(pointer_state *s, int x, int y, int mask, const char *want)
+{
+    char out[512];
+    int n = pointer_update(s, x, y, mask, out, sizeof out);
+    assert(n == (int)strlen(want));
+    assert(memcmp(out, want, (size_t)n) == 0);
+}
 
 int main(void)
 {
-    pointer_state s = {0, 0, 0};
-    pointer_event ev[8];
-    int n;
+    pointer_state s = { 0, 0, 0, 0, 1.0 };
+    char small[8];
 
-    n = pointer_update(&s, 10, 20, 0, ev, 8);
-    assert(n == 1 && ev[0].type == EV_ABS && ev[0].code == 10 && ev[0].value == 20);
+    check(&s, 100, 50, 0,
+          "type:move\ndx:-3000\ndy:-3000\ndown:0\n\n"
+          "type:move\ndx:100\ndy:50\ndown:0\n\n");
+    check(&s, 110, 50, 0, "type:move\ndx:10\ndy:0\ndown:0\n\n");
+    check(&s, 110, 50, 0, "");
+    check(&s, 110, 50, 1, "type:click\n\n");
+    check(&s, 110, 50, 0, "");
+    check(&s, 110, 50, 4, "type:button\nname:BACK\n\n");
+    check(&s, 110, 50, 0, "");
+    check(&s, 110, 50, 8, "type:scroll\ndx:0\ndy:-1\n\n");
+    check(&s, 110, 50, 0, "");
+    check(&s, 110, 50, 16, "type:scroll\ndx:0\ndy:1\n\n");
 
-    n = pointer_update(&s, 10, 20, 0, ev, 8);
-    assert(n == 0);
+    s.scale = 2.0;
+    check(&s, 120, 50, 16, "type:move\ndx:20\ndy:0\ndown:0\n\n");
 
-    n = pointer_update(&s, 10, 20, 1, ev, 8);
-    assert(n == 1 && ev[0].type == EV_KEY && ev[0].code == BTN_LEFT && ev[0].value == 1);
-
-    n = pointer_update(&s, 30, 20, 1, ev, 8);
-    assert(n == 1 && ev[0].type == EV_ABS);
-
-    n = pointer_update(&s, 30, 20, 0, ev, 8);
-    assert(n == 1 && ev[0].code == BTN_LEFT && ev[0].value == 0);
-
-    n = pointer_update(&s, 30, 20, 4, ev, 8);
-    assert(n == 1 && ev[0].code == BTN_RIGHT && ev[0].value == 1);
-
-    /* move + press together: move first */
-    n = pointer_update(&s, 1, 2, 5, ev, 8);
-    assert(n == 2 && ev[0].type == EV_ABS && ev[1].code == BTN_LEFT && ev[1].value == 1);
+    assert(pointer_update(&s, 130, 50, 16, small, sizeof small) == -1);
     return 0;
 }

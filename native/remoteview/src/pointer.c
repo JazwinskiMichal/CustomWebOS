@@ -1,38 +1,62 @@
 #include "pointer.h"
 
-#include <linux/input.h>
+#include <stdarg.h>
+#include <stdio.h>
 
-static int push(pointer_event out[], int n, int max, int type, int code, int value)
+#define CORNER_SLAM 3000
+
+static int round_scaled(int d, double scale)
 {
-    if (n < max) {
-        out[n].type = type;
-        out[n].code = code;
-        out[n].value = value;
-    }
-    return n + 1;
+    double v = d * scale;
+    return (int)(v < 0 ? v - 0.5 : v + 0.5);
 }
 
-int pointer_update(pointer_state *s, int x, int y, int mask,
-                   pointer_event out[], int max)
+/* Appends printf output at out[*used]; returns 0, or -1 if it does not fit. */
+static int put(char *out, size_t n, size_t *used, const char *fmt, ...)
 {
-    static const struct { int bit, code; } btns[] = {
-        { 1 << 0, BTN_LEFT },
-        { 1 << 2, BTN_RIGHT },
-    };
-    int n = 0;
-    unsigned i;
+    va_list ap;
+    int w;
 
-    if (x != s->x || y != s->y) {
-        n = push(out, n, max, EV_ABS, x, y);
-        s->x = x;
-        s->y = y;
+    va_start(ap, fmt);
+    w = vsnprintf(out + *used, n - *used, fmt, ap);
+    va_end(ap);
+    if (w < 0 || (size_t)w >= n - *used)
+        return -1;
+    *used += (size_t)w;
+    return 0;
+}
+
+int pointer_update(pointer_state *s, int x, int y, int mask, char *out, size_t n)
+{
+    static const char mv[] = "type:move\ndx:%d\ndy:%d\ndown:0\n\n";
+    size_t used = 0;
+    int rising = mask & ~s->buttons;
+
+    if (n == 0)
+        return -1;
+    out[0] = '\0';
+
+    if (!s->synced) {
+        if (put(out, n, &used, mv, -CORNER_SLAM, -CORNER_SLAM) ||
+            put(out, n, &used, mv, round_scaled(x, s->scale), round_scaled(y, s->scale)))
+            return -1;
+        s->synced = 1;
+    } else if (x != s->x || y != s->y) {
+        if (put(out, n, &used, mv, round_scaled(x - s->x, s->scale),
+                round_scaled(y - s->y, s->scale)))
+            return -1;
     }
-    for (i = 0; i < sizeof btns / sizeof btns[0]; i++) {
-        int was = (s->buttons & btns[i].bit) != 0;
-        int now = (mask & btns[i].bit) != 0;
-        if (was != now)
-            n = push(out, n, max, EV_KEY, btns[i].code, now);
-    }
+    s->x = x;
+    s->y = y;
+
+    if ((rising & 1) && put(out, n, &used, "type:click\n\n"))
+        return -1;
+    if ((rising & 4) && put(out, n, &used, "type:button\nname:BACK\n\n"))
+        return -1;
+    if ((rising & 8) && put(out, n, &used, "type:scroll\ndx:0\ndy:-1\n\n"))
+        return -1;
+    if ((rising & 16) && put(out, n, &used, "type:scroll\ndx:0\ndy:1\n\n"))
+        return -1;
     s->buttons = mask;
-    return n > max ? max : n;
+    return (int)used;
 }
