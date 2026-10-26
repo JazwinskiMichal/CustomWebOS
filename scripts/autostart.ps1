@@ -72,6 +72,10 @@ if ($Remove) {
     & ssh @sshArgs
 } else {
     $OutputEncoding = New-Object System.Text.UTF8Encoding $false
+    # On a UTF-8 console (code page 65001) Windows PowerShell still writes a BOM
+    # unless the console input encoding is BOM-less too; sh on the TV then
+    # fails the first line.
+    [Console]::InputEncoding = $OutputEncoding
     ((Get-Content -LiteralPath $shScript -Raw) -replace "`r`n", "`n") | & ssh @sshArgs
 }
 if ($LASTEXITCODE -ne 0) {

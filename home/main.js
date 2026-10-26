@@ -830,6 +830,8 @@ function mountUI(doc) {
 
   function sendPerfReport(deltas, durations) {
     var datePl = null;
+    // A fixed date (Sunday 25 Oct 2026), not today: shows how the TV's own Intl
+    // formats Polish dates, for comparison with formatDate.
     try {
       datePl = new Date(2026, 9, 25).toLocaleDateString('pl-PL', { weekday: 'long', day: 'numeric', month: 'long' });
     } catch (e) { /* no Intl */ }
