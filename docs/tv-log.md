@@ -201,3 +201,6 @@ Versions 0.1.1 → 0.1.5 are on-device-test iterations. 0.1.5 is the current `ma
   - Netflix, cap raised to 15 with a proportional governor (fps × 0.45/cpu when over 0.50): 15 → 12, then 12 fps steady at 0.44–0.45, VmHWM 16.5 MB.
 - **Idle after disconnecting:** 0.00 CPU over 30 s, one thread, VmRSS 7.2 MB. `/dev/lg/gfx0` and the `gm` message queues stay open (libgm keeps them); no DILE_VT handle.
 - **The OLED screensaver came on over the idle home screen during the session** (`tvpowerd … "Screen Saver"`).
+- **Live TV, 15 fps cap:** 15 → 12, then 12 fps steady at 0.45–0.47 of a core (about 0.24 encoding, 0.22 capture), VmHWM 16.6 MB.
+- **Home key.** A network `HOME` button press opens LG's home bar, because it skips LG Input Hook. The daemon now launches CustomWebOS instead (`ssap://system.launcher/launch`); owner: "indeed its working now".
+- **Cleanup:** test server stopped; `/tmp/rv`, `/tmp/hwspike` and the test password removed. Only `remoteview.client-key` stays in `/home/root/.config/customwebos/`.

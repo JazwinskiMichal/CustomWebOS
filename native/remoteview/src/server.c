@@ -28,6 +28,7 @@
 
 #define TILE 64
 #define CONFIG_DIR "/home/root/.config/customwebos"
+#define HOME_APP_ID "org.jazwinski.customwebos.home"
 #define GOV_PERIOD_S 2
 #define GOV_LOG_S 30
 
@@ -384,7 +385,12 @@ static void on_key(rfbBool down, rfbKeySym key, rfbClientPtr cl)
     if (!down || !input)
         return;
     button = keymap_button((uint32_t)key);
-    if (button) {
+    if (button && !strcmp(button, "HOME")) {
+        /* A network HOME press skips LG Input Hook and opens LG's home bar;
+         * launch CustomWebOS directly, as the remote's Home button does. */
+        if (lginput_launch(input, HOME_APP_ID) < 0)
+            input_failed();
+    } else if (button) {
         if (lginput_button(input, button) < 0)
             input_failed();
     } else if (keymap_text((uint32_t)key, text)) {

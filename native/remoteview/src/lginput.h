@@ -24,6 +24,9 @@ int lginput_button(lginput *l, const char *name);
 /* Types text into the focused field via the IME service. Returns 0, or -1. */
 int lginput_text(lginput *l, const char *text);
 
+/* Launches an app by id (ssap://system.launcher/launch). Returns 0, or -1. */
+int lginput_launch(lginput *l, const char *app_id);
+
 /* Non-blocking keepalive: reads what is available on both sockets, answers
  * pings and discards everything else. Returns 0, or -1 if a socket closed. */
 int lginput_poll(lginput *l);
