@@ -64,7 +64,9 @@ else()
   target_include_directories(gm_backend PRIVATE ${HW}/src ${HW}/src/backends)
   target_link_libraries(gm_backend gm)
 
-  add_library(dile_vt_backend SHARED ${HW}/src/backends/libdile_vt.c)
+  # Our copy of libdile_vt.c: its cleanup also unmaps the frame buffers and
+  # closes /dev/mem (upstream leaks both on every capture session).
+  add_library(dile_vt_backend SHARED backends/libdile_vt.c)
   target_include_directories(dile_vt_backend PRIVATE ${HW}/src ${HW}/src/backends)
   # libdile_vt.so lacks DT_NEEDED for PmLogLib.
   target_link_libraries(dile_vt_backend dile_vt)
