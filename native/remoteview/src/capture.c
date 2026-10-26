@@ -3,6 +3,7 @@
 #include <libgen.h>
 #include <libyuv.h>
 #include <limits.h>
+#include <signal.h>
 #include <stdio.h>
 #include <string.h>
 #include <unistd.h>
@@ -54,14 +55,18 @@ static void close_video(void)
     video_up = 0;
 }
 
-int capture_open(int width, int height, int *has_video)
+static void close_locked(void);
+
+static int open_locked(int width, int height, int *has_video)
 {
     cap_backend_config_t cfg;
     int ret;
 
     *has_video = 0;
-    if (ui_up)
+    if (ui_up) {
+        *has_video = video_run;
         return 0;
+    }
     log_init();
     memset(&cfg, 0, sizeof cfg);
     cfg.resolution_width = width;
@@ -78,7 +83,7 @@ int capture_open(int width, int height, int *has_video)
     ui_up = 1;
     if (ui.start(ui.state) != 0) {
         fprintf(stderr, "capture: UI layer failed to start\n");
-        capture_close();
+        close_locked();
         return -1;
     }
     ui_run = 1;
@@ -100,7 +105,7 @@ int capture_open(int width, int height, int *has_video)
     return 0;
 }
 
-int capture_frame(uint8_t *argb_out, int stride)
+static int frame_locked(uint8_t *argb_out, int stride)
 {
     frame_info_t uf = { PIXFMT_INVALID }, vf = { PIXFMT_INVALID };
     frame_info_t uc = { PIXFMT_INVALID }, vc = { PIXFMT_INVALID };
@@ -109,7 +114,7 @@ int capture_frame(uint8_t *argb_out, int stride)
     if (!ui_run)
         return -1;
     if (video_run) {
-        video.wait(video.state);
+        /* No vsync wait: it blocks without a video signal; the caller paces frames. */
         got_video = video.acquire_frame(video.state, &vf) == 0;
         if (got_video && converter_run(&video_conv, &vf, &vc, PIXFMT_ARGB) != 0)
             got_video = 0;
@@ -143,7 +148,7 @@ int capture_frame(uint8_t *argb_out, int stride)
     return rc;
 }
 
-void capture_close(void)
+static void close_locked(void)
 {
     close_video();
     if (ui_run)
@@ -156,4 +161,49 @@ void capture_close(void)
     converter_release(&video_conv);
     converter_init(&ui_conv);
     converter_init(&video_conv);
+}
+
+/* Blocks the termination signals so the shutdown handler never runs while the
+ * flags above are half-updated (it would then skip releasing DILE_VT). */
+static void block_signals(sigset_t *old)
+{
+    sigset_t set;
+
+    sigemptyset(&set);
+    sigaddset(&set, SIGTERM);
+    sigaddset(&set, SIGINT);
+    sigaddset(&set, SIGHUP);
+    sigaddset(&set, SIGQUIT);
+    sigprocmask(SIG_BLOCK, &set, old);
+}
+
+int capture_open(int width, int height, int *has_video)
+{
+    sigset_t old;
+    int rc;
+
+    block_signals(&old);
+    rc = open_locked(width, height, has_video);
+    sigprocmask(SIG_SETMASK, &old, NULL);
+    return rc;
+}
+
+int capture_frame(uint8_t *argb_out, int stride)
+{
+    sigset_t old;
+    int rc;
+
+    block_signals(&old);
+    rc = frame_locked(argb_out, stride);
+    sigprocmask(SIG_SETMASK, &old, NULL);
+    return rc;
+}
+
+void capture_close(void)
+{
+    sigset_t old;
+
+    block_signals(&old);
+    close_locked();
+    sigprocmask(SIG_SETMASK, &old, NULL);
 }

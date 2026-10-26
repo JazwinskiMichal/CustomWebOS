@@ -182,8 +182,8 @@ int main(int argc, char **argv)
         return input_test(argc > 2 ? atof(argv[2]) : 1.0);
     if (argc > 2 && strcmp(argv[1], "--capture-test") == 0) {
         int w = 960, h = 540;
-        if (argc > 4 && strcmp(argv[3], "--size") == 0 && sscanf(argv[4], "%dx%d", &w, &h) != 2) {
-            fprintf(stderr, "bad --size\n");
+        if (argc > 4 && strcmp(argv[3], "--size") == 0 && (sscanf(argv[4], "%dx%d", &w, &h) != 2 || w <= 0 || h <= 0)) {
+            fprintf(stderr, "usage: remoteview --capture-test N [--size WxH], W and H positive\n");
             return 2;
         }
         return capture_test(atoi(argv[2]), w, h);

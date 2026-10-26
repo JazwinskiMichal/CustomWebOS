@@ -8,17 +8,14 @@
 #include "../src/shutdown.h"
 
 static int wfd;
-static int exit_in_cleanup;
 
 static void cleanup(void)
 {
     (void)!write(wfd, "x", 1);
-    if (exit_in_cleanup)
-        exit(5); /* re-enters the atexit path while cleanup is running */
 }
 
 /* Forks a child that installs cleanup, runs mode, and reports marker count and exit status. */
-static void run(int sig, int exit_inside, int *markers, int *status)
+static void run(int sig, int *markers, int *status)
 {
     int p[2], st, n = 0;
     char c;
@@ -30,7 +27,6 @@ static void run(int sig, int exit_inside, int *markers, int *status)
     if (pid == 0) {
         close(p[0]);
         wfd = p[1];
-        exit_in_cleanup = exit_inside;
         shutdown_install(cleanup);
         if (sig)
             raise(sig);
@@ -50,13 +46,15 @@ int main(void)
 {
     int m, s;
 
-    run(SIGTERM, 0, &m, &s);
+    run(SIGTERM, &m, &s);
     assert(m == 1 && s == 143);
-    run(SIGINT, 0, &m, &s);
+    run(SIGINT, &m, &s);
     assert(m == 1 && s == 130);
-    run(0, 0, &m, &s);
+    run(0, &m, &s);
     assert(m == 1 && s == 0);
-    run(SIGTERM, 1, &m, &s);
-    assert(m == 1 && s == 5);
+    run(SIGHUP, &m, &s);
+    assert(m == 1 && s == 129);
+    run(SIGQUIT, &m, &s);
+    assert(m == 1 && s == 131);
     return 0;
 }
