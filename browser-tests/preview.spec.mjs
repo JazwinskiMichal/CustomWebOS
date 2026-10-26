@@ -762,3 +762,38 @@ test('Home switches to night at Warsaw sunset without reopening', async () => {
   assert.ok(s.glass.length >= 1 && s.glass.every((g) => g.endsWith('morphogenesis-night-dock.jpg')), s.glass.join())
   await page.close()
 })
+
+// Glass behind the clock and date, on Home only.
+test('the clock sits on glass lined up with the wallpaper, and the longest date fits', async () => {
+  const { page, close } = await openPreview()
+  try {
+    await waitForServiceList(page)
+    await page.waitForFunction(() => {
+      const m = document.querySelector('.top .mat-img')
+      return m && m.complete && m.naturalWidth > 0
+    })
+    await page.evaluate(() => { document.querySelector('.date').textContent = 'poniedziałek, 30 października' })
+    const g = await page.evaluate(() => {
+      const box = (s) => document.querySelector(s).getBoundingClientRect().toJSON()
+      return { top: box('.top'), img: box('.top .mat-img'), clock: box('.clock'), date: box('.date'),
+               radius: getComputedStyle(document.querySelector('.top')).borderTopLeftRadius }
+    })
+    assert.deepEqual([g.top.x, g.top.y], [112, 72])
+    assert.ok(g.top.width >= 560 && g.top.height >= 200, JSON.stringify(g.top))
+    assert.equal(g.radius, '48px')
+    assert.ok(Math.abs(g.img.x) <= 1 && Math.abs(g.img.y) <= 1, 'glass registered at the stage origin: ' + JSON.stringify(g.img))
+    for (const t of [g.clock, g.date]) {
+      assert.ok(t.x >= g.top.x + 24 && t.x + t.width <= g.top.x + g.top.width - 24, 'inside horizontally: ' + JSON.stringify(t))
+      assert.ok(t.y >= g.top.y + 16 && t.y + t.height <= g.top.y + g.top.height - 16, 'inside vertically: ' + JSON.stringify(t))
+    }
+  } finally { await close() }
+})
+
+test('All apps keeps the clock without glass', async () => {
+  const { page, close } = await openPreview()
+  try {
+    await waitForServiceList(page)
+    await openAllApps(page)
+    assert.equal(await page.locator('.top .mat').count(), 0)
+  } finally { await close() }
+})

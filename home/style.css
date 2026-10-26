@@ -91,6 +91,27 @@ html, body {
   text-shadow: var(--text-shadow);
 }
 
+/* On Home they sit on glass like the dock's (same image, same radius),
+   which grows to fit a longer date. The veil shows only if the glass image
+   is missing. The text keeps the same place on screen as before. */
+.view-home .top {
+  left: 112px;
+  top: 72px;
+  min-width: 560px;
+  min-height: 200px;
+  padding: 24px 32px;
+  border-radius: 48px;
+  overflow: hidden;
+  background: var(--veil);
+  -webkit-transform: translateZ(0);
+  transform: translateZ(0);
+}
+
+.top .clock,
+.top .date {
+  position: relative;
+}
+
 .clock {
   font-size: 96px;
   font-weight: 500;

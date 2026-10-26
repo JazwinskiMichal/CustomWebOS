@@ -543,6 +543,9 @@ function mountUI(doc) {
     if (nav.view === 'all') root.appendChild(el('div', 'sheet'));
 
     var top = el('div', 'top');
+    // On Home the clock and date sit on glass like the dock; All apps
+    // already dims everything behind them.
+    if (nav.view === 'home') addGlass(top);
     var now = new Date();
     top.appendChild(el('div', 'clock', formatClock(now)));
     top.appendChild(el('div', 'date', formatDate(now, lang)));
@@ -621,14 +624,15 @@ function mountUI(doc) {
   }
 
   // Call once the dock's content is in place: its size decides where it
-  // sits, and so how far the glass image must shift.
+  // sits, and so how far each glass image (dock and clock) must shift.
   function alignGlass() {
-    var img = dockEl && dockEl.querySelector('.mat-img');
-    if (!img) return;
-    var box = dockEl.getBoundingClientRect();
+    var imgs = root.querySelectorAll('.mat-img');
     var rootBox = root.getBoundingClientRect();
-    img.style.left = Math.round(rootBox.left - box.left) + 'px';
-    img.style.top = Math.round(rootBox.top - box.top) + 'px';
+    for (var i = 0; i < imgs.length; i++) {
+      var box = imgs[i].parentNode.getBoundingClientRect();
+      imgs[i].style.left = Math.round(rootBox.left - box.left) + 'px';
+      imgs[i].style.top = Math.round(rootBox.top - box.top) + 'px';
+    }
   }
 
   // The one-line launch note above the dock (see .state.note).
