@@ -222,3 +222,12 @@ CustomWebOS 0.5.0, then 0.5.1, installed with `install.ps1`. The `customwebos-re
 - **Idle cost after a session:** 2 CPU ticks in 60 s (~0.03% of a core), 7.2 MB, one thread, 21 fds.
 - **0.5.2, after the final review:** TCP keepalive on viewer sockets. A viewer whose packets were silently dropped mid-session (two temporary `iptables` DROP rules on the TV, removed afterwards) was detected and capture closed after **28 s**.
 - **Rollback proven:** `scripts/remoteview.ps1 -Remove` stopped the daemon (exit 130), the hook's loop logged "stopped", port 5900 closed, and the hook file was gone. After a reboot nothing started (no process, no port, no log). The hook was then reinstalled, and after a reboot the daemon was back on 5900.
+
+## Day/night theme, 0.6.0 (2026-10-26)
+
+Installed with `install.ps1 -Reboot`; the old photos were removed by the installer. Checked from the PC by grabbing frames with remote view's `remoteview --capture-test 1` (no viewer connected), then reading `/tmp/rv/frame.data`.
+
+- **Following the sun:** at 19:50 CET, after Warsaw's sunset, CustomWebOS came up after the boot in the night look: dark Morphogenesis, light text on dark glass, clock and date on glass like the dock.
+- **Forced day look** (`perf.ps1 -Theme light`): light Morphogenesis, dark text and icons on light glass, readable; the day tint needed no retuning.
+- **Dock speed:** `perf.ps1 -Action right -Steps 9` with `-Theme light`: p95 16.7 ms, 0 frames over 33 ms (first paint 199 ms, apps 381 ms); with `-Theme dark`: p95 16.7 ms, 0 over 33 ms. The clock glass costs no frames.
+- **Back to normal:** a plain close and launch put it back on the sun (night look at 19:51).

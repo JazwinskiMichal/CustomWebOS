@@ -4,8 +4,9 @@ Where CustomWebOS stands and what's next. Last updated **2026-10-26**. Update it
 
 ## On the TV now
 
-- **CustomWebOS 0.5.2** is the home screen:
-  - a full-screen photo, clock and Polish date
+- **CustomWebOS 0.6.0** is the home screen:
+  - GNOME's Morphogenesis wallpaper: light by day, dark from sunset to sunrise in Warsaw, with text and glass colours to match
+  - the clock and Polish date on glass like the dock
   - a frosted-glass dock of white logos for the curated apps
   - an All apps grid
   - 60 fps, with apps shown in about 0.3–0.6 s
@@ -22,7 +23,7 @@ From the [overall design](superpowers/specs/2026-10-24-customwebos-design.md):
 | | What | State |
 |---|---|---|
 | M1 | Foundation: repo, setup guide, minimal home app that launches apps | Done ([plan](superpowers/plans/2026-10-24-m1-foundation.md)) |
-| M2 | Home screen depth: wallpaper, clock, good remote navigation, settings | Mostly done. Preview loop and hardening ([plan](superpowers/plans/2026-10-25-m2-preview-ui-hardening.md)), the [redesign](superpowers/plans/2026-10-25-home-redesign.md), and Home button / power-on. Open: time-of-day theme, on-TV settings (none planned yet) |
+| M2 | Home screen depth: wallpaper, clock, good remote navigation, settings | Mostly done. Preview loop and hardening ([plan](superpowers/plans/2026-10-25-m2-preview-ui-hardening.md)), the [redesign](superpowers/plans/2026-10-25-home-redesign.md), Home button / power-on, and the day/night theme ([plan](superpowers/plans/2026-10-26-day-night-theme.md)). Open: on-TV settings (none planned yet) |
 | M3 | First background service: HDMI signal loss → NAS photo slideshow | Not started |
 | M4 | Overlays over the foreground app (doorbell camera over Netflix) | Not started |
 | M5+ | Custom apps | Not started |
@@ -36,9 +37,7 @@ In suggested order. Each new piece of work starts with a design (`docs/superpowe
 0. **Remote view follow-ups** (small, none blocking):
    - The persistent "someone is watching" badge comes with M4; the toast is temporary.
    - Parked minors with reasons: the log rotates only at restart; pointer drift after using the Magic Remote mid-session; `pointer_scale` above 1.2 can drop big moves; capture-library waits have no time limit (not seen on this TV).
-1. **Time-of-day theme:** after a set hour, a dark wallpaper and colours, "similar to macOS".
-   - Light and dark colour sets already exist (`.theme-dark` / `.theme-light` on `<html>`, `home/style.css`).
-   - Each wallpaper needs its `-dock.jpg` glass image; three photos ship, see `home/assets/wallpapers/`.
+1. **Day/night theme follow-ups** (small, none blocking): a forced `theme` (perf runs, checks) stays until the app is next closed; only the first switch is preloaded; a few edge cases (local 00:30, clock-change days, switching during All apps) are checked by review only, not by tests.
 2. **M3, the NAS photo slideshow on HDMI signal loss.**
    - The base URL is a setting.
    - Replacing LG's no-signal screen is ideal, but launching over it is acceptable.

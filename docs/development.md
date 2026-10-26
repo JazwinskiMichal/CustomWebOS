@@ -17,13 +17,14 @@ How to work on CustomWebOS from a machine (Windows is the one in use). Rules for
 
 | Step | Command | Notes |
 |---|---|---|
-| Preview in a browser | `npm run dev` → http://127.0.0.1:4795/ | Serves `home/` with a mock luna bridge. `?mock=error\|slow\|empty\|few\|flaky\|recover\|recoverlate\|errorlong\|slowlaunch` shows the other states. |
+| Preview in a browser | `npm run dev` → http://127.0.0.1:4795/ | Serves `home/` with a mock luna bridge. `?mock=error\|slow\|empty\|few\|flaky\|recover\|recoverlate\|errorlong\|slowlaunch` shows the other states; `&theme=light\|dark` forces the day or night look. |
 | Unit tests | `npm test` | Node's test runner. Covers pure logic, the ES5 parse of every TV file, assets and their records, the service handlers, and dry runs of every script. |
 | Browser tests | `npm run check:browser` | Playwright against the preview at 1920×1080. |
 | Package | `scripts/package.ps1` | Builds `dist/org.jazwinski.customwebos.home_<version>_all.ipk` from `home/` plus the service and the daemon (staged in `dist/stage/`; the daemon ends up in `<service dir>/bin/`). Bump `home/appinfo.json` first. |
 | Build the daemon | `scripts/build-native.ps1` | Cross-compiles `native/remoteview/` in Docker into `dist/native/remoteview/` (the `remoteview` binary, its two capture backends, `libjpeg.so.8` and its licence). `-Test` runs its host unit tests instead. Needed before `package.ps1`, which stops with a clear message without it. |
 | Install | `scripts/install.ps1 -TvHost <tv-ip> -Reboot` | **Always `-Reboot`** (tv-notes.md). Needs the owner's go-ahead. |
-| Measure | `scripts/perf.ps1 -TvHost <tv-ip> -Action right -Steps 9` | Add `-View all -Action down` for All apps. Prints first paint, frame times and per-keypress cost. The bar: p95 frame < 33 ms. Past numbers are in tv-log.md. |
+| Measure | `scripts/perf.ps1 -TvHost <tv-ip> -Action right -Steps 9` | Add `-View all -Action down` for All apps, `-Theme light\|dark` to force the day or night look (it stays until the app is next closed). Prints first paint, frame times and per-keypress cost. The bar: p95 frame < 33 ms. Past numbers are in tv-log.md. |
+| Wallpapers | `scripts/wallpapers.ps1 [-DayTint "#rrggbb pct"] [-NightTint ...]` | Re-renders the day/night JPEGs and their glass from GNOME's Morphogenesis SVGs in Docker into `home/assets/wallpapers/`. Only needed to change the crop or retune the glass tint. |
 | Power-on hook | `scripts/autostart.ps1 -TvHost <tv-ip> [-Remove]` | See home-button.md. |
 | Remote view | `scripts/remoteview.ps1 -TvHost <tv-ip> [-SetPassword] [-Pair] [-Remove]` | After installing the `.ipk` (with `-Reboot`): the default installs the boot hook `init.d/customwebos-remoteview`; `-SetPassword` asks for the VNC password (only the first 8 characters count), saves it to `.local/remoteview/password.txt` and stores it on the TV; `-Pair` pairs with the TV's second-screen API (accept the prompt on the TV); `-Remove` deletes the hook and stops the daemon. The daemon's log is `/tmp/remoteview.log` on the TV. |
 | Service registration | `scripts/register-service.ps1 -TvHost <tv-ip> [-Unregister]` | Once per TV (setup.md §4.3b); not needed for upgrades. |
@@ -38,9 +39,9 @@ Use TightVNC: `tvnviewer.exe <tv-ip>::5900` (two colons mean a port number). Tig
 
 - `home/`: the TV web app, **ES5 only**.
   - `main.js`: pure, unit-tested helpers at the top; `mountUI` at the bottom owns the DOM.
-  - `config.js`: Home apps and wallpaper, edited by hand.
+  - `config.js`: Home apps and the location for sunrise/sunset (day/night look), edited by hand.
   - `style.css`: Chromium 53, no Grid, gap or backdrop-filter.
-  - `assets/`: photos, logos and font, each with its source records.
+  - `assets/`: the day/night wallpapers and their glass images, logos and font, each with its source records.
 - `services/org.jazwinski.customwebos.home.service/`: a Node 0.12 luna service. The web app can't call `applicationManager` itself, so this service lists and launches apps for it (`listApps`, `launch`, `perfReport`). `handlers.js` holds the testable logic.
 - `scripts/`: PowerShell first. Each `.ps1` that reaches the TV has `-WhatIf`. `autostart.sh`, `remoteview.sh` and `register-service.sh` run on the TV.
 - `native/remoteview/`: the remote view daemon in C (GPL-2.0, own licence), built by `scripts/build-native.ps1`.

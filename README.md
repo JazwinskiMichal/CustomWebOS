@@ -18,7 +18,7 @@ The home screen's look follows CleanFrame's dock. Bundled assets keep their own 
 ## Status
 
 On the TV today:
-- A CleanFrame-style home screen: a photo, clock and Polish date, a glass dock of white logos, and All apps. It runs at 60 fps.
+- A CleanFrame-style home screen that follows the sun: a light wallpaper by day and a dark one after sunset, a clock and Polish date on glass, a glass dock of white logos, and All apps. It runs at 60 fps.
 - The TV opens it at power-on, and the Home button opens it.
 
 **Start at [docs/status.md](docs/status.md)** for the current state and next steps, and [docs/README.md](docs/README.md) for the map of all docs. The [design doc](docs/superpowers/specs/2026-10-24-customwebos-design.md) holds the overall vision and milestones.

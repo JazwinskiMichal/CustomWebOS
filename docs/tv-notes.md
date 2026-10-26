@@ -67,3 +67,5 @@ Lasting facts and rules for the target TV. Read this before touching it. The evi
 - **Boot hook:** `init.d/customwebos-remoteview` runs it at `nice -n 10` and restarts it after it exits (5 s, doubling to 300 s). Its log, with the daemon's stdout and stderr, is `/tmp/remoteview.log` (one old generation, `.log.1`, past 256 KB). Stop the daemon with SIGINT only (see the `DILE_VT` note above); `remoteview.ps1 -Remove` does.
 - **Cost:** 960×540, about 12 fps within 0.45 of a core, about 17 MB; 0 CPU when idle. Use TightVNC as the viewer: it picks Tight+JPEG, far cheaper here than UltraVNC's ZRLE.
 - **Password:** VNC uses only the first 8 characters.
+- **Seeing the TV's screen from the PC:** with no VNC viewer connected, `<service dir>/bin/remoteview --capture-test 1` writes the current screen to `/tmp/rv/frame.data` (raw RGB24, 960×540). Handy for checking the home screen without someone at the TV.
+- **A launch with `theme` or `perf` params sticks:** Home-button launches are relaunches, so the forced look stays until the app is closed. Close and launch it without params to go back to following the sun.
