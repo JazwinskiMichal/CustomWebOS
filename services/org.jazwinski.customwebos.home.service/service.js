@@ -10,6 +10,8 @@
 //   luna://org.jazwinski.customwebos.home.service/perfReport
 //     payload: {report: object}  (the home app's perf mode)
 //     -> writes /tmp/customwebos-perf.json, {returnValue: true}
+//   luna://org.jazwinski.customwebos.home.service/listPhotos
+//     -> {returnValue: true, photos: ["usb/sda/sda1/E1.jpg", ...]} (USB sticks)
 //
 // The webapp (org.jazwinski.customwebos.home) runs unprivileged and cannot
 // talk to com.webos.applicationManager directly (LSCallFromApplication is
@@ -34,3 +36,4 @@ var handlers = require('./handlers.js').createHandlers(function (uri, params, ca
 service.register('listApps', handlers.listApps);
 service.register('launch', handlers.launch);
 service.register('perfReport', handlers.perfReport);
+service.register('listPhotos', handlers.listPhotos);

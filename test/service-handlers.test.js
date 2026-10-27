@@ -114,3 +114,42 @@ test('perfReport reports a write error', () => {
   h.perfReport(m)
   assert.deepEqual(m.responses, [{ returnValue: false, errorText: 'disk full' }])
 })
+
+// Photos on USB sticks for the no-signal slideshow.
+const fs = require('node:fs')
+const os = require('node:os')
+const path = require('node:path')
+const { photoFiles, walkTree, USB_ROOT } = require('../services/org.jazwinski.customwebos.home.service/handlers.js')
+
+test('photoFiles keeps JPEG/PNG in any folder, skips hidden and other files, sorted', () => {
+  assert.deepEqual(
+    photoFiles(['b.png', 'a/IMG_1.JPG', 'c.jpeg', 'd.gif', '.hidden.jpg', '.thumbs/x.jpg', 'a/.x/y.png', 'notes.txt']),
+    ['a/IMG_1.JPG', 'b.png', 'c.jpeg'])
+})
+
+test('photoFiles caps the list at 2000', () => {
+  const many = []
+  for (let i = 0; i < 2500; i++) many.push('p' + String(i).padStart(4, '0') + '.jpg')
+  assert.equal(photoFiles(many).length, 2000)
+})
+
+test('walkTree lists files below a root, relative, and an empty list for a missing root', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'cwo-usb-'))
+  fs.mkdirSync(path.join(root, 'sda', 'sda1', 'Holiday'), { recursive: true })
+  fs.writeFileSync(path.join(root, 'sda', 'sda1', 'E1.jpg'), 'x')
+  fs.writeFileSync(path.join(root, 'sda', 'sda1', 'Holiday', 'beach.JPG'), 'x')
+  assert.deepEqual(walkTree(fs, root, 8).sort(), ['sda/sda1/E1.jpg', 'sda/sda1/Holiday/beach.JPG'])
+  assert.deepEqual(walkTree(fs, path.join(root, 'nope'), 8), [])
+})
+
+test('listPhotos answers usb/-relative paths of the photos on the sticks', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'cwo-usb-'))
+  fs.mkdirSync(path.join(root, 'sda', 'sda1'), { recursive: true })
+  fs.writeFileSync(path.join(root, 'sda', 'sda1', 'E1.jpg'), 'x')
+  fs.writeFileSync(path.join(root, 'sda', 'sda1', 'notes.txt'), 'x')
+  const h = createHandlers(() => {}, () => {}, { fs, usbRoot: root })
+  const msg = fakeMessage({})
+  h.listPhotos(msg)
+  assert.deepEqual(msg.responses, [{ returnValue: true, photos: ['usb/sda/sda1/E1.jpg'] }])
+  assert.equal(USB_ROOT, '/tmp/usb')
+})
