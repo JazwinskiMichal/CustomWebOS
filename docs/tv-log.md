@@ -252,6 +252,26 @@ While trying to make the TV start on Live TV:
 - **Power-on autostart retired** at the owner's request: `customwebos-autostart` now only stops LG Input Hook's port-1842 server.
 - **Correction, after the cold start.** With Live TV really playing (MAIN sink `connected:true`), unmuted, then `reboot`: `getLastInput` answered `DTV`, bootd started `com.webos.app.livetv`, and nothing opened CustomWebOS (0 launches; the retired autostart). The earlier "stays HDMI_1" results came from the broken state: Live TV never got a picture, so it was never recorded.
 
+## Black inputs found: LG Input Hook's tvservice injection (2026-10-27)
+
+The black inputs came back twice during the M3 slideshow tests. Bisected with the owner at the TV, one boot hook at a time (hooks moved out of `init.d` and back). Steps every time: the TV starts on HDMI 1 with the PS5 off, PS5 on, then Input → Live TV.
+
+| Boot hooks | Live TV |
+|---|---|
+| none (failsafe boot) | channel |
+| remote view, SSH | channel |
+| LG Input Hook, remote view, SSH | **black** |
+| + our autostart hook | black |
+| + slideshow watcher | black |
+| all, but the boot started on Live TV (then HDMI 1, then Live TV) | channel |
+| all, LG Input Hook limited to `lginput2` | **channel**; Home still opens CustomWebOS |
+
+- **Cause.** LG Input Hook's service injects its library (Frida-based, 10 MB) into every running process named `RELEASE`, `lginput2`, `micomservice`, `tvservice` or `testapp` (`service.js`, `targetNames`). The remap runs in `lginput2` only (its log shows `Replacing lginput_uinput_send_button` and the key presses); the `tvservice` log stays empty. Injected while `tvservice` drives an HDMI input, it leaves `tvservice` unable to switch: Live TV comes to the front, `eim/getCurrentInput` stays `HDMI_1`, MAIN sink `connected:false`, and every input is black until a cold start. Both our dock's launch and LG's own Input button break the same way.
+- **Fix.** `scripts/inputhook-patch.ps1` changes `targetNames` to `['lginput2']` (original kept as `service.js.orig`; `-Undo`). Applied, then the slideshow run passed: cover at boot, PS5 on, picture back, Live TV plays, Home opens CustomWebOS.
+- **Earlier entries corrected.** The first black inputs (above) followed a launch over HDMI 1 on a boot that started there, not the hand-made `inputcommon` launch. Neither the slideshow, our dock, remote view nor our autostart hook was involved.
+- **Failsafe boots** came twice more, each after a cold start that followed a black-input boot: that boot's `startup.sh` hadn't cleared its flag. Not explained yet; every boot since the patch finished cleanly (flag gone by +80 s).
+- **Slideshow flashes (owner).** A brief Home before the slideshow (the photo list loaded first), and a brief stale slideshow on the next Home press (a hidden page doesn't repaint; webOS shows the app's last frame). Fix in 0.7.0, not yet checked on the TV: the black layer goes up at once, and the app closes when a show ends hidden (owner's choice: the first Home after a show is a fresh launch).
+
 ## No-signal slideshow spike (M3, 2026-10-27)
 
 With the owner switching the PS5 on and off on HDMI 1:

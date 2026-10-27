@@ -13,6 +13,7 @@ Where CustomWebOS stands and what's next. Last updated **2026-10-26**. Update it
   - the owner accepted the look
 - **CustomWebOS opens only with the Home button;** power-on leaves the TV on the source that was playing at switch-off (webOS restores it: Live TV or an HDMI input). Our boot hook only shuts LG Input Hook's root config server (port 1842) once the remap is active.
 - **The Home button opens CustomWebOS** (LG Input Hook, Home = ID 773). LG Input Hook's LAN config server is stopped after boot.
+- **LG Input Hook is patched to inject into `lginput2` only** (`scripts/inputhook-patch.ps1`); unpatched, a boot that starts on an HDMI input leaves every input black after the next source switch. Re-run the script after reinstalling or updating LG Input Hook.
 - **Remote view (VNC):** connect TightVNC to `<tv>:5900` with the owner's password to see and control the TV, including live TV, Netflix and HDMI. It runs at 960×540, about 12 fps within half a CPU core and about 17 MB; idle it costs nothing. Started by the `customwebos-remoteview` boot hook; its log is `/tmp/remoteview.log`. Set up with [development.md](development.md); details in [tv-notes.md](tv-notes.md).
 - **All three mechanisms have proven rollbacks:** [home-button.md](home-button.md).
 
