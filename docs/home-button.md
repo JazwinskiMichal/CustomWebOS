@@ -20,6 +20,7 @@ SSH doesn't depend on the screen. Homebrew Channel's own `dropbear` (port 22, `w
 
 ### A. CustomWebOS on power-on (our own init.d hook): recommended first
 
+- **Retired 2026-10-27 (owner: "the autostart of the custom web os is not needed, it should stay only under the home button").** The hook no longer opens CustomWebOS; it only stops LG Input Hook's config server (see section D). What follows describes what it did until then.
 - **What:** `scripts/autostart.sh`, installed as `/var/lib/webosbrew/init.d/customwebos-autostart`.
   - At boot it waits in the background until `applicationManager` answers.
   - It waits a few seconds more, so the TV finishes restoring its last app.

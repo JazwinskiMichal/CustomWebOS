@@ -241,3 +241,12 @@ Prompted by a rough morning start: the PS5 (last input) came up first, Home open
 - **Our own boot activity doesn't help.** Registered with a callback that launches CustomWebOS at minimal-boot-done, it never fired at +20 s: ActivityManager itself only starts serving at +26–29 s (its first getBootStatus subscriptions in bootd.log). At best it would equal the hooks' earliest run. Cancelled and removed.
 - **Faster autostart hook:** it opens CustomWebOS as soon as the bus answers, and closes and reopens it only when the TV had already reopened it. CustomWebOS was requested at +29.1 s and full screen at +31.3 s on one boot; requested at +41.9 s and full screen at +43.8 s on another. Before, it was +47/48 s.
 - **LG's home bar** opened at +21–23 s on these boots, either by Home presses before Input Hook was active, or by itself on the micom (reboot) power-on. webOS's "Home Auto Launch" is off.
+
+## Inputs went black after a hand-made input switch; failsafe boot (2026-10-27)
+
+While trying to make the TV start on Live TV:
+
+- **Power-on input.** At boot bootd calls `luna://com.webos.service.utp.externaldevice/getLastInput` and starts that input (`changeRunningAppId`). It only records external inputs: it stayed `HDMI_1` through every switch to Live TV (by command, by the input picker, and per the owner by remote), and every reboot came back on HDMI 1. The `lastInputApp` / `physicalLastInputApp` settings are copies, rewritten at boot. Not pursued further.
+- **Black inputs.** After launching `com.webos.app.inputcommon` by hand with `{"changeRunningAppId":"com.webos.app.livetv"}` (mimicking bootd), every broadcast and HDMI source stayed black, including no "No signal" text, while Netflix and the UI worked. `tv.display/getScreenStatus` showed the MAIN sink `connected:false`, and `externaldevice` calls hung. Soft reboots (`reboot`, micomPower) didn't fix it; **pulling the mains plug for 60 s did.** No capture was running on the boot that was still black, so remote view was ruled out.
+- **Failsafe boot.** The cold start came up in Homebrew's failsafe mode (hooks skipped, unauthenticated telnet on 23). The previous boot's `startup.sh` never finished (it clears its flag 10 s after the hooks), most likely blocked by the same stuck services. The next normal boot finished cleanly (flag cleared, hooks at +38–39 s).
+- **Power-on autostart retired** at the owner's request: `customwebos-autostart` now only stops LG Input Hook's port-1842 server.

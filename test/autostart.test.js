@@ -74,65 +74,40 @@ test('autostart.sh is valid sh', { skip: !SH && 'no sh' }, () => {
   assert.equal(r.status, 0, r.stderr)
 })
 
-test('with another app in front, it opens CustomWebOS as soon as the bus answers', { skip: !SH && 'no sh' }, () => {
-  const { r, calls } = run(1)
-  assert.equal(r.status, 0, r.stderr)
-  const probe = calls.findIndex((c) => c.includes('getForegroundAppInfo'))
-  const launch = calls.findIndex((c) => c.includes('/launch ') && c.includes(APP))
-  assert.equal(launch, probe + 1, 'no wait and no close in between:\n' + calls.join('\n'))
-  assert.ok(!calls.some((c) => c.includes('/closeByAppId')), calls.join('\n'))
-})
-
-test('with CustomWebOS already in front (it may be stuck), it closes and reopens it', { skip: !SH && 'no sh' }, () => {
-  const { r, calls } = run(1, () => ({ STUB_FG: APP }))
-  assert.equal(r.status, 0, r.stderr)
-  const close = calls.findIndex((c) => c.includes('/closeByAppId') && c.includes(APP))
-  const launch = calls.findIndex((c) => c.includes('/launch ') && c.includes(APP))
-  assert.ok(close > -1 && launch > close, calls.join('\n'))
-  assert.deepEqual(calls.slice(close + 1, launch), ['sleep 1'])
-})
-
-test('it keeps asking until the bus answers', { skip: !SH && 'no sh' }, () => {
-  const { calls } = run(4)
-  const probes = calls.filter((c) => c.includes('getForegroundAppInfo'))
-  assert.ok(probes.length >= 4, calls.join('\n'))
-  assert.ok(calls.some((c) => c.includes('/launch ')))
-})
-
-test('it gives up without launching if the bus never answers', { skip: !SH && 'no sh' }, () => {
-  const { r, calls } = run(100000)
-  assert.equal(r.status, 0)
-  assert.equal(calls.filter((c) => c.includes('getForegroundAppInfo')).length, 120)
-  assert.ok(!calls.some((c) => c.includes('/launch ') || c.includes('closeByAppId')))
-})
-
-test('every luna-send gets a stdin that is not the caller\'s pipe', { skip: !SH && 'no sh' }, () => {
-  // luna-send returns nothing (rc 0) when its stdin is a pipe (tv-log).
-  const { calls } = run(1, () => ({ STUB_FG: APP }))
-  const luna = calls.filter((c) => !c.startsWith('sleep ') && !c.startsWith('kill '))
-  assert.ok(luna.length >= 3)
-  for (const c of luna) assert.match(c, /^other /, c)
+test('it never opens or closes an app: CustomWebOS only opens with the Home button', { skip: !SH && 'no sh' }, () => {
+  for (const env of [undefined, withInputHook(true), withInputHook(false)]) {
+    const { r, calls } = run(1, env)
+    assert.equal(r.status, 0, r.stderr)
+    assert.ok(!calls.some((c) => c.includes('/launch') || c.includes('/closeByAppId')), calls.join('\n'))
+  }
 })
 
 test('without --foreground it returns at once and works in the background', { skip: !SH && 'no sh' }, async () => {
   // run-parts runs the hooks one after another: this one must not hold the
-  // others up while it waits for the bus.
+  // others up while it waits for LG Input Hook to inject.
   const s = stubs(1)
+  fs.mkdirSync(path.join(s.dir, 'inputhook-app'))
+  fs.writeFileSync(path.join(s.dir, 'inputhook-marker'), '')
   // A sleep that really waits, so a blocking script would take seconds.
   fs.writeFileSync(path.join(s.dir, 'sleep'), ['#!/bin/sh', 'node -e "setTimeout(function () {}, 1000)"', ''].join('\n'), { mode: 0o755 })
   const started = Date.now()
   const r = spawnSync(SH, [SCRIPT], {
     encoding: 'utf8',
-    env: Object.assign({}, process.env, { PATH: s.dir + path.delimiter + process.env.PATH }),
+    env: Object.assign({}, process.env, {
+      PATH: s.dir + path.delimiter + process.env.PATH,
+      INPUTHOOK_DIR: path.join(s.dir, 'inputhook-app'),
+      INPUTHOOK_MARKER: path.join(s.dir, 'inputhook-marker'),
+      KILL: path.join(s.dir, 'kill'),
+    }),
   })
   assert.equal(r.status, 0, r.stderr)
   assert.ok(Date.now() - started < 1000, 'returned after ' + (Date.now() - started) + ' ms')
-  for (let i = 0; i < 150; i++) {
+  for (let k = 0; k < 150; k++) {
     const log = fs.existsSync(s.log) ? fs.readFileSync(s.log, 'utf8') : ''
-    if (log.includes('/launch ')) return
+    if (log.includes('kill 4402')) return
     await new Promise((res) => setTimeout(res, 100))
   }
-  assert.fail('the background run never launched the app')
+  assert.fail('the background run never stopped the config server')
 })
 
 function ps(args) {
