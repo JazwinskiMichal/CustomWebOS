@@ -811,3 +811,74 @@ test('before the script picks a mode the page is already dark, not white', async
     for (const ch of bg.match(/\d+/g).slice(0, 3).map(Number)) assert.ok(ch < 60, 'dark first frame ' + bg)
   } finally { await ctx.close() }
 })
+
+// No-signal slideshow (launched with {"slideshow":{"input":…}}; ?slideshow= in the preview).
+const PIXEL_JPG = Buffer.from('/9j/4AAQSkZJRgABAQEASABIAAD/2wBDAP//////////////////////////////////////////////////////////////////////////////////////wgALCAABAAEBAREA/8QAFBABAAAAAAAAAAAAAAAAAAAAAP/aAAgBAQABPxA=', 'base64')
+
+async function openSlideshow(mock = 'photos') {
+  const page = await browser.newPage({ viewport: { width: 1920, height: 1080 } })
+  await page.route('**/usb/**', (r) => r.fulfill({ status: 200, contentType: 'image/jpeg', body: PIXEL_JPG }))
+  await page.clock.install()
+  await page.goto(server.url + '?mock=' + mock + '&theme=dark&slideshow=com.webos.app.hdmi1')
+  return page
+}
+
+const shownPhoto = (page) => page.evaluate(() => {
+  const s = document.getElementById('slideshow')
+  const on = s && s.querySelector('img.on')
+  return on ? on.getAttribute('src') : null
+})
+
+test('the slideshow covers the screen with a photo from the stick, no clock or dock', async () => {
+  const page = await openSlideshow()
+  try {
+    await page.clock.runFor(1000)
+    await page.waitForFunction(() => document.querySelector('#slideshow img.on'))
+    assert.match(await shownPhoto(page), /^usb\//)
+    const box = await page.locator('#slideshow').boundingBox()
+    assert.deepEqual([box.x, box.y, box.width, box.height], [0, 0, 1920, 1080])
+    assert.equal(await page.locator('#slideshow').evaluate((e) => getComputedStyle(e).zIndex > 0), true)
+  } finally { await page.close() }
+})
+
+test('photos change every 30 s; arrows step; Back keeps the show', async () => {
+  const page = await openSlideshow()
+  try {
+    await page.clock.runFor(1000)
+    await page.waitForFunction(() => document.querySelector('#slideshow img.on'))
+    const first = await shownPhoto(page)
+    await page.clock.runFor(30000)
+    const second = await shownPhoto(page)
+    assert.notEqual(second, first)
+    await page.keyboard.press('ArrowLeft')
+    assert.equal(await shownPhoto(page), first)
+    await page.keyboard.press('ArrowRight')
+    assert.equal(await shownPhoto(page), second)
+    await page.keyboard.press('Escape')
+    await page.keyboard.press('Backspace')
+    assert.equal(await page.locator('#slideshow').isVisible(), true)
+  } finally { await page.close() }
+})
+
+test('with no photos it hands back to the HDMI input', async () => {
+  const page = await openSlideshow('nophotos')
+  try {
+    await page.clock.runFor(2000)
+    await page.waitForFunction(() => window.__mock.launches.includes('com.webos.app.hdmi1'))
+    assert.equal(await page.locator('#slideshow').isVisible(), false)
+  } finally { await page.close() }
+})
+
+test('a relaunch without slideshow params (the Home button) shows Home', async () => {
+  const page = await openSlideshow()
+  try {
+    await page.clock.runFor(1000)
+    await page.waitForFunction(() => document.querySelector('#slideshow img.on'))
+    await page.evaluate(() => {
+      window.PalmSystem = { launchParams: '{}' }
+      document.dispatchEvent(new Event('webOSRelaunch'))
+    })
+    assert.equal(await page.locator('#slideshow').isVisible(), false)
+    assert.equal(await page.locator('.dock').count() > 0, true)
+  } finally { await page.close() }
+})

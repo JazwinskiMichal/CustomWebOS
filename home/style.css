@@ -374,3 +374,31 @@ html, body {
   overflow: hidden;
   text-overflow: ellipsis;
 }
+
+/* No-signal slideshow: the stick's photos over everything, on black,
+   cross-faded (main.js FADE_MS). No clock, dock or glass on top. */
+#slideshow {
+  position: fixed;
+  left: 0;
+  top: 0;
+  width: 1920px;
+  height: 1080px;
+  background: #000;
+  z-index: 100;
+}
+
+#slideshow img {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 1920px;
+  height: 1080px;
+  object-fit: contain;
+  opacity: 0;
+  -webkit-transition: opacity 1s;
+  transition: opacity 1s;
+}
+
+#slideshow img.on {
+  opacity: 1;
+}

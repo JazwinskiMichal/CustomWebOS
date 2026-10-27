@@ -415,6 +415,37 @@ function forcedTheme(raw, search) {
   return t === 'light' || t === 'dark' ? t : null;
 }
 
+// No-signal slideshow: one photo every SLIDE_MS, cross-faded over FADE_MS.
+var SLIDE_MS = 30000;
+var FADE_MS = 1000;
+var HDMI_APP = /^com\.webos\.app\.hdmi[1-4]$/;
+
+// {input} when launched to cover a dark HDMI input: launch params
+// {"slideshow":{"input":"com.webos.app.hdmiN"}}, or, without launch params,
+// a ?slideshow=com.webos.app.hdmiN query (dev server). Else null.
+function slideshowParams(raw, search) {
+  var parsed = null;
+  try { parsed = JSON.parse(raw); } catch (e) { parsed = null; }
+  var input = parsed && parsed.slideshow && parsed.slideshow.input;
+  if (!input && typeof search === 'string') {
+    var m = /[?&]slideshow=([a-z0-9.]+)/.exec(search);
+    input = m && m[1];
+  }
+  return typeof input === 'string' && HDMI_APP.test(input) ? { input: input } : null;
+}
+
+// A shuffled copy of list (Fisher-Yates); rand() returns [0, 1).
+function shuffle(list, rand) {
+  var out = list.slice();
+  for (var i = out.length - 1; i > 0; i--) {
+    var j = Math.floor(rand() * (i + 1));
+    var t = out[i];
+    out[i] = out[j];
+    out[j] = t;
+  }
+  return out;
+}
+
 // --- Browser runtime (guarded; does not execute when required from Node) ---
 
 function mountUI(doc) {
@@ -741,6 +772,12 @@ function mountUI(doc) {
     var action = keyAction(e.keyCode);
     if (!action) return;
     e.preventDefault();
+    if (show) {
+      // During the slideshow only the arrows do anything; Back stays put.
+      if (action === 'left') stepShow(-1);
+      if (action === 'right') stepShow(1);
+      return;
+    }
     if (e.repeat && action === 'ok') return; // held OK: launch once
     dispatch(action);
   }
@@ -953,6 +990,95 @@ function mountUI(doc) {
     lunaCall(SERVICE_URI + '/perfReport', { report: report }, function () {}, function () {});
   }
 
+  // No-signal slideshow over a dark HDMI input (the no-signal hook launches
+  // the app with {"slideshow":{"input":…}}). It ends only when the signal
+  // returns (the hook relaunches the input), the source changes (the app is
+  // hidden), or a relaunch without slideshow params (the Home button); with
+  // no photos left it hands back to the input itself.
+  var show = null;
+
+  function startShow(input) {
+    endShow(false);
+    var s = { input: input, photos: [], idx: 0, timer: null, el: null, imgs: null, cur: 0, failed: 0 };
+    show = s;
+    lunaCall(SERVICE_URI + '/listPhotos', {}, function (r) {
+      if (show !== s) return;
+      var photos = (r && r.photos) || [];
+      if (!photos.length) { endShow(true); return; }
+      s.photos = shuffle(photos, Math.random);
+      s.el = el('div');
+      s.el.id = 'slideshow';
+      s.imgs = [el('img'), el('img')];
+      for (var i = 0; i < 2; i++) {
+        s.imgs[i].alt = '';
+        s.imgs[i].onerror = onPhotoError;
+        s.el.appendChild(s.imgs[i]);
+      }
+      doc.body.appendChild(s.el);
+      showPhoto(0);
+    }, function () { if (show === s) endShow(true); });
+  }
+
+  // Shows photo i in the hidden layer and fades it in; restarts the timer.
+  function showPhoto(i) {
+    var s = show;
+    var n = s.photos.length;
+    s.idx = ((i % n) + n) % n;
+    s.cur = 1 - s.cur;
+    s.imgs[s.cur].src = s.photos[s.idx];
+    s.imgs[s.cur].className = 'on';
+    s.imgs[1 - s.cur].className = '';
+    clearTimeout(s.timer);
+    s.timer = setTimeout(nextPhoto, SLIDE_MS);
+  }
+
+  // After the last photo, re-reads the stick: photos added or removed show
+  // up, and an empty or pulled stick ends the show.
+  function nextPhoto() {
+    var s = show;
+    if (!s) return;
+    if (s.idx + 1 < s.photos.length) { showPhoto(s.idx + 1); return; }
+    lunaCall(SERVICE_URI + '/listPhotos', {}, function (r) {
+      if (show !== s) return;
+      var photos = (r && r.photos) || [];
+      if (!photos.length) { endShow(true); return; }
+      s.photos = shuffle(photos, Math.random);
+      showPhoto(0);
+    }, function () { if (show === s) endShow(true); });
+  }
+
+  function stepShow(delta) {
+    if (show && show.photos.length) showPhoto(show.idx + delta);
+  }
+
+  // An unreadable photo is skipped; if none can be shown, the show ends.
+  function onPhotoError() {
+    var s = show;
+    if (!s) return;
+    s.failed++;
+    if (s.failed >= s.photos.length) { endShow(true); return; }
+    showPhoto(s.idx + 1);
+  }
+
+  // Removes the show; handBack relaunches the HDMI input it covered.
+  function endShow(handBack) {
+    var s = show;
+    if (!s) return;
+    show = null;
+    clearTimeout(s.timer);
+    if (s.el && s.el.parentNode) s.el.parentNode.removeChild(s.el);
+    if (handBack) lunaCall(SERVICE_URI + '/launch', { id: s.input }, function () {}, function () {});
+  }
+
+  doc.addEventListener('webOSRelaunch', function () {
+    var p = slideshowParams(window.PalmSystem && window.PalmSystem.launchParams, '');
+    if (p) startShow(p.input);
+    else endShow(false);
+  });
+  doc.addEventListener('visibilitychange', function () {
+    if (doc.hidden) endShow(false);
+  });
+
   doc.addEventListener('keydown', onKey);
   doc.addEventListener('visibilitychange', onVisibility);
   root.addEventListener('mousemove', onPointer('point'));
@@ -960,6 +1086,9 @@ function mountUI(doc) {
   render();
   tickClock();
   requestApps(0);
+  var bootShow = slideshowParams(window.PalmSystem && window.PalmSystem.launchParams,
+    window.location && window.location.search);
+  if (bootShow) startShow(bootShow.input);
 }
 
 if (typeof window !== 'undefined' && window.document) {
@@ -998,6 +1127,10 @@ if (typeof module !== 'undefined' && module.exports) {
     themeFor: themeFor,
     wallpaperSrc: wallpaperSrc,
     forcedTheme: forcedTheme,
+    slideshowParams: slideshowParams,
+    shuffle: shuffle,
+    SLIDE_MS: SLIDE_MS,
+    FADE_MS: FADE_MS,
     msToNextMinute: msToNextMinute,
     PREFS_KEY: PREFS_KEY,
     loadPrefs: loadPrefs,

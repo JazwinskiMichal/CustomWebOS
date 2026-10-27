@@ -468,3 +468,26 @@ test('forcedTheme reads a theme launch param, else a ?theme= query', () => {
   assert.equal(main.forcedTheme('not json', '?theme=pink'), null)
   assert.equal(main.forcedTheme(undefined, undefined), null)
 })
+
+test('slideshowParams accepts the four HDMI inputs from launch params or the preview query', () => {
+  for (const n of [1, 2, 3, 4]) {
+    assert.deepEqual(main.slideshowParams('{"slideshow":{"input":"com.webos.app.hdmi' + n + '"}}', ''), { input: 'com.webos.app.hdmi' + n })
+  }
+  assert.deepEqual(main.slideshowParams(undefined, '?mock=photos&slideshow=com.webos.app.hdmi2'), { input: 'com.webos.app.hdmi2' })
+  assert.equal(main.slideshowParams('{"slideshow":{"input":"com.webos.app.livetv"}}', ''), null)
+  assert.equal(main.slideshowParams('{"slideshow":{"input":"com.webos.app.hdmi5"}}', ''), null)
+  assert.equal(main.slideshowParams('not json', '?slideshow=netflix'), null)
+  assert.equal(main.slideshowParams('{}', ''), null)
+})
+
+test('shuffle returns a permutation, driven by the given random source', () => {
+  const list = ['a', 'b', 'c', 'd', 'e']
+  let seed = 1
+  const rand = () => { seed = (seed * 16807) % 2147483647; return seed / 2147483647 }
+  const out = main.shuffle(list, rand)
+  assert.deepEqual([...out].sort(), list)
+  assert.deepEqual(list, ['a', 'b', 'c', 'd', 'e'], 'input untouched')
+  assert.notDeepEqual(out, list)
+  assert.equal(main.SLIDE_MS, 30000)
+  assert.equal(main.FADE_MS, 1000)
+})

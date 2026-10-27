@@ -12,6 +12,8 @@
 // ?mock=slowlaunch listApps as ok; launch answers after 12 s
 // ?mock=few      only netflix, youtube and pl.cda are installed
 // ?mock=recoverlate  the first three listApps fail, then it answers
+// ?mock=photos   listPhotos answers three photos (other modes: none)
+// ?mock=nophotos listPhotos answers no photos
 (function () {
   var mode = (/[?&]mock=(\w+)/.exec(window.location.search) || [])[1] || 'ok'
   var SERVICE = 'luna://org.jazwinski.customwebos.home.service/'
@@ -41,6 +43,10 @@
 
   function answer(uri, payload) {
     if (uri === SERVICE + 'listApps') return listApps()
+    if (uri === SERVICE + 'listPhotos') {
+      var photos = mode === 'photos' ? ['usb/sda/sda1/a.jpg', 'usb/sda/sda1/b.jpg', 'usb/sda/sda1/c.jpg'] : []
+      return Promise.resolve({ returnValue: true, photos: photos })
+    }
     if (uri === SERVICE + 'perfReport') {
       window.__mock.perfReports.push(payload.report)
       return Promise.resolve({ returnValue: true })
