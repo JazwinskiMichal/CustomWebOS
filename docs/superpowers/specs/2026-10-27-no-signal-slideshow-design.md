@@ -51,6 +51,11 @@ When the HDMI device Michał was watching goes off (the PS5 in practice, but "th
 3. **Reading the stick from the web app:** whether the app can load `file://` images from `/tmp/usb/…` directly, or the root service must list (and maybe serve) them.
 4. **LG's auto power-off and screensaver** while our slideshow covers a signal-less input.
 
+## Decisions after the TV tests (2026-10-27)
+
+- **Auto power-off (Michał: option A):** covering the input stops LG's own no-signal timer (17 min test: the TV stayed on). The watcher keeps LG's rule itself: 15 minutes after the slideshow starts covering an input, if it's still covering and the TV's `noSignalAutoOff` setting is on, it switches the TV off.
+- **LG's screensaver may take over** the slideshow (Michał); nothing holds it off.
+
 ## Decisions from the builder check
 
 - **No usable stick:** see Goals (accepted in playback; mid-show removal ends the show, Claude's call).

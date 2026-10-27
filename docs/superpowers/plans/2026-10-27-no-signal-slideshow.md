@@ -20,7 +20,7 @@
 - No network, no copies on flash. Idle costs nothing: the watcher only blocks on subscriptions (no `sleep` loops while a signal is present).
 - Every `luna-send` gets `< /dev/null` and writes to a file or a read loop fed by a FIFO (tv-notes); BusyBox `timeout -t`.
 - ES5 for TV web code; scripts PowerShell-first with `-WhatIf`; device work needs Michał's go-ahead per task; installs with `install.ps1 -Reboot`.
-- LG's no-signal auto power-off must keep working, or Michał decides (spec anti-goal).
+- LG's no-signal auto power-off must keep working: the watcher turns the TV off (`luna://com.webos.service.tvpower/power/powerOff`) **15 min** after a cover starts, if still covering and `time.noSignalAutoOff` is `on` (owner: option A). LG's screensaver may cover the slideshow.
 
 ## Review Focus
 

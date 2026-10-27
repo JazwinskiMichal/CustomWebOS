@@ -18,7 +18,10 @@
 #
 # Event-driven: three luna-send subscriptions (current input, input states,
 # foreground app) feed a FIFO; each event re-checks the state. The only
-# timer is one background sleep for the settle delay. It never opens or
+# timers are one background sleep for the settle delay and one for LG's
+# auto power-off: covering the input stops the TV's own no-signal timer, so
+# 15 min after a cover starts, if it's still up and time.noSignalAutoOff is
+# on, the watcher turns the TV off itself (owner's choice). It never opens or
 # switches inputs except by launching the HDMI app back (tv-notes).
 #
 # It also links <CustomWebOS dir>/usb to /tmp/usb: the app can't read the
@@ -36,9 +39,12 @@ USB_ROOT=${USB_ROOT:-/tmp/usb}
 STATE=${STATE:-/tmp/nosignal}
 LOG=${LOG:-/tmp/nosignal.log}
 SETTLE_S=5
+OFF_S=${OFF_S:-900}   # LG's no-signal auto-off delay, kept by the watcher
 EIM=luna://com.webos.service.eim
 AM=luna://com.webos.applicationManager
 HOME_SERVICE=luna://org.jazwinski.customwebos.home.service
+SETTINGS=luna://com.webos.settingsservice
+POWER=luna://com.webos.service.tvpower/power
 
 # decide CUR FG BLOCK SPDSEEN COVERING LOSTFOR -> none|wait|cover|uncover|clear
 #   CUR      current input (HDMI_1…, DTV…)
@@ -66,6 +72,23 @@ decide() {
     if [ "$covering" = "$cur" ]; then echo none; return; fi
     if [ "$fg" != "com.webos.app.hdmi${cur#HDMI_}" ]; then echo none; return; fi
     if [ "$lostfor" -ge "$SETTLE_S" ]; then echo cover; else echo wait; fi
+}
+
+# off_due TIMER_ID COVER_ID SETTING -> yes|no: the 15-minute timer started
+# with cover TIMER_ID fires; turn the TV off only if that same cover is still
+# up and LG's own no-signal auto-off (time.noSignalAutoOff) is on.
+off_due() {
+    if [ "$1" = "$2" ] && [ "$3" = on ]; then echo yes; else echo no; fi
+}
+
+# The timer's event: power off if off_due says so.
+offcheck() {
+    current=$(cat "$STATE/cover-id" 2>/dev/null || echo -)
+    setting=$(ask "$SETTINGS/getSystemSettings" '{"category":"time","keys":["noSignalAutoOff"]}' | sed -n 's/.*"noSignalAutoOff":"\([a-z]*\)".*/\1/p')
+    if [ "$(off_due "$1" "$current" "$setting")" = yes ]; then
+        say "15 min of slideshow without a signal: turning the TV off (LG's no-signal auto-off is on)"
+        luna-send -n 1 "$POWER/powerOff" '{"reason":"remoteKey"}' < /dev/null > /dev/null 2>&1
+    fi
 }
 
 say() {
@@ -108,18 +131,21 @@ check() {
                 n=${cur#HDMI_}
                 luna-send -n 1 "$AM/launch" "{\"id\":\"$APP_ID\",\"params\":{\"slideshow\":{\"input\":\"com.webos.app.hdmi$n\"}}}" < /dev/null > /dev/null 2>&1
                 echo "$cur" > "$STATE/covering"
+                id=$(uptime_s)
+                echo "$id" > "$STATE/cover-id"
+                (sleep "$OFF_S"; echo "off $id" >&3) &
                 say "$cur covered with the slideshow"
             else
                 say "$cur has no picture but the stick has no photos: LG's screen stays"
             fi
             ;;
         uncover)
-            rm -f "$STATE/covering" "$STATE"/lost-*
+            rm -f "$STATE/covering" "$STATE/cover-id" "$STATE"/lost-*
             luna-send -n 1 "$AM/launch" "{\"id\":\"com.webos.app.hdmi${cur#HDMI_}\"}" < /dev/null > /dev/null 2>&1
             say "$cur has its picture back; input relaunched"
             ;;
         clear)
-            rm -f "$STATE/covering" "$STATE"/lost-*
+            rm -f "$STATE/covering" "$STATE/cover-id" "$STATE"/lost-*
             say "source changed to $cur; slideshow left"
             ;;
         none)
@@ -131,10 +157,18 @@ check() {
 # Keeps one subscription running, feeding the FIFO; restarts it after 5 s
 # if luna-send exits.
 subscribe() {
+    echo "$(mypid)" >> "$STATE/pids"
     while :; do
-        luna-send -i "$1" '{"subscribe":true}' < /dev/null >&3 2>/dev/null
+        luna-send -i "$1" '{"subscribe":true}' < /dev/null >&3 2>/dev/null &
+        echo $! >> "$STATE/pids"
+        wait $!
         sleep 5
     done
+}
+
+# This (sub)shell's pid: $$ is the parent's inside a subshell.
+mypid() {
+    sh -c 'echo $PPID'
 }
 
 main() {
@@ -143,18 +177,26 @@ main() {
     [ -d "$APP_DIR" ] && ln -sfn "$USB_ROOT" "$APP_DIR/usb"
     mkfifo "$STATE/events"
     exec 3<> "$STATE/events"
+    # Our process ids (main, the three loops and their luna-send), so
+    # nosignal.ps1 -Remove and the tests can stop everything.
+    mypid > "$STATE/pids"
     subscribe "$EIM/getCurrentInput" &
     subscribe "$EIM/getAllInputStatus" &
     subscribe "$AM/getForegroundAppInfo" &
     say "watching"
-    while read -r _ <&3; do
-        check
+    while read -r line <&3; do
+        case "$line" in
+            "off "*) offcheck "${line#off }" ;;
+            *) check ;;
+        esac
     done
 }
 
 case "$1" in
     --decide) shift; decide "$@" ;;
+    --off-due) shift; off_due "$@" ;;
     --foreground) main ;;
-    *) main < /dev/null > /dev/null 2>&1 & ;;
+    "") main < /dev/null > /dev/null 2>&1 & ;;
+    *) echo "usage: $0 [--foreground | --decide … | --off-due …]" >&2; exit 2 ;;
 esac
 exit 0

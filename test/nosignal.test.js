@@ -82,6 +82,14 @@ test('without --foreground it returns at once (run-parts runs the hooks one afte
   })
   assert.equal(r.status, 0, r.stderr)
   assert.ok(Date.now() - started < 1500, 'returned after ' + (Date.now() - started) + ' ms')
+  // Stop the watcher it started (its pids file appears once it runs).
+  const pidsFile = path.join(dir, 'state', 'pids')
+  for (let i = 0; i < 50 && !fs.existsSync(pidsFile); i++) spawnSync(SH, ['-c', 'sleep 0.1'])
+  // main, three loops and their three luna-send
+  for (let i = 0; i < 50 && fs.readFileSync(pidsFile, 'utf8').trim().split(/\s+/).length < 7; i++) spawnSync(SH, ['-c', 'sleep 0.1'])
+  const pids = fs.readFileSync(pidsFile, 'utf8').trim().split(/\s+/)
+  assert.equal(pids.length, 7)
+  spawnSync(SH, ['-c', 'kill ' + pids.join(' ')])
 })
 
 test('every luna-send in nosignal.sh gets /dev/null as stdin', () => {
@@ -107,4 +115,23 @@ test('nosignal.ps1 -Remove -WhatIf shows the removal', { skip: !PS && 'no PowerS
   const r = ps(['-TvHost', '192.0.2.1', '-Remove', '-WhatIf'])
   assert.equal(r.status, 0, r.stderr)
   assert.match(r.stdout, /rm -f \/var\/lib\/webosbrew\/init\.d\/customwebos-nosignal/)
+  assert.match(r.stdout, /kill .*\/tmp\/nosignal\/pids/)
+})
+
+// off_due <timer's cover id> <current cover id or -> <noSignalAutoOff value> -> yes|no
+function offDue(id, current, setting) {
+  const r = spawnSync(SH, [SCRIPT, '--off-due', id, current, setting], { encoding: 'utf8' })
+  assert.equal(r.status, 0, r.stderr)
+  return r.stdout.trim()
+}
+
+test('15 min into the same cover, with LG\'s no-signal auto-off on, the TV is turned off', skip, () => {
+  assert.equal(offDue('812', '812', 'on'), 'yes')
+})
+
+test('no power-off when the cover ended or changed, or LG\'s auto-off is off', skip, () => {
+  assert.equal(offDue('812', '-', 'on'), 'no')
+  assert.equal(offDue('812', '990', 'on'), 'no')
+  assert.equal(offDue('812', '812', 'off'), 'no')
+  assert.equal(offDue('812', '812', ''), 'no')
 })

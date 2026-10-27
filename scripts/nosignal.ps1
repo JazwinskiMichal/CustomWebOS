@@ -16,7 +16,8 @@
   TV's LAN IP or hostname.
 
 .PARAMETER Remove
-  Delete the hook instead (rollback). Takes effect from the next boot.
+  Delete the hook and stop the running watcher (its pids are in
+  /tmp/nosignal/pids on the TV).
 
 .PARAMETER Port
   SSH port. Defaults to 22022 (see docs/setup.md §3.3).
@@ -48,7 +49,7 @@ $target    = '/var/lib/webosbrew/init.d/customwebos-nosignal'
 # No double quotes in $remote: Windows PowerShell strips them from native
 # command arguments.
 if ($Remove) {
-    $remote = "rm -f $target; ls /var/lib/webosbrew/init.d"
+    $remote = "kill `$(cat /tmp/nosignal/pids 2>/dev/null) 2>/dev/null; rm -f $target; ls /var/lib/webosbrew/init.d"
     $action = 'remove the no-signal watcher'
 } else {
     if (-not (Test-Path -LiteralPath $shScript)) { throw "nosignal.sh not found at: $shScript" }
