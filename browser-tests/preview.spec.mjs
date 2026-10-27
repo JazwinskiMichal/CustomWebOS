@@ -841,6 +841,44 @@ test('the slideshow covers the screen with a photo from the stick, no clock or d
   } finally { await page.close() }
 })
 
+test('the slideshow hides Home from the first frame, before the photo list arrives', async () => {
+  const page = await openSlideshow()
+  try {
+    // The mock answers listPhotos after 150 ms on the paused clock: not yet.
+    await page.waitForSelector('#slideshow')
+    assert.equal(await shownPhoto(page), null)
+    const box = await page.locator('#slideshow').boundingBox()
+    assert.deepEqual([box.x, box.y, box.width, box.height], [0, 0, 1920, 1080])
+    assert.equal(await page.locator('#slideshow').evaluate((e) => getComputedStyle(e).backgroundColor), 'rgb(0, 0, 0)')
+  } finally { await page.close() }
+})
+
+// Simulates webOS hiding the app (another source or app came to the front).
+const hideApp = (page) => page.evaluate(() => {
+  window.__closed = false
+  window.close = () => { window.__closed = true }
+  Object.defineProperty(document, 'hidden', { configurable: true, get: () => true })
+  document.dispatchEvent(new Event('visibilitychange'))
+  return window.__closed
+})
+
+test('a source change during the show closes the app, so Home never flashes a stale photo', async () => {
+  const page = await openSlideshow()
+  try {
+    await page.clock.runFor(1000)
+    await page.waitForFunction(() => document.querySelector('#slideshow img.on'))
+    assert.equal(await hideApp(page), true)
+    assert.equal(await page.locator('#slideshow').count(), 0)
+  } finally { await page.close() }
+})
+
+test('Home hidden without a show stays alive (instant Home)', async () => {
+  const { page, close } = await openPreview()
+  try {
+    assert.equal(await hideApp(page), false)
+  } finally { await close() }
+})
+
 test('photos change every 30 s; arrows step; Back keeps the show', async () => {
   const page = await openSlideshow()
   try {

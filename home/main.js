@@ -999,22 +999,22 @@ function mountUI(doc) {
 
   function startShow(input) {
     endShow(false);
-    var s = { input: input, photos: [], idx: 0, timer: null, el: null, imgs: null, cur: 0, failed: 0 };
+    var s = { input: input, photos: [], idx: 0, timer: null, el: el('div'), imgs: [el('img'), el('img')], cur: 0, failed: 0 };
     show = s;
+    // The black layer goes up at once, so Home never shows while the photo
+    // list loads; the first photo fades in over it.
+    s.el.id = 'slideshow';
+    for (var i = 0; i < 2; i++) {
+      s.imgs[i].alt = '';
+      s.imgs[i].onerror = onPhotoError;
+      s.el.appendChild(s.imgs[i]);
+    }
+    doc.body.appendChild(s.el);
     lunaCall(SERVICE_URI + '/listPhotos', {}, function (r) {
       if (show !== s) return;
       var photos = (r && r.photos) || [];
       if (!photos.length) { endShow(true); return; }
       s.photos = shuffle(photos, Math.random);
-      s.el = el('div');
-      s.el.id = 'slideshow';
-      s.imgs = [el('img'), el('img')];
-      for (var i = 0; i < 2; i++) {
-        s.imgs[i].alt = '';
-        s.imgs[i].onerror = onPhotoError;
-        s.el.appendChild(s.imgs[i]);
-      }
-      doc.body.appendChild(s.el);
       showPhoto(0);
     }, function () { if (show === s) endShow(true); });
   }
@@ -1075,8 +1075,15 @@ function mountUI(doc) {
     if (p) startShow(p.input);
     else endShow(false);
   });
+  // A hidden page doesn't repaint, and webOS shows an app's last frame when
+  // it comes back: a show that ends hidden would flash its photo on the next
+  // Home press. So the app closes instead; that next Home is a fresh launch
+  // (owner's choice: no flash over an instant Home after a slideshow).
   doc.addEventListener('visibilitychange', function () {
-    if (doc.hidden) endShow(false);
+    if (doc.hidden && show) {
+      endShow(false);
+      window.close();
+    }
   });
 
   doc.addEventListener('keydown', onKey);
