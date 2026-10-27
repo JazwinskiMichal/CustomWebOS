@@ -231,3 +231,13 @@ Installed with `install.ps1 -Reboot`; the old photos were removed by the install
 - **Forced day look** (`perf.ps1 -Theme light`): light Morphogenesis, dark text and icons on light glass, readable; the day tint needed no retuning.
 - **Dock speed:** `perf.ps1 -Action right -Steps 9` with `-Theme light`: p95 16.7 ms, 0 frames over 33 ms (first paint 199 ms, apps 381 ms); with `-Theme dark`: p95 16.7 ms, 0 over 33 ms. The clock glass costs no frames.
 - **Back to normal:** a plain close and launch put it back on the sun (night look at 19:51).
+
+## Power-on: how early can CustomWebOS open? (2026-10-27)
+
+Prompted by a rough morning start: the PS5 (last input) came up first, Home opened LG's bar, and Netflix got opened before CustomWebOS appeared at +47 s. Times are seconds after power-on (bootd's clock).
+
+- **Boot milestones** (bootd.log): core-boot-done 17.9, init-boot-done 20.0, minimal-boot-done 20.4–20.6, boot-done 29–34. The TV puts the last input full screen at ~18.7.
+- **Homebrew's hooks start late, and how late varies:** at +40, +29 and +41 s on three boots. Homebrew's own trigger is a persistent ActivityManager activity on core-boot-done that starts its Node service, which spawns `startup.sh`. That script waits 2 s, starts telnet/SSH, bind-mounts, runs `elevate-service`, then `run-parts` our hooks. LG Input Hook is injected right after (+41/+42 s); before that, Home opens LG's bar.
+- **Our own boot activity doesn't help.** Registered with a callback that launches CustomWebOS at minimal-boot-done, it never fired at +20 s: ActivityManager itself only starts serving at +26–29 s (its first getBootStatus subscriptions in bootd.log). At best it would equal the hooks' earliest run. Cancelled and removed.
+- **Faster autostart hook:** it opens CustomWebOS as soon as the bus answers, and closes and reopens it only when the TV had already reopened it. CustomWebOS was requested at +29.1 s and full screen at +31.3 s on one boot; requested at +41.9 s and full screen at +43.8 s on another. Before, it was +47/48 s.
+- **LG's home bar** opened at +21–23 s on these boots, either by Home presses before Input Hook was active, or by itself on the micom (reboot) power-on. webOS's "Home Auto Launch" is off.
