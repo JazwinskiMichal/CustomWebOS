@@ -89,3 +89,10 @@ Not part of the Home/power-on work, but it is a boot hook with its own rollback.
 - **Remove:** `scripts/remoteview.ps1 -TvHost <tv-ip> -Remove` (also stops the running daemon).
 - **Undo by hand:** `rm /var/lib/webosbrew/init.d/customwebos-remoteview && reboot`.
 - Keep that command in `.local/webos/recovery.md` too.
+
+### No-signal slideshow watcher (not a Home/power-on mechanism)
+
+`scripts/nosignal.ps1` installs `/var/lib/webosbrew/init.d/customwebos-nosignal`, which covers an HDMI input that loses its picture with the USB stick's photos (M3). It also links `<CustomWebOS dir>/usb` to `/tmp/usb`.
+
+- **Remove:** `scripts/nosignal.ps1 -TvHost <tv-ip> -Remove`, then reboot.
+- **Undo by hand:** `rm /var/lib/webosbrew/init.d/customwebos-nosignal && reboot`.
