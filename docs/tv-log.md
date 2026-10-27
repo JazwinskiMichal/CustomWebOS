@@ -251,3 +251,15 @@ While trying to make the TV start on Live TV:
 - **Failsafe boot.** The cold start came up in Homebrew's failsafe mode (hooks skipped, unauthenticated telnet on 23). The previous boot's `startup.sh` never finished (it clears its flag 10 s after the hooks), most likely blocked by the same stuck services. The next normal boot finished cleanly (flag cleared, hooks at +38–39 s).
 - **Power-on autostart retired** at the owner's request: `customwebos-autostart` now only stops LG Input Hook's port-1842 server.
 - **Correction, after the cold start.** With Live TV really playing (MAIN sink `connected:true`), unmuted, then `reboot`: `getLastInput` answered `DTV`, bootd started `com.webos.app.livetv`, and nothing opened CustomWebOS (0 launches; the retired autostart). The earlier "stays HDMI_1" results came from the broken state: Live TV never got a picture, so it was never recorded.
+
+## No-signal slideshow spike (M3, 2026-10-27)
+
+With the owner switching the PS5 on and off on HDMI 1:
+
+- **Input state, event-driven:** `luna://com.webos.service.eim/getAllInputStatus` and `getCurrentInput` (`{"subscribe":true}`) push changes. Per input, `activate` means a device is connected and powered (a PS5 in rest mode stays `true`). `spdVendorName` / `spdProductDescription` / `spdSourceDeviceInfo` ("SCEI", "PS5", "GAME") are present only while the device sends video. The current source shows as `mainInputSourceId` (`DTV`, `HDMI_1`). Captured payloads: `test/fixtures/nosignal/`.
+- **Not usable:** `externaldevice/getVideoInfo` reports 0×0 even with the PS5 on. `tv.display/getScreenStatus` MAIN stays `connected:true` without a signal.
+- **LG's own signal state:** `utp|tv.externaldevice /input/getSignalState {"externalInputId": <session>}` → `videoSignalState: "bad"`, `screensaverType: "NO_SIGNAL"`, which is what the HDMI app uses. The session id isn't exposed by any read-only call found, so we don't use it.
+- **USB:** a stick mounts at `/tmp/usb/sda/sda1` (tfat). `pdm/getAttachedStorageDeviceList` needs a subscription.
+- **Photos in the app:** `file:///tmp/usb/...` fails (sandbox). A symlink `<app dir>/usb → /tmp/usb/sda/sda1` and `src="usb/E1.jpg"` works (1916×898 shown).
+- **Covering:** CustomWebOS launched over the dark HDMI 1 stayed in front, with no LG overlay, at 5 s and 65 s.
+- **Auto power-off:** settings `time.noSignalAutoOff` on, `time.autoOff15Min` on. With CustomWebOS covering the dark input for 17 min the TV stayed on (`Active` → `Screen Saver`): covering stops LG's no-signal timer. LG's screensaver comes on over the app. Owner: the watcher turns the TV off itself after 15 min (when `noSignalAutoOff` is on); the screensaver may take over.
