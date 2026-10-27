@@ -29,10 +29,17 @@ function stubs(answerFrom) {
     '[ -t 0 ] && tty=tty || tty=notty',
     'if [ -p /dev/stdin ]; then src=pipe; else src=other; fi',
     'echo "$src $*" >> "' + log.replace(/\\/g, '/') + '"',
-    'if [ $n -ge ' + answerFrom + ' ]; then echo \'{"returnValue":true}\'; fi',
+    // getForegroundAppInfo names $STUB_FG (default: the PS5's HDMI input).
+    'fg=${STUB_FG:-com.webos.app.hdmi1}',
+    'if [ $n -ge ' + answerFrom + ' ]; then',
+    '  case "$*" in',
+    '    *getForegroundAppInfo*) echo "{\\"appId\\":\\"$fg\\",\\"returnValue\\":true}" ;;',
+    '    *) echo \'{"returnValue":true}\' ;;',
+    '  esac',
+    'fi',
     'exit 0',
   ].join('\n') + '\n', { mode: 0o755 })
-  fs.writeFileSync(path.join(dir, 'sleep'), '#!/bin/sh\nexit 0\n', { mode: 0o755 })
+  fs.writeFileSync(path.join(dir, 'sleep'), '#!/bin/sh\necho "sleep $*" >> "' + log.replace(/\\/g, '/') + '"\n', { mode: 0o755 })
   fs.writeFileSync(path.join(dir, 'ps'), [
     '#!/bin/sh',
     'echo "UID        PID  PPID  C STIME TTY          TIME CMD"',
@@ -67,12 +74,22 @@ test('autostart.sh is valid sh', { skip: !SH && 'no sh' }, () => {
   assert.equal(r.status, 0, r.stderr)
 })
 
-test('once the bus answers, it closes and reopens CustomWebOS', { skip: !SH && 'no sh' }, () => {
+test('with another app in front, it opens CustomWebOS as soon as the bus answers', { skip: !SH && 'no sh' }, () => {
   const { r, calls } = run(1)
+  assert.equal(r.status, 0, r.stderr)
+  const probe = calls.findIndex((c) => c.includes('getForegroundAppInfo'))
+  const launch = calls.findIndex((c) => c.includes('/launch ') && c.includes(APP))
+  assert.equal(launch, probe + 1, 'no wait and no close in between:\n' + calls.join('\n'))
+  assert.ok(!calls.some((c) => c.includes('/closeByAppId')), calls.join('\n'))
+})
+
+test('with CustomWebOS already in front (it may be stuck), it closes and reopens it', { skip: !SH && 'no sh' }, () => {
+  const { r, calls } = run(1, () => ({ STUB_FG: APP }))
   assert.equal(r.status, 0, r.stderr)
   const close = calls.findIndex((c) => c.includes('/closeByAppId') && c.includes(APP))
   const launch = calls.findIndex((c) => c.includes('/launch ') && c.includes(APP))
   assert.ok(close > -1 && launch > close, calls.join('\n'))
+  assert.deepEqual(calls.slice(close + 1, launch), ['sleep 1'])
 })
 
 test('it keeps asking until the bus answers', { skip: !SH && 'no sh' }, () => {
@@ -91,9 +108,10 @@ test('it gives up without launching if the bus never answers', { skip: !SH && 'n
 
 test('every luna-send gets a stdin that is not the caller\'s pipe', { skip: !SH && 'no sh' }, () => {
   // luna-send returns nothing (rc 0) when its stdin is a pipe (tv-log).
-  const { calls } = run(1)
-  assert.ok(calls.length >= 3)
-  for (const c of calls) assert.match(c, /^other /, c)
+  const { calls } = run(1, () => ({ STUB_FG: APP }))
+  const luna = calls.filter((c) => !c.startsWith('sleep ') && !c.startsWith('kill '))
+  assert.ok(luna.length >= 3)
+  for (const c of luna) assert.match(c, /^other /, c)
 })
 
 test('without --foreground it returns at once and works in the background', { skip: !SH && 'no sh' }, async () => {

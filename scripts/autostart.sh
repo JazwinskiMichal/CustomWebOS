@@ -4,10 +4,10 @@
 # startup.sh runs it once per boot, as root, alongside its other hooks.
 #
 # Waits (in the background, so the other hooks aren't held up) until
-# applicationManager answers, gives the TV a moment to restore its last app,
-# then closes and reopens CustomWebOS. Reopening also replaces an instance
-# the TV may have opened before the app's bus permissions were loaded,
-# which would otherwise stay stuck (docs/tv-log.md).
+# applicationManager answers, then opens CustomWebOS at once. If the TV had
+# reopened CustomWebOS by itself, that instance is closed and opened again:
+# one opened before the app's bus permissions were loaded stays stuck
+# (docs/tv-log.md).
 #
 # luna-send always gets /dev/null as stdin: with a pipe there (run-parts,
 # ssh) it prints nothing and still exits 0.
@@ -36,9 +36,14 @@ main() {
         [ "$i" -ge 120 ] && return 0   # ~4 min of 2 s tries: give up quietly
         sleep 2
     done
-    sleep 5
-    luna-send -n 1 "$AM/closeByAppId" "$APP" < /dev/null > /dev/null 2>&1
-    sleep 2
+    # Open CustomWebOS the moment the bus answers: the TV restored its last
+    # input long before (+18 s against +40 s for the hooks, tv-log). Only an
+    # instance the TV reopened by itself may be stuck, so only that one is
+    # closed and opened again.
+    if grep -q '"appId":"org.jazwinski.customwebos.home"' "$OUT"; then
+        luna-send -n 1 "$AM/closeByAppId" "$APP" < /dev/null > /dev/null 2>&1
+        sleep 1
+    fi
     luna-send -n 1 "$AM/launch" "$APP" < /dev/null > "$OUT" 2>&1
     stop_inputhook_server
     return 0
