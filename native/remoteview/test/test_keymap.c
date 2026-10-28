@@ -27,7 +27,13 @@ int main(void)
     btn(0xff1b, "BACK");
     btn(0xff08, "BACK");
     btn(0xff50, "HOME");
-    assert(keymap_button(0xffbe) == NULL);
+    btn(0xffbe, "INPUT");      /* F1 */
+    btn(0xffbf, "MUTE");       /* F2 */
+    btn(0xffc0, "VOLUMEDOWN"); /* F3 */
+    btn(0xffc1, "VOLUMEUP");   /* F4 */
+    btn(0xff55, "CHANNELUP");  /* Page Up */
+    btn(0xff56, "CHANNELDOWN"); /* Page Down */
+    assert(keymap_button(0xffc5) == NULL); /* F8: the viewer's own menu */
     txt('a', "a");
     txt('A', "A");
     txt('?', "?");

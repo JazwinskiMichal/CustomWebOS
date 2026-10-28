@@ -10,6 +10,12 @@ static const struct { uint32_t keysym; const char *name; } special[] = {
     { 0xff1b, "BACK" },  /* Esc */
     { 0xff08, "BACK" },  /* BackSpace */
     { 0xff50, "HOME" },  /* Home */
+    { 0xffbe, "INPUT" },       /* F1: LG's source picker (server.c shows it) */
+    { 0xffbf, "MUTE" },        /* F2 */
+    { 0xffc0, "VOLUMEDOWN" },  /* F3 */
+    { 0xffc1, "VOLUMEUP" },    /* F4 */
+    { 0xff55, "CHANNELUP" },   /* Page Up */
+    { 0xff56, "CHANNELDOWN" }, /* Page Down */
 };
 
 const char *keymap_button(uint32_t keysym)

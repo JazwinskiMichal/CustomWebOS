@@ -27,6 +27,10 @@ int lginput_text(lginput *l, const char *text);
 /* Launches an app by id (ssap://system.launcher/launch). Returns 0, or -1. */
 int lginput_launch(lginput *l, const char *app_id);
 
+/* Shows LG's source picker, as the remote's Input button does. Returns 0, or
+ * -1 on failure. */
+int lginput_input_picker(lginput *l);
+
 /* Non-blocking keepalive: reads what is available on both sockets, answers
  * pings and discards everything else. Returns 0, or -1 if a socket closed. */
 int lginput_poll(lginput *l);

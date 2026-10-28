@@ -1,10 +1,10 @@
 # Status
 
-Where CustomWebOS stands and what's next. Last updated **2026-10-26**. Update it whenever something lands. Setting up a machine: [development.md](development.md). TV rules: [tv-notes.md](tv-notes.md).
+Where CustomWebOS stands and what's next. Last updated **2026-10-28**. Update it whenever something lands. Setting up a machine: [development.md](development.md). TV rules: [tv-notes.md](tv-notes.md).
 
 ## On the TV now
 
-- **CustomWebOS 0.6.0** is the home screen:
+- **CustomWebOS 0.7.3** is the home screen:
   - GNOME's Morphogenesis wallpaper: light by day, dark from sunset to sunrise in Warsaw, with text and glass colours to match
   - the clock and Polish date on glass like the dock
   - a frosted-glass dock of white logos for the curated apps
@@ -15,6 +15,8 @@ Where CustomWebOS stands and what's next. Last updated **2026-10-26**. Update it
 - **The Home button opens CustomWebOS** (LG Input Hook, Home = ID 773). LG Input Hook's LAN config server is stopped after boot.
 - **LG Input Hook is patched to inject into `lginput2` only** (`scripts/inputhook-patch.ps1`); unpatched, a boot that starts on an HDMI input leaves every input black after the next source switch. Re-run the script after reinstalling or updating LG Input Hook.
 - **Remote view (VNC):** connect TightVNC to `<tv>:5900` with the owner's password to see and control the TV, including live TV, Netflix and HDMI. It runs at 960×540, about 12 fps within half a CPU core and about 17 MB; idle it costs nothing. Started by the `customwebos-remoteview` boot hook; its log is `/tmp/remoteview.log`. Set up with [development.md](development.md); details in [tv-notes.md](tv-notes.md).
+- **Remote view keys:** arrows, Enter (OK), Esc/Backspace (Back), Home, typed text, and F1 = Input (LG's source picker), F2 = Mute, F3/F4 = volume down/up, Page Up/Down = channel up/down (`native/remoteview/src/keymap.c`).
+- **No-signal slideshow (M3):** when the HDMI input on screen loses its picture (e.g. the PS5 goes off) and a USB stick has photos, the `customwebos-nosignal` boot hook covers it with a full-screen slideshow of the stick's photos after 5 s (30 s per photo, ←/→ step, Back does nothing). It ends when the picture comes back (the input is relaunched) or the source changes; Home opens CustomWebOS. Without a stick or photos, LG's screen stays. If LG's no-signal auto-off is on, the watcher turns the TV off 15 min after a cover starts. Log: `/tmp/nosignal.log`.
 - **All three mechanisms have proven rollbacks:** [home-button.md](home-button.md).
 
 ## Milestones
@@ -25,7 +27,7 @@ From the [overall design](superpowers/specs/2026-10-24-customwebos-design.md):
 |---|---|---|
 | M1 | Foundation: repo, setup guide, minimal home app that launches apps | Done ([plan](superpowers/plans/2026-10-24-m1-foundation.md)) |
 | M2 | Home screen depth: wallpaper, clock, good remote navigation, settings | Mostly done. Preview loop and hardening ([plan](superpowers/plans/2026-10-25-m2-preview-ui-hardening.md)), the [redesign](superpowers/plans/2026-10-25-home-redesign.md), Home button / power-on, and the day/night theme ([plan](superpowers/plans/2026-10-26-day-night-theme.md)). Open: on-TV settings (none planned yet) |
-| M3 | First background service: HDMI signal loss → NAS photo slideshow | Not started |
+| M3 | First background service: HDMI signal loss → photo slideshow | Done, USB stick instead of the NAS ([spec](superpowers/specs/2026-10-27-no-signal-slideshow-design.md), [plan](superpowers/plans/2026-10-27-no-signal-slideshow.md)). Follow-ups below |
 | M4 | Overlays over the foreground app (doorbell camera over Netflix) | Not started |
 | M5+ | Custom apps | Not started |
 
@@ -39,10 +41,12 @@ In suggested order. Each new piece of work starts with a design (`docs/superpowe
    - The persistent "someone is watching" badge comes with M4; the toast is temporary.
    - Parked minors with reasons: the log rotates only at restart; pointer drift after using the Magic Remote mid-session; `pointer_scale` above 1.2 can drop big moves; capture-library waits have no time limit (not seen on this TV).
 1. **Day/night theme follow-ups** (small, none blocking): a forced `theme` (perf runs, checks) stays until the app is next closed; only the first switch is preloaded; a few edge cases (local 00:30, clock-change days, switching during All apps) are checked by review only, not by tests.
-2. **M3, the NAS photo slideshow on HDMI signal loss.**
-   - The base URL is a setting.
-   - Replacing LG's no-signal screen is ideal, but launching over it is acceptable.
-   - It must not interfere with the OLED pixel-refresh screensaver.
+2. **No-signal slideshow follow-ups:**
+   - Home pressed during the show, then staying in CustomWebOS for 15 min, still lets the watcher turn the TV off (it can't tell Home from the show). Fix: the app tells the watcher the show ended.
+   - Not yet checked on the TV: pulling the stick mid-show, no stick at all, the 15-min power-off itself, the watcher's idle cost.
+   - The owner saw one more brief flash once, sequence not remembered; the known ones are fixed (Home before the show, Home over a dark input's tile, stale photo on the next Home).
+   - Homebrew came up in failsafe mode twice on 27 Oct, each after a cold start that followed a black-input boot. Not explained; every boot since the Input Hook patch finished cleanly.
+   - Photos from the NAS instead of the stick (the original idea), if wanted.
 3. **Home Assistant:**
    - The home service talks to a Home Assistant server; install one locally for testing.
    - "Plugins" are panels inside CustomWebOS, starting with a whole-house lights panel.

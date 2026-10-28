@@ -413,6 +413,10 @@ static void on_key(rfbBool down, rfbKeySym key, rfbClientPtr cl)
          * launch CustomWebOS directly, as the remote's Home button does. */
         if (lginput_launch(input, HOME_APP_ID) < 0)
             input_failed();
+    } else if (button && !strcmp(button, "INPUT")) {
+        /* The remote's Input button: LG's source picker, not a button name. */
+        if (lginput_input_picker(input) < 0)
+            input_failed();
     } else if (button) {
         if (lginput_button(input, button) < 0)
             input_failed();

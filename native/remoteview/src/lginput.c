@@ -423,6 +423,16 @@ int lginput_launch(lginput *l, const char *app_id)
     return await(&l->ssap, "\"id\":\"launch\"", IO_TIMEOUT_S, msg, sizeof msg);
 }
 
+int lginput_input_picker(lginput *l)
+{
+    char req[512], msg[MSG_MAX];
+    int n = ssap_request_msg(req, sizeof req, "inputs", "ssap://com.webos.surfacemanager/showInputPicker", "{}");
+
+    if (n < 0 || ws_send(&l->ssap, req, (size_t)n) < 0)
+        return -1;
+    return await(&l->ssap, "\"id\":\"inputs\"", IO_TIMEOUT_S, msg, sizeof msg);
+}
+
 /* Reads whatever is available on c without blocking, answers pings and drops
  * the rest. Returns 0, or -1 if the socket closed or sent garbage. */
 static int conn_poll(wsconn *c)

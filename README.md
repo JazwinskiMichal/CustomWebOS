@@ -19,7 +19,9 @@ The home screen's look follows CleanFrame's dock. Bundled assets keep their own 
 
 On the TV today:
 - A CleanFrame-style home screen that follows the sun: a light wallpaper by day and a dark one after sunset, a clock and Polish date on glass, a glass dock of white logos, and All apps. It runs at 60 fps.
-- The TV opens it at power-on, and the Home button opens it.
+- The Home button opens it; power-on stays on the source that was playing (Live TV or an HDMI input).
+- When the HDMI input on screen loses its picture (the PS5 goes off), a full-screen slideshow of a USB stick's photos replaces LG's no-signal screen, and it ends when the picture or the source changes.
+- Remote view: see and control the TV from a PC over VNC, with keys for Input, mute, volume and channels.
 
 **Start at [docs/status.md](docs/status.md)** for the current state and next steps, and [docs/README.md](docs/README.md) for the map of all docs. The [design doc](docs/superpowers/specs/2026-10-24-customwebos-design.md) holds the overall vision and milestones.
 
