@@ -4,7 +4,7 @@ Where CustomWebOS stands and what's next. Last updated **2026-10-28**. Update it
 
 ## On the TV now
 
-- **CustomWebOS 0.7.3** is the home screen:
+- **CustomWebOS 0.7.4** is the home screen:
   - GNOME's Morphogenesis wallpaper: light by day, dark from sunset to sunrise in Warsaw, with text and glass colours to match
   - the clock and Polish date on glass like the dock
   - a frosted-glass dock of white logos for the curated apps
@@ -42,8 +42,8 @@ In suggested order. Each new piece of work starts with a design (`docs/superpowe
    - Parked minors with reasons: the log rotates only at restart; pointer drift after using the Magic Remote mid-session; `pointer_scale` above 1.2 can drop big moves; capture-library waits have no time limit (not seen on this TV).
 1. **Day/night theme follow-ups** (small, none blocking): a forced `theme` (perf runs, checks) stays until the app is next closed; only the first switch is preloaded; a few edge cases (local 00:30, clock-change days, switching during All apps) are checked by review only, not by tests.
 2. **No-signal slideshow follow-ups:**
-   - Home pressed during the show, then staying in CustomWebOS for 15 min, still lets the watcher turn the TV off (it can't tell Home from the show). Fix: the app tells the watcher the show ended.
-   - Not yet checked on the TV: pulling the stick mid-show, no stick at all, the 15-min power-off itself, the watcher's idle cost.
+   - Not yet checked on the TV: pulling the stick mid-show, no stick at all, the 15-min power-off itself (with LG's screensaver up), and a very large photo (40+ MP; files over 20 MB are already skipped).
+   - Minor review findings, deferred (ledger): a cover forgotten by one event comes back on the next; the app's failed-photo count isn't reset per lap; no browser test for the stick pulled mid-show; `inputhook-patch.sh --undo` trusts an old `.orig`; the stick is walked in full before the 2000-photo cap; the watcher's one-shot luna calls have no timeout; `-Remove` leaves `<app dir>/usb`.
    - The owner saw one more brief flash once, sequence not remembered; the known ones are fixed (Home before the show, Home over a dark input's tile, stale photo on the next Home).
    - Homebrew came up in failsafe mode twice on 27 Oct, each after a cold start that followed a black-input boot. Not explained; every boot since the Input Hook patch finished cleanly.
    - Photos from the NAS instead of the stick (the original idea), if wanted.

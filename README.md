@@ -37,9 +37,9 @@ A CleanFrame-style home screen: a clock and Polish date on glass, a frosted-glas
 
 ### No-signal slideshow
 
-When the HDMI input on screen loses its picture (the PS5 is switched off or goes to rest), a full-screen slideshow of your photos replaces LG's "No signal" screen.
+When the HDMI input on screen loses its picture (the PS5 is switched off, or goes to rest after it has sent a picture since the TV started), a full-screen slideshow of your photos replaces LG's "No signal" screen.
 
-- **Photos:** put `.jpg`, `.jpeg` or `.png` files on a USB stick, in any folders (up to 8 levels deep), and plug it into the TV. Without a stick or photos, LG's own screen stays.
+- **Photos:** put `.jpg`, `.jpeg` or `.png` files on a USB stick, in any folders (up to 8 levels deep), and plug it into the TV. Files over 20 MB are skipped. Without a stick or photos, LG's own screen stays.
 - **When it starts:** 5 s after the input on screen goes dark. It covers any HDMI input, and only when that input is in front; Live TV and apps are never covered.
 - **During the show:** a new photo every 30 s, in random order; **←/→** step through them. **Back** does nothing. **Home** opens CustomWebOS.
 - **When it ends:** the device's picture comes back (the input reappears by itself), or you change the source with **Input**. Picking the dark input again (e.g. from the dock) brings the slideshow back after 5 s.
