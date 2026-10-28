@@ -137,6 +137,9 @@ check() {
             rm -f "$STATE/lost-$cur"
             if ask "$HOME_SERVICE/listPhotos" '{}' | grep -q '"usb/'; then
                 n=${cur#HDMI_}
+                # Brought back while running, CustomWebOS would first show its
+                # last frame (Home); a fresh launch shows the black layer.
+                luna-send -n 1 "$AM/closeByAppId" "{\"id\":\"$APP_ID\"}" < /dev/null > /dev/null 2>&1
                 luna-send -n 1 "$AM/launch" "{\"id\":\"$APP_ID\",\"params\":{\"slideshow\":{\"input\":\"com.webos.app.hdmi$n\"}}}" < /dev/null > /dev/null 2>&1
                 echo "$cur" > "$STATE/covering"
                 id=$(uptime_s)

@@ -114,6 +114,16 @@ test('every luna-send in nosignal.sh gets /dev/null as stdin', () => {
   for (const l of calls) assert.match(l, /< \/dev\/null/, l)
 })
 
+// A running CustomWebOS would first show its last frame (Home) when brought
+// back; a fresh launch has none.
+test('a cover closes CustomWebOS first, then launches the slideshow', () => {
+  const cover = fs.readFileSync(SCRIPT, 'utf8').split('\n        cover)')[1].split(';;')[0]
+  const close = cover.indexOf('/closeByAppId')
+  const launch = cover.indexOf('"$AM/launch"')
+  assert.ok(close > 0, 'no closeByAppId in the cover branch')
+  assert.ok(close < launch, 'closeByAppId must come before the launch')
+})
+
 function ps(args) {
   return spawnSync(PS, ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', path.join(__dirname, '..', 'scripts', 'nosignal.ps1'), ...args], { encoding: 'utf8' })
 }
