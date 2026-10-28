@@ -14,9 +14,9 @@ const PS5_ON = '"id":"HDMI_1","label":"PlayStation5","port":1,"activate":true,"a
 const PS5_REST = '"id":"HDMI_1","label":"PlayStation5","port":1,"activate":true,"appId":"com.webos.app.hdmi1"'
 const UNPLUGGED = '"id":"HDMI_1","label":"PlayStation5","port":1,"activate":false,"appId":"com.webos.app.hdmi1"'
 
-// decide <current input> <foreground app> <device entry> <spd seen 0|1> <covering input or -> <seconds lost>
-function decide(cur, fg, block, spdSeen, covering, lostFor) {
-  const r = spawnSync(SH, [SCRIPT, '--decide', cur, fg, block, String(spdSeen), covering, String(lostFor)], { encoding: 'utf8' })
+// decide <current input> <foreground app> <device entry> <spd seen 0|1> <covering input or -> <seconds lost> <cover age s>
+function decide(cur, fg, block, spdSeen, covering, lostFor, coverAge = 0) {
+  const r = spawnSync(SH, [SCRIPT, '--decide', cur, fg, block, String(spdSeen), covering, String(lostFor), String(coverAge)], { encoding: 'utf8' })
   assert.equal(r.status, 0, r.stderr)
   return r.stdout.trim()
 }
@@ -31,6 +31,11 @@ test('PS5 went to rest on the foreground HDMI 1: wait, then cover after 5 s', sk
   assert.equal(decide('HDMI_1', 'com.webos.app.hdmi1', PS5_REST, 1, '-', 0), 'wait')
   assert.equal(decide('HDMI_1', 'com.webos.app.hdmi1', PS5_REST, 1, '-', 4), 'wait')
   assert.equal(decide('HDMI_1', 'com.webos.app.hdmi1', PS5_REST, 1, '-', 5), 'cover')
+})
+
+test('another app in front of the covered input (Home, then Netflix): forget the cover, so its power-off timer is void', skip, () => {
+  assert.equal(decide('HDMI_1', 'netflix', PS5_REST, 1, 'HDMI_1', 0, 300), 'clear')
+  assert.equal(decide('HDMI_1', 'netflix', PS5_REST, 1, '-', 60), 'none')
 })
 
 test('a device switched off or unplugged (activate false) counts as lost', skip, () => {
@@ -54,6 +59,16 @@ test('Live TV, apps, or the Home screen in front of a dark input: never cover', 
   assert.equal(decide('DTV', 'com.webos.app.livetv', '', 0, '-', 60), 'none')
   assert.equal(decide('HDMI_1', 'netflix', PS5_REST, 1, '-', 60), 'none')
   assert.equal(decide('HDMI_1', 'org.jazwinski.customwebos.home', PS5_REST, 1, '-', 60), 'none')
+})
+
+test('the covered input back in front (Home pressed during the show, then its tile): forget the cover', skip, () => {
+  assert.equal(decide('HDMI_1', 'com.webos.app.hdmi1', PS5_REST, 1, 'HDMI_1', 0, 300), 'clear')
+  assert.equal(decide('HDMI_1', 'com.webos.app.hdmi1', PS5_REST, 1, '-', 5), 'cover')
+})
+
+test('a cover just launched, its app not in front yet: keep it', skip, () => {
+  assert.equal(decide('HDMI_1', 'com.webos.app.hdmi1', PS5_REST, 1, 'HDMI_1', 0, 0), 'none')
+  assert.equal(decide('HDMI_1', 'com.webos.app.hdmi1', PS5_REST, 1, 'HDMI_1', 0, 4), 'none')
 })
 
 test('the source changed while covering: forget the cover (the app hides itself)', skip, () => {

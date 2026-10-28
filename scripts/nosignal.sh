@@ -46,20 +46,26 @@ HOME_SERVICE=luna://org.jazwinski.customwebos.home.service
 SETTINGS=luna://com.webos.settingsservice
 POWER=luna://com.webos.service.tvpower/power
 
-# decide CUR FG BLOCK SPDSEEN COVERING LOSTFOR -> none|wait|cover|uncover|clear
+# decide CUR FG BLOCK SPDSEEN COVERING LOSTFOR [AGE] -> none|wait|cover|uncover|clear
 #   CUR      current input (HDMI_1…, DTV…)
 #   FG       foreground app id
 #   BLOCK    CUR's entry from getAllInputStatus, spaces removed
 #   SPDSEEN  1 if CUR has sent spd* fields since boot
 #   COVERING the input the slideshow covers, or -
 #   LOSTFOR  seconds CUR has been without a picture (0 if not known)
+#   AGE      seconds since the cover was launched (0 if not known)
 decide() {
-    cur=$1 fg=$2 block=$3 spdseen=$4 covering=$5 lostfor=$6
+    cur=$1 fg=$2 block=$3 spdseen=$4 covering=$5 lostfor=$6 age=${7:-0}
     case "$cur" in
         HDMI_[1-4]) ;;
         *) if [ "$covering" != "-" ]; then echo clear; else echo none; fi; return ;;
     esac
     if [ "$covering" != "-" ] && [ "$covering" != "$cur" ]; then echo clear; return; fi
+    # Something other than CustomWebOS in front: the show ended without a source
+    # change (Home pressed during it, then the input's tile or another app).
+    # A cover just launched can still show the input in front for a moment,
+    # hence the age.
+    if [ "$covering" = "$cur" ] && [ "$fg" != "$APP_ID" ] && [ "$age" -ge "$SETTLE_S" ]; then echo clear; return; fi
     case "$block" in
         *'"activate":false'*) lost=1 ;;
         *'"spdVendorName"'*|*'"spdProductDescription"'*) lost=0 ;;
@@ -116,7 +122,9 @@ check() {
     covering=$(cat "$STATE/covering" 2>/dev/null || echo -)
     lostfor=0
     [ -e "$STATE/lost-$cur" ] && lostfor=$(( $(uptime_s) - $(cat "$STATE/lost-$cur") ))
-    action=$(decide "$cur" "$fg" "$block" "$spdseen" "$covering" "$lostfor")
+    age=0
+    [ -e "$STATE/cover-id" ] && age=$(( $(uptime_s) - $(cat "$STATE/cover-id") ))
+    action=$(decide "$cur" "$fg" "$block" "$spdseen" "$covering" "$lostfor" "$age")
     case "$action" in
         wait)
             if [ ! -e "$STATE/lost-$cur" ]; then
@@ -146,7 +154,7 @@ check() {
             ;;
         clear)
             rm -f "$STATE/covering" "$STATE/cover-id" "$STATE"/lost-*
-            say "source changed to $cur; slideshow left"
+            say "slideshow left ($cur, $fg in front)"
             ;;
         none)
             rm -f "$STATE"/lost-*
