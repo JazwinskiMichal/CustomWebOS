@@ -114,6 +114,13 @@ test('every luna-send in nosignal.sh gets /dev/null as stdin', () => {
   for (const l of calls) assert.match(l, /< \/dev\/null/, l)
 })
 
+// $(mypid) runs mypid in a command-substitution subshell: BusyBox ash and
+// dash then record that subshell's pid, not the loop's (bash gets it right),
+// so -Remove left the loops running on the TV.
+test('pids are recorded without a command substitution', () => {
+  assert.doesNotMatch(fs.readFileSync(SCRIPT, 'utf8'), /\$\(mypid\)/)
+})
+
 // A running CustomWebOS would first show its last frame (Home) when brought
 // back; a fresh launch has none.
 test('a cover closes CustomWebOS first, then launches the slideshow', () => {

@@ -17,7 +17,7 @@
 (function () {
   var mode = (/[?&]mock=(\w+)/.exec(window.location.search) || [])[1] || 'ok'
   var SERVICE = 'luna://org.jazwinski.customwebos.home.service/'
-  window.__mock = { mode: mode, launches: [], listAppsAnswered: 0, perfReports: [] }
+  window.__mock = { mode: mode, launches: [], listAppsAnswered: 0, perfReports: [], showEnded: 0 }
 
   function listApps() {
     if (mode === 'error') return Promise.resolve({ returnValue: false, errorText: 'mock error' })
@@ -46,6 +46,10 @@
     if (uri === SERVICE + 'listPhotos') {
       var photos = mode === 'photos' ? ['usb/sda/sda1/a.jpg', 'usb/sda/sda1/b.jpg', 'usb/sda/sda1/c.jpg'] : []
       return Promise.resolve({ returnValue: true, photos: photos })
+    }
+    if (uri === SERVICE + 'showEnded') {
+      window.__mock.showEnded++
+      return Promise.resolve({ returnValue: true })
     }
     if (uri === SERVICE + 'perfReport') {
       window.__mock.perfReports.push(payload.report)

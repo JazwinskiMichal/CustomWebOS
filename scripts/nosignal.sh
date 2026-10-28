@@ -168,7 +168,7 @@ check() {
 # Keeps one subscription running, feeding the FIFO; restarts it after 5 s
 # if luna-send exits.
 subscribe() {
-    echo "$(mypid)" >> "$STATE/pids"
+    mypid >> "$STATE/pids"
     while :; do
         luna-send -i "$1" '{"subscribe":true}' < /dev/null >&3 2>/dev/null &
         echo $! >> "$STATE/pids"

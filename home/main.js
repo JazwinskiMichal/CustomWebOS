@@ -1073,7 +1073,12 @@ function mountUI(doc) {
   doc.addEventListener('webOSRelaunch', function () {
     var p = slideshowParams(window.PalmSystem && window.PalmSystem.launchParams, '');
     if (p) startShow(p.input);
-    else endShow(false);
+    else if (show) {
+      // Home during the show: CustomWebOS stays in front, so the watcher
+      // can't tell; without this its 15-min power-off would still fire.
+      endShow(false);
+      lunaCall(SERVICE_URI + '/showEnded', {}, function () {}, function () {});
+    }
   });
   // A hidden page doesn't repaint, and webOS shows an app's last frame when
   // it comes back: a show that ends hidden would flash its photo on the next

@@ -10,6 +10,11 @@ var PERF_FILE = '/tmp/customwebos-perf.json';
 // <app dir>/usb to it and the app loads "usb/<path below USB_ROOT>".
 var USB_ROOT = '/tmp/usb';
 var MAX_PHOTOS = 2000;
+// ponytail: a byte cap stands in for a pixel cap (the TV's browser decodes an
+// <img> at full size); read the JPEG/PNG header if big-but-small files bite.
+var MAX_PHOTO_BYTES = 20 * 1024 * 1024;
+// The no-signal watcher's state (scripts/nosignal.sh).
+var NOSIGNAL_DIR = '/tmp/nosignal';
 var PHOTO_EXT = /\.(jpe?g|png)$/i;
 
 // The photos among relative paths: JPEG/PNG, nothing hidden (a "."-prefixed
@@ -25,9 +30,10 @@ function photoFiles(paths) {
 }
 
 // Every file below root, as paths relative to it, at most maxDepth folders
-// deep; [] if root is missing or unreadable. fsLike is Node's fs (injected
-// for tests). Symlinks aren't followed, so a loop on a stick can't hang it.
-function walkTree(fsLike, root, maxDepth) {
+// deep and, if maxBytes is given, at most that big; [] if root is missing or
+// unreadable. fsLike is Node's fs (injected for tests). Symlinks aren't
+// followed, so a loop on a stick can't hang it.
+function walkTree(fsLike, root, maxDepth, maxBytes) {
     var out = [];
     function walk(dir, rel, depth) {
         var names;
@@ -39,7 +45,7 @@ function walkTree(fsLike, root, maxDepth) {
             try { st = fsLike.lstatSync(full); } catch (e) { continue; }
             if (st.isDirectory()) {
                 if (depth < maxDepth) walk(full, relPath, depth + 1);
-            } else if (st.isFile()) {
+            } else if (st.isFile() && !(maxBytes && st.size > maxBytes)) {
                 out.push(relPath);
             }
         }
@@ -50,7 +56,8 @@ function walkTree(fsLike, root, maxDepth) {
 
 // writeFile(path, text, callback(err)) is injected too (fs.writeFile on the
 // TV) so perfReport is testable without touching the disk; opts.fs and
-// opts.usbRoot let tests point listPhotos at a temporary folder.
+// opts.usbRoot let tests point listPhotos at a temporary folder, and
+// opts.nosignalDir showEnded.
 function createHandlers(call, writeFile, opts) {
     opts = opts || {};
     function listApps(message) {
@@ -98,19 +105,33 @@ function createHandlers(call, writeFile, opts) {
 
     // The photos on all USB sticks, for the no-signal slideshow; [] if none.
     function listPhotos(message) {
-        var files = photoFiles(walkTree(opts.fs || require('fs'), opts.usbRoot || USB_ROOT, 8));
+        var files = photoFiles(walkTree(opts.fs || require('fs'), opts.usbRoot || USB_ROOT, 8, MAX_PHOTO_BYTES));
         var photos = [];
         for (var i = 0; i < files.length; i++) photos.push('usb/' + files[i]);
         message.respond({ returnValue: true, photos: photos });
     }
 
-    return { listApps: listApps, launch: launch, perfReport: perfReport, listPhotos: listPhotos };
+    // Home ended a slideshow while CustomWebOS stays in front: the watcher
+    // can't see that, so the app tells it here. Without its cover files it
+    // drops the 15-min power-off and won't relaunch the input over Home.
+    function showEnded(message) {
+        var fsLike = opts.fs || require('fs');
+        var dir = opts.nosignalDir || NOSIGNAL_DIR;
+        var names = ['covering', 'cover-id'];
+        for (var i = 0; i < names.length; i++) {
+            try { fsLike.unlinkSync(dir + '/' + names[i]); } catch (e) { /* not covering */ }
+        }
+        message.respond({ returnValue: true });
+    }
+
+    return { listApps: listApps, launch: launch, perfReport: perfReport, listPhotos: listPhotos, showEnded: showEnded };
 }
 
 module.exports = {
     APP_MANAGER: APP_MANAGER,
     PERF_FILE: PERF_FILE,
     USB_ROOT: USB_ROOT,
+    MAX_PHOTO_BYTES: MAX_PHOTO_BYTES,
     photoFiles: photoFiles,
     walkTree: walkTree,
     createHandlers: createHandlers

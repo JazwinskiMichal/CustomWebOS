@@ -153,3 +153,49 @@ test('listPhotos answers usb/-relative paths of the photos on the sticks', () =>
   assert.deepEqual(msg.responses, [{ returnValue: true, photos: ['usb/sda/sda1/E1.jpg'] }])
   assert.equal(USB_ROOT, '/tmp/usb')
 })
+
+// A fake fs: name -> size, or a nested object for a folder.
+function fakeFs(tree) {
+  function at(p) {
+    let node = tree
+    for (const part of p.split('/').filter(Boolean)) node = node && node[part]
+    if (node === undefined) throw new Error('ENOENT ' + p)
+    return node
+  }
+  return {
+    readdirSync: (p) => Object.keys(at(p)),
+    lstatSync: (p) => {
+      const n = at(p)
+      return { isDirectory: () => typeof n === 'object', isFile: () => typeof n === 'number', size: n }
+    }
+  }
+}
+
+test('walkTree leaves out files bigger than maxBytes (huge photos would stall the TV)', () => {
+  const fsLike = fakeFs({ usb: { 'small.jpg': 5e6, 'huge.jpg': 30e6, Trip: { 'edge.jpg': 20 * 1024 * 1024 } } })
+  assert.deepEqual(walkTree(fsLike, '/usb', 8, 20 * 1024 * 1024).sort(), ['Trip/edge.jpg', 'small.jpg'])
+  assert.deepEqual(walkTree(fsLike, '/usb', 8).sort(), ['Trip/edge.jpg', 'huge.jpg', 'small.jpg'])
+})
+
+test('listPhotos skips photos over MAX_PHOTO_BYTES', () => {
+  const { MAX_PHOTO_BYTES } = require('../services/org.jazwinski.customwebos.home.service/handlers.js')
+  assert.equal(MAX_PHOTO_BYTES, 20 * 1024 * 1024)
+  const fsLike = fakeFs({ usb: { 'a.jpg': 1e6, 'big.png': MAX_PHOTO_BYTES + 1 } })
+  const h = createHandlers(() => {}, () => {}, { fs: fsLike, usbRoot: '/usb' })
+  const msg = fakeMessage({})
+  h.listPhotos(msg)
+  assert.deepEqual(msg.responses, [{ returnValue: true, photos: ['usb/a.jpg'] }])
+})
+
+test('showEnded forgets the no-signal cover (its 15-min power-off with it), keeps the watcher running', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'cwo-nosignal-'))
+  for (const f of ['covering', 'cover-id', 'pids']) fs.writeFileSync(path.join(dir, f), '1\n')
+  const h = createHandlers(() => {}, () => {}, { fs, nosignalDir: dir })
+  const msg = fakeMessage({})
+  h.showEnded(msg)
+  assert.deepEqual(msg.responses, [{ returnValue: true }])
+  assert.deepEqual(fs.readdirSync(dir), ['pids'])
+  const again = fakeMessage({})
+  h.showEnded(again)
+  assert.deepEqual(again.responses, [{ returnValue: true }])
+})

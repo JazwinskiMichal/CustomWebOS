@@ -918,5 +918,19 @@ test('a relaunch without slideshow params (the Home button) shows Home', async (
     })
     assert.equal(await page.locator('#slideshow').isVisible(), false)
     assert.equal(await page.locator('.dock').count() > 0, true)
+    // The watcher must forget the cover, or its 15-min power-off would turn
+    // the TV off while someone uses Home.
+    assert.equal(await page.evaluate(() => window.__mock.showEnded), 1)
   } finally { await page.close() }
+})
+
+test('Home without a show running does not call showEnded', async () => {
+  const { page, close } = await openPreview()
+  try {
+    await page.evaluate(() => {
+      window.PalmSystem = { launchParams: '{}' }
+      document.dispatchEvent(new Event('webOSRelaunch'))
+    })
+    assert.equal(await page.evaluate(() => window.__mock.showEnded), 0)
+  } finally { await close() }
 })
