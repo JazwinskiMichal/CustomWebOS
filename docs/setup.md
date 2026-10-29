@@ -201,7 +201,7 @@ Adjust the port to 22 if you didn't need the 22022 workaround. The private key f
 From the repo root:
 
 ```powershell
-pwsh scripts/package.ps1               # produces dist/org.jazwinski.customwebos.home_<version>_all.ipk
+pwsh scripts/package.ps1               # produces dist/org.jazwinski.customwebos.home_<version>_all.ipk and ...doorbell_<version>_all.ipk
 pwsh scripts/install.ps1 -Device tv    # ares-install -d tv dist/*.ipk
 ```
 
@@ -236,7 +236,7 @@ pwsh scripts/register-service.ps1 -TvHost <tv-ip> -DryRunOnTv  # connect, print 
 pwsh scripts/register-service.ps1 -TvHost <tv-ip>              # write the eleven files under /var/luna-service2-dev/
 ```
 
-Reboot afterwards. Nine files get written: seven make the service itself known to the hub, and two (`roles.d/` and `client-permissions.d/` `org.jazwinski.customwebos.home.app.json`) give the web app a bus role so it's allowed to call the service. Without those two, every call from the app fails with -1031 "not privileged".
+Reboot afterwards. Eleven files get written: seven make the service itself known to the hub, and two pairs (`roles.d/` and `client-permissions.d/` `org.jazwinski.customwebos.home.app.json`, and the same for `org.jazwinski.customwebos.doorbell`) give the two web apps a bus role so they're allowed to call the service. Without those two, every call from the app fails with -1031 "not privileged".
 
 In the one clean measurement (2026-10-25) the bus answered at 38 s after boot; the earlier "5 minutes" was mostly a `luna-send` piping artifact (see `docs/tv-log.md`). Until the service answers, the home screen shows "Can't reach the home service" with the reason and retries on its own. Once it answers, you get the real installed list.
 

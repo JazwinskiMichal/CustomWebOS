@@ -1,5 +1,7 @@
 # Remote View (VNC) Implementation Plan
 
+> **Status (2026-10-28): complete.** Remote view runs on the TV, with the extra keys added on 2026-10-28; see [docs/status.md](../../status.md).
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** A password-protected VNC server on the LG C8, started at boot, that shows the whole screen (video + UI) and takes mouse and keyboard input, costing nothing while nobody is connected.

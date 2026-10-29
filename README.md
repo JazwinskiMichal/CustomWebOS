@@ -92,7 +92,7 @@ See and control the TV from a PC on your home network: the home screen, Live TV,
 
 ## Status
 
-**Start at [docs/status.md](docs/status.md)** for the current state and next steps, and [docs/README.md](docs/README.md) for the map of all docs. The [design doc](docs/superpowers/specs/2026-10-24-customwebos-design.md) holds the overall vision and milestones.
+The project is **paused since 2026-10-29**: everything under Features works on the TV, and the next ideas (Home Assistant panels, a real doorbell) wait for hardware. **Start at [docs/status.md](docs/status.md)** for the current state and where to pick up, and [docs/README.md](docs/README.md) for the map of all docs. The [design doc](docs/superpowers/specs/2026-10-24-customwebos-design.md) holds the overall vision and milestones.
 
 ## Setting it up
 

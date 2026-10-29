@@ -20,10 +20,10 @@ Lasting facts and rules for the target TV. Read this before touching it. The evi
 - **Installing:** `ApplicationInstallerUtility -c install -t developer -p <ipk> -f /etc/palm/appinstalld/opkg.conf`, wrapped by `install.ps1 -TvHost`.
   - Without `-t developer`, a second copy lands in cryptofs. `-c remove` deletes **both** copies.
   - Without `-f`, opkg fails with "no such file".
+- **opkg refuses a package whose version is already installed:** bump `appinfo.json` for every install. `install.ps1` installs the doorbell box too; only the home install decides its result and the reboot.
 - **Every app upgrade needs a reboot.** Until then, the upgraded app's calls to its service are silently dropped. Four reboot-free fixes were tried and none worked: close and reopen, `ls-control scan-volatile-dirs`, re-registering, restarting WebAppMgr. Always `install.ps1 -Reboot`.
-- **A CustomWebOS instance opened in the first ~30 s after boot can stay stuck,** with no bus calls ever, because the TV reopens the last app before Homebrew Channel's startup is done. Closing and reopening it fixes that. The power-on hook (`autostart.sh`) does exactly that after every boot.
+- **A CustomWebOS instance opened in the first ~30 s after boot can stay stuck,** with no bus calls ever, because the TV reopens the last app before Homebrew Channel's startup is done. Closing and reopening it fixes that. (Our boot hook used to do that; since CustomWebOS opens only with Home, it doesn't open or reopen anything.)
 - **Power-on and Home** (details in [home-button.md](home-button.md)):
-  - Our `init.d/customwebos-autostart` opens CustomWebOS once the bus answers.
   - LG Input Hook maps the Home button (ID **773** on the C8's remote) to launch CustomWebOS.
   - The boot hook then stops LG Input Hook's service, closing its port-1842 config server.
 

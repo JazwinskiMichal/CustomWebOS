@@ -1,5 +1,7 @@
 # Doorbell overlay (M4) Implementation Plan
 
+> **Status (2026-10-29): complete.** Tested on the TV with the owner's webcam. Changed on the TV test, per the owner: no timers (only Back closes), Back on the enlarged box returns to the corner, a click counts as OK, no launch splash. The spec records these; follow-ups in [docs/status.md](../../status.md).
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** A ring opens a floating camera box over whatever is on the TV; OK enlarges and centres it, a second OK opens the door, Back closes it.

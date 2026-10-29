@@ -1,5 +1,7 @@
 # No-Signal Slideshow (M3) Implementation Plan
 
+> **Status (2026-10-28): complete.** On the TV, after the LG Input Hook fix and the slideshow fixes (docs/tv-log.md); follow-ups in [docs/status.md](../../status.md).
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** When the HDMI input on screen loses its signal, CustomWebOS covers it with a full-screen slideshow of the USB stick's photos, until the signal returns or the source changes.

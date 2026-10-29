@@ -1,5 +1,7 @@
 # Day/Night Theme and Glass Clock Implementation Plan
 
+> **Status (2026-10-26): complete.** On the TV; see [docs/status.md](../../status.md).
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** CustomWebOS Home switches between GNOME's Morphogenesis light (day) and dark (night) wallpaper and colours at Warsaw's sunrise and sunset, and the clock and date sit on glass like the dock.

@@ -90,9 +90,24 @@ Not part of the Home/power-on work, but it is a boot hook with its own rollback.
 - **Undo by hand:** `rm /var/lib/webosbrew/init.d/customwebos-remoteview && reboot`.
 - Keep that command in `.local/webos/recovery.md` too.
 
+### LG Input Hook patch
+
+`scripts/inputhook-patch.ps1` limits LG Input Hook's injection to `lginput2` (without it, a boot that starts on an HDMI input turns every source black after the next switch; tv-log 2026-10-27). It keeps the original as `service.js.orig`.
+
+- **Undo:** `scripts/inputhook-patch.ps1 -TvHost <tv-ip> -Undo`, then reboot.
+- Reinstalling or updating LG Input Hook also undoes it; run the script again afterwards.
+
 ### No-signal slideshow watcher (not a Home/power-on mechanism)
 
 `scripts/nosignal.ps1` installs `/var/lib/webosbrew/init.d/customwebos-nosignal`, which covers an HDMI input that loses its picture with the USB stick's photos (M3). It also links `<CustomWebOS dir>/usb` to `/tmp/usb`.
 
 - **Remove:** `scripts/nosignal.ps1 -TvHost <tv-ip> -Remove`, then reboot.
 - **Undo by hand:** `rm /var/lib/webosbrew/init.d/customwebos-nosignal && reboot`.
+
+### Doorbell box (not a boot hook)
+
+`org.jazwinski.customwebos.doorbell` is a second app; nothing of it runs until a ring launches it.
+
+- **Remove the app:** `ssh … 'luna-send -n 1 luna://com.webos.appInstallService/dev/remove "{\"id\":\"org.jazwinski.customwebos.doorbell\"}" </dev/null'`.
+- **Remove its settings:** `rm -r /var/lib/customwebos`.
+- Its two bus-role files go with `scripts/register-service.ps1 -Unregister` (which also unregisters the home service; re-run it without `-Unregister` to keep Home working), then reboot.
