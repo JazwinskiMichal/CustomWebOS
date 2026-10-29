@@ -199,3 +199,80 @@ test('showEnded forgets the no-signal cover (its 15-min power-off with it), keep
   h.showEnded(again)
   assert.deepEqual(again.responses, [{ returnValue: true }])
 })
+
+// Doorbell (M4): settings from a JSON file on the TV, the door request through
+// an injected request(url, cb(err, statusCode)).
+function doorbellFs(content) {
+  return { readFileSync: (p) => { if (content === undefined) throw new Error('ENOENT ' + p); return content } }
+}
+
+function doorbell(content, request) {
+  return createHandlers(() => {}, () => {}, { fs: doorbellFs(content), doorbellFile: '/x/doorbell.json', request })
+}
+
+test('DOORBELL_FILE is where doorbell.ps1 -Configure writes', () => {
+  const { DOORBELL_FILE } = require('../services/org.jazwinski.customwebos.home.service/handlers.js')
+  assert.equal(DOORBELL_FILE, '/var/lib/customwebos/doorbell.json')
+})
+
+test('doorbellConfig returns the file\'s settings', () => {
+  const msg = fakeMessage({})
+  doorbell('{"cameraUrl":"http://cam/mjpeg","cameraMode":"mjpeg","doorUrl":"http://ha/hook"}').doorbellConfig(msg)
+  assert.deepEqual(msg.responses, [{ returnValue: true, config: { cameraUrl: 'http://cam/mjpeg', cameraMode: 'mjpeg', doorUrl: 'http://ha/hook' } }])
+})
+
+test('doorbellConfig answers {} when the file is missing', () => {
+  const msg = fakeMessage({})
+  doorbell(undefined).doorbellConfig(msg)
+  assert.deepEqual(msg.responses, [{ returnValue: true, config: {} }])
+})
+
+test('doorbellConfig answers {} when the file is not JSON', () => {
+  const msg = fakeMessage({})
+  doorbell('{nope').doorbellConfig(msg)
+  assert.deepEqual(msg.responses, [{ returnValue: true, config: {} }])
+})
+
+test('openDoor without doorUrl is simulated', () => {
+  let called = 0
+  const msg = fakeMessage({})
+  doorbell('{"cameraUrl":"http://cam/x"}', () => { called++ }).openDoor(msg)
+  assert.equal(called, 0)
+  assert.deepEqual(msg.responses, [{ returnValue: true, simulated: true }])
+})
+
+test('openDoor posts to doorUrl and reports 2xx', () => {
+  const urls = []
+  const msg = fakeMessage({})
+  doorbell('{"doorUrl":"http://ha/hook"}', (url, cb) => { urls.push(url); cb(null, 200) }).openDoor(msg)
+  assert.deepEqual(urls, ['http://ha/hook'])
+  assert.deepEqual(msg.responses, [{ returnValue: true, simulated: false }])
+})
+
+test('openDoor reports a non-2xx status', () => {
+  const msg = fakeMessage({})
+  doorbell('{"doorUrl":"http://ha/hook"}', (url, cb) => cb(null, 404)).openDoor(msg)
+  assert.deepEqual(msg.responses, [{ returnValue: false, errorText: 'HTTP 404' }])
+})
+
+test('openDoor reports a request error', () => {
+  const msg = fakeMessage({})
+  doorbell('{"doorUrl":"http://ha/hook"}', (url, cb) => cb(new Error('timeout'))).openDoor(msg)
+  assert.deepEqual(msg.responses, [{ returnValue: false, errorText: 'timeout' }])
+})
+
+test('openDoor\'s default request really POSTs to the doorUrl', async () => {
+  const http = require('http')
+  const seen = []
+  const server = http.createServer((req, res) => { seen.push(req.method + ' ' + req.url); res.writeHead(204); res.end() })
+  await new Promise((r) => server.listen(0, '127.0.0.1', r))
+  const url = 'http://127.0.0.1:' + server.address().port + '/api/webhook/door'
+  const msg = fakeMessage({})
+  await new Promise((resolve) => {
+    msg.respond = (r) => { msg.responses.push(r); resolve() }
+    createHandlers(() => {}, () => {}, { fs: doorbellFs(JSON.stringify({ doorUrl: url })) }).openDoor(msg)
+  })
+  server.close()
+  assert.deepEqual(seen, ['POST /api/webhook/door'])
+  assert.deepEqual(msg.responses, [{ returnValue: true, simulated: false }])
+})

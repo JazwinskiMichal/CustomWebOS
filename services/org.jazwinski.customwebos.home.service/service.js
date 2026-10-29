@@ -14,6 +14,10 @@
 //     -> {returnValue: true, photos: ["usb/sda/sda1/E1.jpg", ...]} (USB sticks)
 //   luna://org.jazwinski.customwebos.home.service/showEnded
 //     -> {returnValue: true}; tells the no-signal watcher Home ended its show
+//   luna://org.jazwinski.customwebos.home.service/doorbellConfig
+//     -> {returnValue: true, config: {cameraUrl?, cameraMode?, doorUrl?}}
+//   luna://org.jazwinski.customwebos.home.service/openDoor
+//     -> {returnValue: true, simulated: bool} or {returnValue: false, errorText}
 //
 // The webapp (org.jazwinski.customwebos.home) runs unprivileged and cannot
 // talk to com.webos.applicationManager directly (LSCallFromApplication is
@@ -40,3 +44,5 @@ service.register('launch', handlers.launch);
 service.register('perfReport', handlers.perfReport);
 service.register('listPhotos', handlers.listPhotos);
 service.register('showEnded', handlers.showEnded);
+service.register('doorbellConfig', handlers.doorbellConfig);
+service.register('openDoor', handlers.openDoor);

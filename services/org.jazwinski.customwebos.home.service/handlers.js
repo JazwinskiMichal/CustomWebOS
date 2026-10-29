@@ -16,6 +16,29 @@ var MAX_PHOTO_BYTES = 20 * 1024 * 1024;
 // The no-signal watcher's state (scripts/nosignal.sh).
 var NOSIGNAL_DIR = '/tmp/nosignal';
 var PHOTO_EXT = /\.(jpe?g|png)$/i;
+// The doorbell box's settings (scripts/doorbell.ps1 -Configure writes them):
+// {cameraUrl, cameraMode: "mjpeg"|"snapshot", doorUrl?}. Outside the app's
+// folder so installs keep it.
+var DOORBELL_FILE = '/var/lib/customwebos/doorbell.json';
+var DOOR_TIMEOUT_MS = 5000;
+
+// POSTs an empty body; cb(err, statusCode). The page can't do this itself: a
+// webhook won't send CORS headers to the TV's browser.
+function postEmpty(url, cb) {
+    var done = false;
+    function finish(err, status) { if (!done) { done = true; cb(err, status); } }
+    var opts;
+    try { opts = require('url').parse(url); } catch (e) { finish(e); return; }
+    opts.method = 'POST';
+    opts.headers = { 'Content-Length': 0 };
+    var req = require(opts.protocol === 'https:' ? 'https' : 'http').request(opts, function (res) {
+        res.resume();
+        finish(null, res.statusCode);
+    });
+    req.setTimeout(DOOR_TIMEOUT_MS, function () { req.abort(); finish(new Error('timeout')); });
+    req.on('error', function (err) { finish(err); });
+    req.end();
+}
 
 // The photos among relative paths: JPEG/PNG, nothing hidden (a "."-prefixed
 // file or folder anywhere in the path), sorted, at most MAX_PHOTOS.
@@ -124,7 +147,39 @@ function createHandlers(call, writeFile, opts) {
         message.respond({ returnValue: true });
     }
 
-    return { listApps: listApps, launch: launch, perfReport: perfReport, listPhotos: listPhotos, showEnded: showEnded };
+    function readDoorbell() {
+        try {
+            var config = JSON.parse((opts.fs || require('fs')).readFileSync(opts.doorbellFile || DOORBELL_FILE, 'utf8'));
+            return config && typeof config === 'object' ? config : {};
+        } catch (e) {
+            return {};
+        }
+    }
+
+    // {} until doorbell.ps1 -Configure has written the file; the box says so.
+    function doorbellConfig(message) {
+        message.respond({ returnValue: true, config: readDoorbell() });
+    }
+
+    // Always the file's doorUrl, never one from the caller: nothing that can
+    // launch the box can point the door request elsewhere.
+    function openDoor(message) {
+        var url = readDoorbell().doorUrl;
+        if (!url) {
+            message.respond({ returnValue: true, simulated: true });
+            return;
+        }
+        (opts.request || postEmpty)(url, function (err, status) {
+            if (err) message.respond({ returnValue: false, errorText: err.message });
+            else if (status >= 200 && status < 300) message.respond({ returnValue: true, simulated: false });
+            else message.respond({ returnValue: false, errorText: 'HTTP ' + status });
+        });
+    }
+
+    return {
+        listApps: listApps, launch: launch, perfReport: perfReport, listPhotos: listPhotos, showEnded: showEnded,
+        doorbellConfig: doorbellConfig, openDoor: openDoor
+    };
 }
 
 module.exports = {
@@ -132,6 +187,7 @@ module.exports = {
     PERF_FILE: PERF_FILE,
     USB_ROOT: USB_ROOT,
     MAX_PHOTO_BYTES: MAX_PHOTO_BYTES,
+    DOORBELL_FILE: DOORBELL_FILE,
     photoFiles: photoFiles,
     walkTree: walkTree,
     createHandlers: createHandlers
