@@ -43,6 +43,10 @@ Each new piece of work starts with a design (`docs/superpowers/specs/`). Before 
 - **Home Assistant:** the home service talks to a Home Assistant server (install one locally to try it). "Plugins" are panels inside CustomWebOS, starting with a whole-house lights panel; the dock's Up direction is reserved for a control row. Nothing to control yet, so not started.
 - **A real doorbell (M4):** pick a Home Assistant-ready doorbell/camera with an MJPEG or snapshot URL, point `doorUrl` at an HA webhook, and ring from HA (`webostv.command` → `system.launcher/launch`, untested). The box itself is done.
 
+**Wanted next, no hardware needed:**
+
+- **A settings screen in CustomWebOS** (owner, 2026-10-29): CustomWebOS already has options set only by editing files or running PC scripts (dock apps and location in `config.js`, slideshow sources, doorbell camera and door URLs, the remote-view password), and more will come. An on-TV settings view would gather them. Needs its own design (where settings live, which the TV can change, what stays PC-only like passwords).
+
 **Small follow-ups** (none blocking; the minors are from the reviews' ledgers):
 
 1. **Remote view:**
