@@ -24,20 +24,35 @@ var DOOR_TIMEOUT_MS = 5000;
 
 // POSTs an empty body; cb(err, statusCode). The page can't do this itself: a
 // webhook won't send CORS headers to the TV's browser.
-function postEmpty(url, cb) {
+// A wall-clock limit, not req.setTimeout: that one is an idle timeout, and in
+// Node 0.12 it isn't armed until the socket connects, so a dropped connect or
+// a server trickling bytes would hang for minutes.
+function postEmpty(url, cb, timeoutMs) {
     var done = false;
-    function finish(err, status) { if (!done) { done = true; cb(err, status); } }
-    var opts;
-    try { opts = require('url').parse(url); } catch (e) { finish(e); return; }
-    opts.method = 'POST';
-    opts.headers = { 'Content-Length': 0 };
-    var req = require(opts.protocol === 'https:' ? 'https' : 'http').request(opts, function (res) {
-        res.resume();
-        finish(null, res.statusCode);
-    });
-    req.setTimeout(DOOR_TIMEOUT_MS, function () { req.abort(); finish(new Error('timeout')); });
-    req.on('error', function (err) { finish(err); });
-    req.end();
+    var req = null;
+    var timer = setTimeout(function () {
+        if (req) req.abort();
+        finish(new Error('no answer within 5 s'));
+    }, timeoutMs || DOOR_TIMEOUT_MS);
+    function finish(err, status) {
+        if (done) return;
+        done = true;
+        clearTimeout(timer);
+        cb(err, status);
+    }
+    try {
+        var opts = require('url').parse(url);
+        opts.method = 'POST';
+        opts.headers = { 'Content-Length': 0 };
+        req = require(opts.protocol === 'https:' ? 'https' : 'http').request(opts, function (res) {
+            res.resume();
+            finish(null, res.statusCode);
+        });
+        req.on('error', function (err) { finish(err); });
+        req.end();
+    } catch (e) {
+        finish(e);
+    }
 }
 
 // The photos among relative paths: JPEG/PNG, nothing hidden (a "."-prefixed
@@ -169,11 +184,15 @@ function createHandlers(call, writeFile, opts) {
             message.respond({ returnValue: true, simulated: true });
             return;
         }
+        if (!/^https?:\/\//.test(url)) {
+            message.respond({ returnValue: false, errorText: 'doorUrl must start with http:// or https://' });
+            return;
+        }
         (opts.request || postEmpty)(url, function (err, status) {
             if (err) message.respond({ returnValue: false, errorText: err.message });
             else if (status >= 200 && status < 300) message.respond({ returnValue: true, simulated: false });
             else message.respond({ returnValue: false, errorText: 'HTTP ' + status });
-        });
+        }, opts.doorTimeoutMs);
     }
 
     return {

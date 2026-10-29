@@ -116,8 +116,11 @@ write "$API_FILE" <<EOF
 {"$SVC.group":["$SVC/*"]}
 EOF
 
+# Public: what any client may call. The doorbell methods stay out (any app on
+# the TV could open the door); only the home and doorbell apps get them, via
+# $SVC.group above.
 write "$API_PUBLIC_FILE" <<EOF
-{"public":["$SVC/*"]}
+{"public":["$SVC/listApps","$SVC/launch","$SVC/perfReport","$SVC/listPhotos","$SVC/showEnded"]}
 EOF
 
 write "$CLIENT_ROOT_FILE" <<EOF

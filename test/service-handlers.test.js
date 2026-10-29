@@ -276,3 +276,35 @@ test('openDoor\'s default request really POSTs to the doorUrl', async () => {
   assert.deepEqual(seen, ['POST /api/webhook/door'])
   assert.deepEqual(msg.responses, [{ returnValue: true, simulated: false }])
 })
+
+test('openDoor gives up after the timeout even when the server trickles bytes', { timeout: 5000 }, async () => {
+  // Review finding: an idle timeout never fires on a slow-but-alive server
+  // (or, in Node 0.12, before the connect); a wall-clock limit must.
+  const net = require('net')
+  const timers = []
+  const server = net.createServer((sock) => {
+    sock.on('error', () => {}) // the abort resets it
+    sock.write('HTTP/1.1 200 OK\r\nX-Slow: ')
+    timers.push(setInterval(() => sock.write('a'), 50))
+  })
+  await new Promise((r) => server.listen(0, '127.0.0.1', r))
+  const url = 'http://127.0.0.1:' + server.address().port + '/door'
+  const msg = fakeMessage({})
+  const started = Date.now()
+  await new Promise((resolve) => {
+    msg.respond = (r) => { msg.responses.push(r); resolve() }
+    createHandlers(() => {}, () => {}, { fs: doorbellFs(JSON.stringify({ doorUrl: url })), doorTimeoutMs: 300 }).openDoor(msg)
+  })
+  timers.forEach(clearInterval)
+  server.close()
+  assert.ok(Date.now() - started < 2000)
+  assert.deepEqual(msg.responses, [{ returnValue: false, errorText: 'no answer within 5 s' }])
+})
+
+test('openDoor refuses a doorUrl that isn\'t http or https instead of crashing the service', () => {
+  for (const doorUrl of ['ftp://ha/hook', 'ha.local/hook', 'HTTPS//ha']) {
+    const msg = fakeMessage({})
+    doorbell(JSON.stringify({ doorUrl })).openDoor(msg)
+    assert.deepEqual(msg.responses, [{ returnValue: false, errorText: 'doorUrl must start with http:// or https://' }], doorUrl)
+  }
+})

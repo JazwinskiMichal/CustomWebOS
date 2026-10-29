@@ -62,6 +62,7 @@ if ($Ring) {
     catch { throw "$ConfigPath is not valid JSON: $($_.Exception.Message)" }
     if (-not $config.cameraUrl) { throw "$ConfigPath needs a cameraUrl" }
     if ($config.cameraMode -notin @('mjpeg', 'snapshot')) { throw "$ConfigPath needs cameraMode 'mjpeg' or 'snapshot'" }
+    if ($config.doorUrl -and $config.doorUrl -cnotmatch '^https?://') { throw "$ConfigPath doorUrl must start with http:// or https://" }
     $remote = "mkdir -p /var/lib/customwebos && tr -d '\015' > $file && chmod 600 $file"
     $action = "write $file"
 }

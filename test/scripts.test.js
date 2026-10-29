@@ -352,3 +352,25 @@ test('doorbell.ps1 -Configure checks the settings before sending them', { skip: 
     fs.rmSync(dir, { recursive: true })
   }
 })
+
+test('register-service.sh keeps openDoor and doorbellConfig off the public API', { skip: !SH && 'no sh' }, () => {
+  // Review finding: with "$SVC/*" public, any app on the TV could open the door.
+  const r = sh(['--dry-run'])
+  const written = (f) => JSON.parse(r.stdout.split('would write ' + f + ':\n')[1].split('\n')[0])
+  const pub = written(`/var/luna-service2-dev/api-permissions.d/${SVC}.api.public.json`).public
+  assert.deepEqual(pub.sort(), ['listApps', 'launch', 'perfReport', 'listPhotos', 'showEnded'].map((m) => `${SVC}/${m}`).sort())
+  assert.deepEqual(written(`/var/luna-service2-dev/api-permissions.d/${SVC}.api.json`), { [`${SVC}.group`]: [`${SVC}/*`] })
+})
+
+test('doorbell.ps1 -Configure rejects a doorUrl that isn\'t http(s)', { skip: !PS && 'no PowerShell' }, () => {
+  const dir = fs.mkdtempSync(path.join(require('node:os').tmpdir(), 'cwo-doorbell-'))
+  const f = path.join(dir, 'd.json')
+  fs.writeFileSync(f, JSON.stringify({ cameraUrl: 'http://cam/mjpeg', cameraMode: 'mjpeg', doorUrl: 'ftp://ha/hook' }))
+  try {
+    const r = ps('doorbell.ps1', ['-TvHost', '192.0.2.1', '-Configure', '-ConfigPath', f, '-WhatIf'])
+    assert.notEqual(r.status, 0)
+    assert.match(r.stdout + r.stderr, /doorUrl/)
+  } finally {
+    fs.rmSync(dir, { recursive: true })
+  }
+})
