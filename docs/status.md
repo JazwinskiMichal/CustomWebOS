@@ -4,10 +4,10 @@ Where CustomWebOS stands and what's next. Last updated **2026-10-29**. Update it
 
 ## On the TV now
 
-- **CustomWebOS 0.7.5** is the home screen:
+- **CustomWebOS 0.7.6** is the home screen:
   - GNOME's Morphogenesis wallpaper: light by day, dark from sunset to sunrise in Warsaw, with text and glass colours to match
   - the clock and Polish date on glass like the dock
-  - a frosted-glass dock of white logos for the curated apps
+  - a frosted-glass dock: Live TV, Netflix, YouTube, PS5 (HDMI 1), Radio (myTuner), then All apps
   - an All apps grid
   - 60 fps, with apps shown in about 0.3–0.6 s
   - the owner accepted the look
