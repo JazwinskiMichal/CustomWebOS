@@ -4,9 +4,12 @@
     "type":  "web",
     "main":  "index.html",
     "vendor":  "Michał Jaźwiński",
-    "version":  "0.1.1",
+    "version":  "0.1.2",
     "icon":  "icon.png",
     "defaultWindowType":  "floating",
     "transparent":  true,
-    "disableBackHistoryAPI":  true
+    "disableBackHistoryAPI":  true,
+    "noSplashOnLaunch":  true,
+    "handlesRelaunch":  true,
+    "visible":  false
 }
