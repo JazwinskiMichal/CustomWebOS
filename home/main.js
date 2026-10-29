@@ -106,8 +106,18 @@ function splitHomeApps(installed, curated) {
   var i;
   for (i = 0; i < installed.length; i++) byId[installed[i].id] = installed[i];
   var home = [];
+  // A config title names the Home tile ("PS5" for HDMI 1); All apps keeps
+  // the TV's own name.
   for (i = 0; i < curated.length; i++) {
-    if (byId.hasOwnProperty(curated[i].id)) home.push(byId[curated[i].id]);
+    if (!byId.hasOwnProperty(curated[i].id)) continue;
+    var row = byId[curated[i].id];
+    if (curated[i].title) {
+      var named = {};
+      for (var k in row) if (row.hasOwnProperty(k)) named[k] = row[k];
+      named.title = curated[i].title;
+      row = named;
+    }
+    home.push(row);
   }
   var all = installed.slice().sort(function (a, b) {
     return String(a.title || a.id).localeCompare(String(b.title || b.id));

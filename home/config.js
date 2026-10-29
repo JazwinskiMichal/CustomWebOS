@@ -6,13 +6,9 @@
 var HOME_LOCATION = { name: 'Warsaw', lat: 52.23, lon: 21.01 };
 
 var HOME_APPS = [
-  { id: 'netflix',                 title: 'Netflix' },
-  { id: 'youtube.leanback.v4',     title: 'YouTube' },
-  { id: 'amazon',                  title: 'Prime Video' },
-  { id: 'com.wbd.stream',          title: 'Max' },
-  { id: 'canalplus',               title: 'Canal+' },
-  { id: 'com.apple.appletv',       title: 'Apple TV' },
-  { id: 'com.webos.app.livetv',    title: 'Live TV' },
-  { id: 'com.webos.app.hdmi1',     title: 'HDMI 1' },
-  { id: 'org.webosbrew.hbchannel', title: 'Homebrew Channel' }
+  { id: 'com.webos.app.livetv',                  title: 'Live TV' },
+  { id: 'netflix',                               title: 'Netflix' },
+  { id: 'youtube.leanback.v4',                   title: 'YouTube' },
+  { id: 'com.webos.app.hdmi1',                   title: 'PS5' },
+  { id: 'com.appgeneration.app.radiobymytuner',  title: 'Radio' }
 ];

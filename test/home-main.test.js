@@ -491,3 +491,10 @@ test('shuffle returns a permutation, driven by the given random source', () => {
   assert.equal(main.SLIDE_MS, 30000)
   assert.equal(main.FADE_MS, 1000)
 })
+
+test('splitHomeApps names Home tiles from config, All apps keeps the TV\'s names', () => {
+  const tv = [app('com.webos.app.hdmi1', 'HDMI 1'), app('radio', 'Radio Internetowe - myTuner'), app('nf', 'Netflix')]
+  const r = main.splitHomeApps(tv, [{ id: 'com.webos.app.hdmi1', title: 'PS5' }, { id: 'radio', title: 'Radio Internetowe' }, { id: 'nf' }])
+  assert.deepEqual(r.home.map((a) => a.title), ['PS5', 'Radio Internetowe', 'Netflix'])
+  assert.deepEqual(r.all.map((a) => a.title).sort(), ['HDMI 1', 'Netflix', 'Radio Internetowe - myTuner'])
+})

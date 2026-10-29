@@ -30,8 +30,7 @@ test('HOME_APPS has unique ids, includes Netflix, and holds at most 9 apps', () 
 test('HOME_APPS starts with the planned curated order', () => {
   // Array.from: arrays made inside the vm sandbox have that realm's prototype.
   assert.deepEqual(Array.from(loadConfig().HOME_APPS, (a) => a.id), [
-    'netflix', 'youtube.leanback.v4', 'amazon', 'com.wbd.stream', 'canalplus',
-    'com.apple.appletv', 'com.webos.app.livetv', 'com.webos.app.hdmi1', 'org.webosbrew.hbchannel',
+    'com.webos.app.livetv', 'netflix', 'youtube.leanback.v4', 'com.webos.app.hdmi1', 'com.appgeneration.app.radiobymytuner',
   ])
 })
 

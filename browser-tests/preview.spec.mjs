@@ -4,6 +4,8 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { chromium } from 'playwright'
+import fs from 'node:fs'
+import vm from 'node:vm'
 import { startDevServer } from '../scripts/dev-server.mjs'
 
 let server
@@ -22,8 +24,9 @@ test.after(async () => {
 // Opens the preview at the TV's 1920x1080 stage and waits for the first
 // render. The mock answers listApps after ~150 ms. The day/night mode is
 // forced (night by default) so the checks don't depend on the time of day.
-async function openPreview(mode = 'ok', theme = 'dark') {
+async function openPreview(mode = 'ok', theme = 'dark', { fullDock = false } = {}) {
   const page = await browser.newPage({ viewport: { width: 1920, height: 1080 } })
+  if (fullDock) await page.route('**/config.js', (route) => route.fulfill({ contentType: 'text/javascript', body: FULL_DOCK_CONFIG }))
   await page.goto(server.url + '?mock=' + mode + '&theme=' + theme)
   await page.waitForSelector('.clock')
   return { page, close: () => page.close() }
@@ -65,8 +68,15 @@ function inside(inner, outer) {
 
 const STAGE = { x: 0, y: 0, width: 1920, height: 1080 }
 
-const CURATED = ['netflix', 'youtube.leanback.v4', 'amazon', 'com.wbd.stream', 'canalplus',
+// The dock apps come from home/config.js, so changing the dock doesn't break
+// these tests. Layout checks use FULL_DOCK_CONFIG instead: the most the dock
+// holds (9 apps, long titles), whatever config.js has today.
+const CONFIG_SRC = fs.readFileSync(new URL('../home/config.js', import.meta.url), 'utf8')
+const CURATED = (() => { const box = {}; vm.runInNewContext(CONFIG_SRC, box); return Array.from(box.HOME_APPS, (a) => a.id) })()
+const FULL_DOCK = ['netflix', 'youtube.leanback.v4', 'amazon', 'com.wbd.stream', 'canalplus',
   'com.apple.appletv', 'com.webos.app.livetv', 'com.webos.app.hdmi1', 'org.webosbrew.hbchannel']
+const FULL_DOCK_CONFIG = CONFIG_SRC.replace(/var HOME_APPS = \[[\s\S]*?\];/,
+  'var HOME_APPS = ' + JSON.stringify(FULL_DOCK.map((id) => ({ id, title: id === 'org.webosbrew.hbchannel' ? 'Homebrew Channel' : id }))) + ';')
 
 // --- Home dock ---
 
@@ -109,8 +119,8 @@ test('focus changes without animation', async () => {
   } finally { await close() }
 })
 
-test('all ten tiles fit inside the dock and the dock inside the stage', async () => {
-  const { page, close } = await openPreview()
+test('a full dock (9 apps + All apps) fits inside the dock and the dock inside the stage', async () => {
+  const { page, close } = await openPreview('ok', 'dark', { fullDock: true })
   try {
     await waitForServiceList(page)
     const dock = await page.locator('.dock').boundingBox()
@@ -133,7 +143,7 @@ test('fewer curated apps centre the dock and keep All apps last', async () => {
 })
 
 test('a long title stays on one line', async () => {
-  const { page, close } = await openPreview()
+  const { page, close } = await openPreview('ok', 'dark', { fullDock: true })
   try {
     await waitForServiceList(page)
     const t = await page.locator('.app-item[data-id="org.webosbrew.hbchannel"] .app-title').evaluate((e) => ({
