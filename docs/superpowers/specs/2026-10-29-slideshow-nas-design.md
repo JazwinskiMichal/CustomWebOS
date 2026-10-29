@@ -43,6 +43,7 @@ Michał wants the no-signal slideshow to show photos from a shared folder on his
 
 ## Decided after the builder check (Michał)
 
+- **The share:** `\\192.168.88.235\CustomWebOS_Slideshow` (its own top-level share, created 2026-10-29; no subfolder). The account name and password live only in `.local/` and on the TV.
 - **A dedicated read-only NAS account for the TV**, with access to the new photos folder only; Michał creates it. The TV never holds his own NAS password. `-Configure` should remind of this (and must not need write access to anything).
 
 ## Decisions from the builder check (Claude's calls)
