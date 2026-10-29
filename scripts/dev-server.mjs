@@ -1,5 +1,5 @@
-// Browser preview for the home app. Serves home/ unmodified, except that
-// index.html gets dev/mock-bridge.js injected before main.js so luna calls
+// Browser preview for the home app (/) and the doorbell box (/doorbell/).
+// Serves home/ and doorbell/ unmodified, except that each index.html gets dev/mock-bridge.js injected before main.js so luna calls
 // hit a fake WebOSServiceBridge. Loopback only; never contacts the TV.
 //
 //   npm run dev            -> http://127.0.0.1:4795/
@@ -11,6 +11,8 @@ import { fileURLToPath } from 'node:url'
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 const HOME_DIR = path.join(ROOT, 'home')
+const DOORBELL_DIR = path.join(ROOT, 'doorbell')
+const DOORBELL_PREFIX = '/doorbell/'
 const DEV_DIR = path.join(ROOT, 'dev')
 const DEV_PREFIX = '/__dev/'
 const MOCK_TAG = '<script src="/__dev/mock-bridge.js"></script>'
@@ -26,14 +28,16 @@ export const TYPES = {
   '.woff2': 'font/woff2',
 }
 
-// Maps a request path to a file under home/ or dev/, or null if it would
-// escape them.
+// Maps a request path to a file under home/, doorbell/ or dev/, or null if it
+// would escape them.
 function resolveFile(urlPath) {
   let decoded
   try { decoded = decodeURIComponent(urlPath.split('?')[0]) } catch { return null }
   const [base, rel] = decoded.startsWith(DEV_PREFIX)
     ? [DEV_DIR, decoded.slice(DEV_PREFIX.length)]
-    : [HOME_DIR, decoded.replace(/^\/+/, '') || 'index.html']
+    : decoded.startsWith(DOORBELL_PREFIX)
+      ? [DOORBELL_DIR, decoded.slice(DOORBELL_PREFIX.length) || 'index.html']
+      : [HOME_DIR, decoded.replace(/^\/+/, '') || 'index.html']
   const file = path.resolve(base, rel)
   return file.startsWith(base + path.sep) ? file : null
 }
@@ -51,7 +55,7 @@ async function handle(req, res) {
     res.end('not found')
     return
   }
-  if (file === path.join(HOME_DIR, 'index.html')) {
+  if (file === path.join(HOME_DIR, 'index.html') || file === path.join(DOORBELL_DIR, 'index.html')) {
     body = body.toString('utf8').replace('<script src="main.js">', MOCK_TAG + '\n  <script src="main.js">')
   }
   res.writeHead(200, {

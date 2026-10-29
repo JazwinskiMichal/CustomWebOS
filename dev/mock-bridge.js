@@ -14,10 +14,28 @@
 // ?mock=recoverlate  the first three listApps fail, then it answers
 // ?mock=photos   listPhotos answers three photos (other modes: none)
 // ?mock=nophotos listPhotos answers no photos
+// Doorbell box (/doorbell/): ?mock=ok snapshot camera from a fixture, door
+// simulated; door (a doorUrl is set); doorfail (openDoor fails with HTTP 500);
+// nocamera (no settings); deadcamera (the camera URL is a 404).
+// &params=<json> stands in for PalmSystem.launchParams; window.close() only
+// sets window.__closed.
 (function () {
   var mode = (/[?&]mock=(\w+)/.exec(window.location.search) || [])[1] || 'ok'
   var SERVICE = 'luna://org.jazwinski.customwebos.home.service/'
-  window.__mock = { mode: mode, launches: [], listAppsAnswered: 0, perfReports: [], showEnded: 0 }
+  window.__mock = { mode: mode, launches: [], listAppsAnswered: 0, perfReports: [], showEnded: 0, openDoor: 0, openDoorPayloads: [] }
+  var params = (/[?&]params=([^&]*)/.exec(window.location.search) || [])[1]
+  if (params) window.PalmSystem = { launchParams: decodeURIComponent(params) }
+  if (window.location.pathname.indexOf('/doorbell/') === 0) {
+    if (!window.PalmSystem) window.PalmSystem = { launchParams: '{}' }
+    window.close = function () { window.__closed = true }
+  }
+
+  function doorbellConfig() {
+    if (mode === 'nocamera') return {}
+    var config = { cameraUrl: mode === 'deadcamera' ? '/__dev/fixtures/no-such-camera.jpg' : '/__dev/fixtures/camera.jpg', cameraMode: 'snapshot' }
+    if (mode === 'door') config.doorUrl = 'http://ha.local/api/webhook/door'
+    return config
+  }
 
   function listApps() {
     if (mode === 'error') return Promise.resolve({ returnValue: false, errorText: 'mock error' })
@@ -50,6 +68,13 @@
     if (uri === SERVICE + 'showEnded') {
       window.__mock.showEnded++
       return Promise.resolve({ returnValue: true })
+    }
+    if (uri === SERVICE + 'doorbellConfig') return Promise.resolve({ returnValue: true, config: doorbellConfig() })
+    if (uri === SERVICE + 'openDoor') {
+      window.__mock.openDoor++
+      window.__mock.openDoorPayloads.push(payload)
+      if (mode === 'doorfail') return Promise.resolve({ returnValue: false, errorText: 'HTTP 500' })
+      return Promise.resolve({ returnValue: true, simulated: mode !== 'door' })
     }
     if (uri === SERVICE + 'perfReport') {
       window.__mock.perfReports.push(payload.report)

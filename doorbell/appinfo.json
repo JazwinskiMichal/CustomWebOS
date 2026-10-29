@@ -1,0 +1,12 @@
+{
+    "id":  "org.jazwinski.customwebos.doorbell",
+    "title":  "CustomWebOS Doorbell",
+    "type":  "web",
+    "main":  "index.html",
+    "vendor":  "Michał Jaźwiński",
+    "version":  "0.1.0",
+    "icon":  "icon.png",
+    "defaultWindowType":  "floating",
+    "transparent":  true,
+    "disableBackHistoryAPI":  true
+}

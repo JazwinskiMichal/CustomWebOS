@@ -8,7 +8,7 @@ const path = require('node:path')
 const acorn = require('acorn')
 
 const ROOT = path.join(__dirname, '..')
-const RUNTIME_DIRS = ['home', 'services']
+const RUNTIME_DIRS = ['home', 'services', 'doorbell']
 
 function walk(dir) {
   return fs.readdirSync(dir, { withFileTypes: true }).flatMap((e) => {
@@ -24,6 +24,7 @@ const jsFiles = runtimeFiles.filter((f) => f.endsWith('.js'))
 test('there are runtime JS files to scan', () => {
   assert.ok(jsFiles.some((f) => f.endsWith(path.join('home', 'main.js'))))
   assert.ok(jsFiles.some((f) => f.endsWith('service.js')))
+  assert.ok(jsFiles.some((f) => f.endsWith(path.join('doorbell', 'main.js'))))
 })
 
 // Returns the ES5 parse errors in src (empty when clean). A real parse

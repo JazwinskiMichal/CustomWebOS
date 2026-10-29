@@ -53,6 +53,14 @@ test('serves svg, jpg and woff2 with their media types', () => withServer(async 
   assert.equal(TYPES['.woff2'], 'font/woff2')
 }))
 
+test('serves the doorbell box with the mock injected', () => withServer(async (url) => {
+  const page = await get(url, '/doorbell/')
+  assert.equal(page.status, 200)
+  assert.match(page.body, /mock-bridge\.js"><\/script>\s*<script src="main\.js">/)
+  const js = await get(url, '/doorbell/main.js')
+  assert.equal(js.status, 200)
+}))
+
 test('refuses path traversal', () => withServer(async (url) => {
   for (const p of ['/../package.json', '/__dev/../../package.json', '/%2e%2e/package.json']) {
     assert.equal((await get(url, p)).status, 404, p)
