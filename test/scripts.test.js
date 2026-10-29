@@ -317,6 +317,8 @@ test('install.ps1 -TvHost -WhatIf installs the doorbell .ipk too', { skip: !PS &
     const ssh = r.stdout.split(/\r?\n/).find((l) => l.startsWith('would run: ssh'))
     assert.equal(ssh.split('ApplicationInstallerUtility -c install -t developer').length - 1, 2)
     assert.match(ssh, /\/tmp\/org\.jazwinski\.customwebos\.doorbell_9\.9\.9-test_all\.ipk/)
+    // The doorbell is often already at its version (opkg refuses); only home decides rc.
+    assert.equal(ssh.split('rc=').length - 1, 1)
   } finally {
     for (const s of stubs) fs.rmSync(s)
     if (createdDist) fs.rmSync(DIST, { recursive: true })

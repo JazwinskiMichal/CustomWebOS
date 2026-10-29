@@ -103,12 +103,13 @@ if ($PSCmdlet.ParameterSetName -eq 'Ares') {
 # No double quotes in $remote: Windows PowerShell strips them when passing
 # arguments to native commands.
 $serviceRe = '^org\.jazwinski\.customwebos\.home\.service$'
-# One install per .ipk; rc keeps the first failure.
+# One install per .ipk. Only the home install decides rc (and the reboot): the
+# doorbell box often has the version already installed, which opkg refuses.
 $remote    = ''
 foreach ($p in $ipks) {
     $remoteIpk = "/tmp/$($p.Name)"
     $remote += "ApplicationInstallerUtility -c install -t developer -p $remoteIpk -f /etc/palm/appinstalld/opkg.conf; "
-    $remote += if ($p -eq $ipk) { "rc=`$?; rm -f $remoteIpk; " } else { "r=`$?; rm -f $remoteIpk; [ `$r -eq 0 ] || [ `$rc -ne 0 ] || rc=`$r; " }
+    $remote += if ($p -eq $ipk) { "rc=`$?; rm -f $remoteIpk; " } else { "rm -f $remoteIpk; " }
 }
 $remote   += "for p in `$(ps -ef | awk '`$8 ~ /$serviceRe/ {print `$2}'); do kill `$p; done; "
 if ($Reboot) { $remote += "[ `$rc -eq 0 ] && reboot; " }
