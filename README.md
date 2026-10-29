@@ -26,7 +26,7 @@ A CleanFrame-style home screen: a clock and Polish date on glass, a frosted-glas
 - **Open it:** press **Home** on the remote.
 - **Move around:** arrows and **OK**, or point and click with the Magic Remote. The last dock tile opens **All apps** (every installed app); **Back** leaves it. Back on Home itself does nothing.
 - **Day and night:** the Morphogenesis wallpaper is light by day and dark from sunset to sunrise, computed on the TV for its location (no internet needed).
-- **Change the dock apps or the location:** edit `home/config.js` (`HOME_APPS`, at most 9; `HOME_LOCATION`), then package and install. Live TV and HDMI inputs can be dock tiles too.
+- **Change the dock apps or the location:** edit `home/config.js` (`HOME_APPS`, at most 9, in order; `HOME_LOCATION`), then package and install. Each entry's `title` names its dock tile (e.g. "PS5" for HDMI 1); All apps keeps the TV's names. Live TV and HDMI inputs can be dock tiles too. Today's dock: Live TV, Netflix, YouTube, PS5, Radio.
 
 ### Home button and power-on
 
