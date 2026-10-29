@@ -4,7 +4,7 @@
     "type":  "web",
     "main":  "index.html",
     "vendor":  "Michał Jaźwiński",
-    "version":  "0.1.0",
+    "version":  "0.1.1",
     "icon":  "icon.png",
     "defaultWindowType":  "floating",
     "transparent":  true,

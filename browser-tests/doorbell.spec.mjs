@@ -63,7 +63,7 @@ test('first OK enlarges and centres the box', async () => {
   await page.close()
 })
 
-test('second OK within 5 s opens the door', async () => {
+test('second OK opens the door', async () => {
   const page = await openBox()
   await ok(page)
   await ok(page)
@@ -79,14 +79,36 @@ test('second OK within 5 s opens the door', async () => {
   await real.close()
 })
 
-test('second OK after 5 s only enlarges again', async () => {
+test('the enlarged box waits for the second OK however long it takes', async () => {
+  // Michał: no auto-shrink; only Back closes it.
   const page = await openBox()
   await ok(page)
-  await page.clock.runFor(5100)
-  assert.deepEqual(await boxRect(page), CORNER)
-  await ok(page)
+  await page.clock.runFor(120000)
   assert.deepEqual(await boxRect(page), BIG)
   assert.equal((await mock(page)).openDoor, 0)
+  await ok(page)
+  assert.equal((await mock(page)).openDoor, 1)
+  assert.deepEqual(await boxRect(page), BIG)
+  await page.close()
+})
+
+test('a click on the box counts as OK (Magic Remote pointer)', async () => {
+  // Seen on the TV: with the pointer showing, OK arrives as a click, not keyCode 13.
+  const page = await openBox()
+  await page.mouse.click(1500, 800)
+  await page.clock.runFor(200)
+  assert.deepEqual(await boxRect(page), BIG)
+  await page.mouse.click(900, 500)
+  await page.clock.runFor(200)
+  assert.equal((await mock(page)).openDoor, 1)
+  await page.close()
+})
+
+test('a click outside the box does nothing', async () => {
+  const page = await openBox()
+  await page.mouse.click(100, 100)
+  await page.clock.runFor(200)
+  assert.deepEqual(await boxRect(page), CORNER)
   await page.close()
 })
 
@@ -105,18 +127,17 @@ test('Back closes the box', async () => {
   await page.close()
 })
 
-test('the box closes after 60 s idle, and a key press restarts the wait', async () => {
+test('the box never closes by itself, in either size', async () => {
   const page = await openBox()
-  await page.clock.runFor(60100)
+  await page.clock.runFor(600000)
+  assert.equal(await page.evaluate(() => window.__closed), undefined)
+  assert.deepEqual(await boxRect(page), CORNER)
+  await ok(page)
+  await page.clock.runFor(600000)
+  assert.equal(await page.evaluate(() => window.__closed), undefined)
+  await page.keyboard.press('Escape')
   assert.equal(await page.evaluate(() => window.__closed), true)
   await page.close()
-
-  const busy = await openBox()
-  await busy.clock.runFor(59000)
-  await busy.keyboard.press('ArrowLeft')
-  await busy.clock.runFor(1100)
-  assert.equal(await busy.evaluate(() => window.__closed), undefined)
-  await busy.close()
 })
 
 test('missing settings say so', async () => {
