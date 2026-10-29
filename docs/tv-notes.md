@@ -16,7 +16,7 @@ Lasting facts and rules for the target TV. Read this before touching it. The evi
 ## How CustomWebOS works on it
 
 - **A dev-mode web app can't call `applicationManager`** (`-1031 … not privileged`, even for "public" methods). So a bundled luna service, `org.jazwinski.customwebos.home.service`, lists and launches apps for it.
-- **The service needs nine luna-hub registration files,** written by `scripts/register-service.ps1`. Two of them give the web app's bus name (`org.jazwinski.customwebos.home-<pid>`) a role.
+- **The service needs eleven luna-hub registration files,** written by `scripts/register-service.ps1`. Four of them give the web apps' bus names (`org.jazwinski.customwebos.home-<pid>`, `org.jazwinski.customwebos.doorbell-<pid>`) a role.
 - **Installing:** `ApplicationInstallerUtility -c install -t developer -p <ipk> -f /etc/palm/appinstalld/opkg.conf`, wrapped by `install.ps1 -TvHost`.
   - Without `-t developer`, a second copy lands in cryptofs. `-c remove` deletes **both** copies.
   - Without `-f`, opkg fails with "no such file".

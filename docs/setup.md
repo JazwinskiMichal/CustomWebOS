@@ -233,7 +233,7 @@ The webOS 4.4 bus won't let a dev-mode web app call `applicationManager` itself,
 ```powershell
 pwsh scripts/register-service.ps1 -TvHost <tv-ip> -WhatIf      # see the ssh command
 pwsh scripts/register-service.ps1 -TvHost <tv-ip> -DryRunOnTv  # connect, print what it would write, change nothing
-pwsh scripts/register-service.ps1 -TvHost <tv-ip>              # write the nine files under /var/luna-service2-dev/
+pwsh scripts/register-service.ps1 -TvHost <tv-ip>              # write the eleven files under /var/luna-service2-dev/
 ```
 
 Reboot afterwards. Nine files get written: seven make the service itself known to the hub, and two (`roles.d/` and `client-permissions.d/` `org.jazwinski.customwebos.home.app.json`) give the web app a bus role so it's allowed to call the service. Without those two, every call from the app fails with -1031 "not privileged".
@@ -272,7 +272,7 @@ Two options:
 
 - **Soft recovery:** full power cycle. Unplug mains for 60 seconds. Clears most transient weirdness.
 - **Settings reset only:** keeps firmware, wipes config. Rebuild from your §0 screenshots.
-- **Home service rollback:** `pwsh scripts/register-service.ps1 -TvHost <tv-ip> -Unregister`, reboot. Removes the nine luna-service2-dev files; the app itself keeps working off its built-in list.
+- **Home service rollback:** `pwsh scripts/register-service.ps1 -TvHost <tv-ip> -Unregister`, reboot. Removes the eleven luna-service2-dev files; the app itself keeps working off its built-in list.
 - **Autostart hook rollback:** if the Home-button override is the thing misbehaving, telnet in (flip Hbchannel's Telnet toggle back on first if you turned it off), undo whichever autostart candidate you chose per §4.4, reboot. LG's native home comes back.
 - **Reinstall same firmware from USB** using the `.epk` you saved in §0.1. Settings → Support → Software Update → "Install from USB". Takes ~20 minutes. This will remove root cleanly and restore the firmware to a known-good state; you can re-root the same way afterward.
 

@@ -1,12 +1,13 @@
 #!/bin/sh
 # Register the CustomWebOS home service with the luna-service2 hub on the TV.
-# Writes the nine files the hub needs Hbchannel-style, then nudges the hub.
+# Writes the eleven files the hub needs Hbchannel-style, then nudges the hub.
 # Idempotent — safe to re-run.
 #   service side: services.d, roles.d, two api-permissions.d, two
 #                 client-permissions.d
 #   app side:     roles.d + client-permissions.d for the webapp itself. Without
 #                 these the webapp has no bus role, and every call it makes is
 #                 refused with -1031 "LSCallFromApplication ... not privileged".
+#                 The same two again for the doorbell box.
 #   manifests.d:  the entry that enumerates all of the above
 #
 # Runs on the TV side, over SSH, as root. Not part of the dev-machine build;
@@ -14,7 +15,7 @@
 #
 # Usage: register-service.sh [--dry-run] [--unregister] [--system-wrapper]
 #   --dry-run         print what would be written/removed, touch nothing
-#   --unregister      remove the nine files (rollback), then nudge the hub
+#   --unregister      remove the eleven files (rollback), then nudge the hub
 #   --system-wrapper  Exec= the stock /usr/bin/run-js-service instead of the
 #                     bundled thirdparty_jail=off wrapper (runs jailed)
 set -e
@@ -45,8 +46,11 @@ CLIENT_ROOT_FILE="$BASE/client-permissions.d/$SVC.root.json"
 CLIENT_SERVICE_FILE="$BASE/client-permissions.d/$SVC.service.json"
 APP_ROLE_FILE="$BASE/roles.d/$APP_ID.app.json"
 APP_CLIENT_FILE="$BASE/client-permissions.d/$APP_ID.app.json"
+DOORBELL_ID=org.jazwinski.customwebos.doorbell
+DOORBELL_ROLE_FILE="$BASE/roles.d/$DOORBELL_ID.app.json"
+DOORBELL_CLIENT_FILE="$BASE/client-permissions.d/$DOORBELL_ID.app.json"
 MANIFEST_FILE="$BASE/manifests.d/$APP_ID.json"
-ALL_FILES="$SERVICE_FILE $ROLE_FILE $API_FILE $API_PUBLIC_FILE $CLIENT_ROOT_FILE $CLIENT_SERVICE_FILE $APP_ROLE_FILE $APP_CLIENT_FILE $MANIFEST_FILE"
+ALL_FILES="$SERVICE_FILE $ROLE_FILE $API_FILE $API_PUBLIC_FILE $CLIENT_ROOT_FILE $CLIENT_SERVICE_FILE $APP_ROLE_FILE $APP_CLIENT_FILE $DOORBELL_ROLE_FILE $DOORBELL_CLIENT_FILE $MANIFEST_FILE"
 
 nudge_hub() {
     if [ "$DRY" = 1 ]; then
@@ -133,11 +137,21 @@ write "$APP_CLIENT_FILE" <<EOF
 {"$APP_ID-*":["public","$SVC.group"]}
 EOF
 
+# The doorbell box (doorbell/) reads its settings and opens the door through
+# this service, so it gets the same two files.
+write "$DOORBELL_ROLE_FILE" <<EOF
+{"appId":"$DOORBELL_ID","type":"regular","allowedNames":["$DOORBELL_ID-*"],"permissions":[{"service":"$DOORBELL_ID-*","outbound":["*"]}]}
+EOF
+
+write "$DOORBELL_CLIENT_FILE" <<EOF
+{"$DOORBELL_ID-*":["public","$SVC.group"]}
+EOF
+
 # The hub reads one manifest JSON per app from manifests.d/ which enumerates
 # every file above. Without this, the individual services.d/ etc entries
 # are not loaded.
 write "$MANIFEST_FILE" <<EOF
-{"id":"$APP_ID","version":"$VERSION","serviceFiles":["$SERVICE_FILE"],"roleFiles":["$ROLE_FILE","$APP_ROLE_FILE"],"apiPermissionFiles":["$API_FILE","$API_PUBLIC_FILE"],"clientPermissionFiles":["$CLIENT_ROOT_FILE","$CLIENT_SERVICE_FILE","$APP_CLIENT_FILE"]}
+{"id":"$APP_ID","version":"$VERSION","serviceFiles":["$SERVICE_FILE"],"roleFiles":["$ROLE_FILE","$APP_ROLE_FILE","$DOORBELL_ROLE_FILE"],"apiPermissionFiles":["$API_FILE","$API_PUBLIC_FILE"],"clientPermissionFiles":["$CLIENT_ROOT_FILE","$CLIENT_SERVICE_FILE","$APP_CLIENT_FILE","$DOORBELL_CLIENT_FILE"]}
 EOF
 
 nudge_hub

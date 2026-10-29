@@ -114,7 +114,7 @@ test('register-service.ps1 -WhatIf forwards -Unregister and -SystemWrapper as fl
 })
 
 const SVC = 'org.jazwinski.customwebos.home.service'
-const NINE = [
+const ELEVEN = [
   `/var/luna-service2-dev/services.d/${SVC}.service`,
   `/var/luna-service2-dev/roles.d/${SVC}.service.json`,
   `/var/luna-service2-dev/api-permissions.d/${SVC}.api.json`,
@@ -123,24 +123,26 @@ const NINE = [
   `/var/luna-service2-dev/client-permissions.d/${SVC}.service.json`,
   '/var/luna-service2-dev/roles.d/org.jazwinski.customwebos.home.app.json',
   '/var/luna-service2-dev/client-permissions.d/org.jazwinski.customwebos.home.app.json',
+  '/var/luna-service2-dev/roles.d/org.jazwinski.customwebos.doorbell.app.json',
+  '/var/luna-service2-dev/client-permissions.d/org.jazwinski.customwebos.doorbell.app.json',
   '/var/luna-service2-dev/manifests.d/org.jazwinski.customwebos.home.json',
 ]
 
-test('register-service.sh --dry-run lists all nine files and writes nothing', { skip: !SH && 'no sh' }, () => {
+test('register-service.sh --dry-run lists all eleven files and writes nothing', { skip: !SH && 'no sh' }, () => {
   const r = sh(['--dry-run'])
   assert.equal(r.status, 0, r.stderr)
-  for (const f of NINE) assert.ok(r.stdout.includes('would write ' + f + ':'), 'missing ' + f)
+  for (const f of ELEVEN) assert.ok(r.stdout.includes('would write ' + f + ':'), 'missing ' + f)
   assert.match(r.stdout, new RegExp('Exec=/media/developer/apps/usr/palm/services/' + SVC.replace(/\./g, '\\.') + '/run-js-service -n '))
   assert.match(r.stdout, /would run: pkill -SIGHUP ls-hubd/)
   assert.match(r.stdout, /dry run: nothing written/)
 })
 
-test('register-service.sh manifest enumerates the other eight files', { skip: !SH && 'no sh' }, () => {
+test('register-service.sh manifest enumerates the other ten files', { skip: !SH && 'no sh' }, () => {
   const r = sh(['--dry-run'])
   const line = r.stdout.split('\n').find((l) => l.startsWith('{"id":"org.jazwinski.customwebos.home"'))
   const manifest = JSON.parse(line)
   const listed = [...manifest.serviceFiles, ...manifest.roleFiles, ...manifest.apiPermissionFiles, ...manifest.clientPermissionFiles]
-  assert.deepEqual(listed.sort(), NINE.slice(0, 8).sort())
+  assert.deepEqual(listed.sort(), ELEVEN.slice(0, 10).sort())
   assert.ok(manifest.version, 'manifest has a version')
 })
 
@@ -150,10 +152,10 @@ test('register-service.sh --system-wrapper points Exec at the stock run-js-servi
   assert.match(r.stdout, /Exec=\/usr\/bin\/run-js-service -n /)
 })
 
-test('register-service.sh --unregister --dry-run would remove all nine files', { skip: !SH && 'no sh' }, () => {
+test('register-service.sh --unregister --dry-run would remove all eleven files', { skip: !SH && 'no sh' }, () => {
   const r = sh(['--unregister', '--dry-run'])
   assert.equal(r.status, 0, r.stderr)
-  for (const f of NINE) assert.ok(r.stdout.includes('would remove ' + f), 'missing ' + f)
+  for (const f of ELEVEN) assert.ok(r.stdout.includes('would remove ' + f), 'missing ' + f)
   assert.doesNotMatch(r.stdout, /would write/)
 })
 
@@ -284,4 +286,14 @@ test('perf.ps1 -Theme light -WhatIf forces the mode in the launch params', { ski
   assert.equal(r.status, 0, r.stderr)
   assert.match(r.stdout, /"theme":"light"/)
   assert.match(r.stdout, /"perf":\{/)
+})
+
+test('register-service.sh grants the doorbell box (<appId>-*) the service group too', { skip: !SH && 'no sh' }, () => {
+  const r = sh(['--dry-run'])
+  const written = (f) => JSON.parse(r.stdout.split('would write ' + f + ':\n')[1].split('\n')[0])
+  const role = written('/var/luna-service2-dev/roles.d/org.jazwinski.customwebos.doorbell.app.json')
+  assert.equal(role.appId, 'org.jazwinski.customwebos.doorbell')
+  assert.deepEqual(role.allowedNames, ['org.jazwinski.customwebos.doorbell-*'])
+  const client = written('/var/luna-service2-dev/client-permissions.d/org.jazwinski.customwebos.doorbell.app.json')
+  assert.deepEqual(client, { 'org.jazwinski.customwebos.doorbell-*': ['public', SVC + '.group'] })
 })
