@@ -45,7 +45,7 @@ Each new piece of work starts with a design (`docs/superpowers/specs/`). Before 
 
 **Wanted next, no hardware needed:**
 
-- **A settings screen in CustomWebOS** (owner, 2026-10-29): CustomWebOS already has options set only by editing files or running PC scripts (dock apps and location in `config.js`, slideshow sources, doorbell camera and door URLs, the remote-view password), and more will come. An on-TV settings view would gather them. Needs its own design (where settings live, which the TV can change, what stays PC-only like passwords).
+- **A settings screen in CustomWebOS** (owner, 2026-10-29; **the next feature after the NAS slideshow**): CustomWebOS already has options set only by editing files or running PC scripts (dock apps and location in `config.js`, the slideshow's NAS share and its login, doorbell camera and door URLs, the remote-view password), and more will come. An on-TV settings view would gather them. Needs its own design (where settings live, which the TV can change, what stays PC-only like passwords).
 
 **Small follow-ups** (none blocking; the minors are from the reviews' ledgers):
 
