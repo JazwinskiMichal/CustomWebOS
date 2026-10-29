@@ -58,7 +58,7 @@ test('first OK enlarges and centres the box', async () => {
   const page = await openBox()
   await ok(page)
   assert.deepEqual(await boxRect(page), BIG)
-  assert.equal(await text(page, '.hint'), 'OK again to open the door')
+  assert.equal(await text(page, '.hint'), 'OK again to open the door · Back: smaller')
   assert.equal((await mock(page)).openDoor, 0)
   await page.close()
 })
@@ -69,7 +69,7 @@ test('second OK opens the door', async () => {
   await ok(page)
   assert.equal((await mock(page)).openDoor, 1)
   assert.equal(await text(page, '.status'), 'Door opened (test)')
-  assert.equal(await text(page, '.hint'), 'OK: open the door · Back: close')
+  assert.equal(await text(page, '.hint'), 'OK: open the door · Back: smaller')
   await page.close()
 
   const real = await openBox('door')
@@ -127,6 +127,22 @@ test('Back closes the box', async () => {
   await page.close()
 })
 
+test('Back on the enlarged box goes back to the corner, a second Back closes', async () => {
+  // Michał: "back should not close right away, but minimize and second back should close".
+  const page = await openBox()
+  await ok(page)
+  await page.keyboard.press('Escape')
+  assert.equal(await page.evaluate(() => window.__closed), undefined)
+  assert.deepEqual(await boxRect(page), CORNER)
+  assert.equal(await text(page, '.hint'), 'OK: open the door · Back: close')
+  await ok(page)
+  assert.equal((await mock(page)).openDoor, 0) // back in the corner, OK asks again
+  await page.keyboard.press('Escape')
+  await page.keyboard.press('Escape')
+  assert.equal(await page.evaluate(() => window.__closed), true)
+  await page.close()
+})
+
 test('the box never closes by itself, in either size', async () => {
   const page = await openBox()
   await page.clock.runFor(600000)
@@ -135,8 +151,7 @@ test('the box never closes by itself, in either size', async () => {
   await ok(page)
   await page.clock.runFor(600000)
   assert.equal(await page.evaluate(() => window.__closed), undefined)
-  await page.keyboard.press('Escape')
-  assert.equal(await page.evaluate(() => window.__closed), true)
+  assert.deepEqual(await boxRect(page), BIG)
   await page.close()
 })
 

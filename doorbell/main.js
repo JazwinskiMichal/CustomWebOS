@@ -1,6 +1,7 @@
 // CustomWebOS Doorbell — a floating camera box over whatever is on screen.
 // Opened by launching the app (a ring); OK enlarges and centres it, a second
-// OK opens the door, Back closes it. No timers: it stays, in either size,
+// OK opens the door. Back on the enlarged box goes back to the corner, Back in
+// the corner closes it. No timers: it stays, in either size,
 // until Back (Michał). OK also arrives as a click on the box when the Magic
 // Remote's pointer is showing. ES5 only (webOS 4.4 web engine).
 (function () {
@@ -14,7 +15,8 @@
   var KEY_BACK = 461;
   var KEY_ESC = 27;
   var HINT_CORNER = 'OK: open the door · Back: close';
-  var HINT_BIG = 'OK again to open the door';
+  var HINT_CONFIRM = 'OK again to open the door · Back: smaller';
+  var HINT_BIG = 'OK: open the door · Back: smaller';
 
   var doc = document;
   var box = doc.querySelector('.box');
@@ -24,6 +26,7 @@
   var status = box.querySelector('.status');
 
   var config = {};
+  var big = false;
   var confirming = false;
   var doorPending = false;
   var cameraGen = 0;
@@ -74,9 +77,10 @@
     return out;
   }
 
-  function setBig(big) {
-    box.className = big ? 'box big' : 'box';
-    hint.textContent = big ? HINT_BIG : HINT_CORNER;
+  function setBig(on) {
+    big = on;
+    box.className = on ? 'box big' : 'box';
+    hint.textContent = on ? HINT_CONFIRM : HINT_CORNER;
   }
 
   function withStamp(url) {
@@ -129,7 +133,7 @@
     confirming = false;
     doorPending = true;
     status.textContent = '';
-    hint.textContent = HINT_CORNER;
+    hint.textContent = HINT_BIG;
     lunaCall(SERVICE + 'openDoor', {}, function (msg) {
       doorPending = false;
       status.textContent = msg.simulated ? 'Door opened (test)' : 'Door opened';
@@ -163,7 +167,13 @@
     var k = e.keyCode;
     if (k === KEY_BACK || k === KEY_ESC) {
       e.preventDefault();
-      window.close();
+      if (big) {
+        confirming = false;
+        status.textContent = '';
+        setBig(false);
+      } else {
+        window.close();
+      }
       return;
     }
     if (k === KEY_OK) {
