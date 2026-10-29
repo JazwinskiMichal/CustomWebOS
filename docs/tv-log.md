@@ -279,6 +279,18 @@ The black inputs came back twice during the M3 slideshow tests. Bisected with th
 - **Remote view keys:** F1 = Input, F2 = Mute, F3/F4 = volume down/up, Page Up/Down = channel up/down. Mute, volume and channels are LG button names (`MUTE`, `VOLUMEDOWN`, `VOLUMEUP`, `CHANNELUP`, `CHANNELDOWN`). Input isn't a button name: launching `com.webos.app.inputmgr` opens the full-screen Input Hub, which lists inputs but isn't the remote's Input picker; `ssap://com.webos.surfacemanager/showInputPicker` is, and the paired remote-view client may call it. Owner: "it works beautifully".
 - **Installs:** opkg refuses a package with the version already installed, so every install to the TV needs a version bump (0.7.0 → 0.7.3 today).
 
+## Overlay spike (M4, 2026-10-28/29)
+
+Throwaway apps (since removed) with a transparent page and a 640×400 box in the bottom-right corner, fed by a fake camera on the PC (JPEG snapshots, MJPEG at 5 fps, or an HLS test stream), reporting key, visibility and video events back to the PC. The owner watched over VNC.
+
+- **`"defaultWindowType":"overlay"` (+ `"transparent":true`)** shows over Live TV and Netflix, but closes by itself (`pagehide`, no key pressed): over Live TV after 5 min 43 s, 59 s and 19 s; over playing Netflix every 2 min, even text-only and with `keepAlive`. LG's screensaver also closes it. Not usable.
+- **`"defaultWindowType":"floating"`** stayed in front over playing Netflix (15+ min), Live TV (15 min, with `livehbbtv` running) and HDMI 1 with the PS5 (10 min), with no drop-outs (`getForegroundAppInfo {"extraInfo":true}` subscription). The app underneath keeps playing.
+- **Keys:** the floating window takes the remote's keys (OK reached the box; Netflix didn't pause). Back closes it, and the keys go back to the app underneath (OK then paused Netflix).
+- **Camera picture:** JPEG polling (every 200 ms) and an MJPEG `<img>` both work; MJPEG is smooth.
+- **Real video (HLS `<video>`) in the box:** the TV plays one video at a time. On 28 Oct the box played and Netflix went black; on 29 Oct Netflix kept playing and the box stayed black (`playing` reported, time stuck at 0.0, then `stalled`). Closing the box left Netflix playing. Which one wins is unpredictable, so no real video in the overlay.
+- **Switching source** (launching `com.webos.app.hdmi1`) closes the floating window.
+- **Fallback:** `luna://com.webos.notification/createAlert` with buttons `[{"label":"Show","onclick":"luna://com.webos.applicationManager/launch","params":{"id":…}},{"label":"Dismiss"}]` shows over HDMI, and Show opened the box. Over VNC, moving the mouse switches the TV to pointer mode and Show loses its key focus; Enter (OK) without moving the mouse works.
+
 ## No-signal slideshow spike (M3, 2026-10-27)
 
 With the owner switching the PS5 on and off on HDMI 1:

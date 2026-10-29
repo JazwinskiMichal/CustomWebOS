@@ -28,7 +28,7 @@ From the [overall design](superpowers/specs/2026-10-24-customwebos-design.md):
 | M1 | Foundation: repo, setup guide, minimal home app that launches apps | Done ([plan](superpowers/plans/2026-10-24-m1-foundation.md)) |
 | M2 | Home screen depth: wallpaper, clock, good remote navigation, settings | Mostly done. Preview loop and hardening ([plan](superpowers/plans/2026-10-25-m2-preview-ui-hardening.md)), the [redesign](superpowers/plans/2026-10-25-home-redesign.md), Home button / power-on, and the day/night theme ([plan](superpowers/plans/2026-10-26-day-night-theme.md)). Open: on-TV settings (none planned yet) |
 | M3 | First background service: HDMI signal loss → photo slideshow | Done, USB stick instead of the NAS ([spec](superpowers/specs/2026-10-27-no-signal-slideshow-design.md), [plan](superpowers/plans/2026-10-27-no-signal-slideshow.md)). Follow-ups below |
-| M4 | Overlays over the foreground app (doorbell camera over Netflix) | Not started |
+| M4 | Overlays over the foreground app (doorbell camera over Netflix) | Spike done, design next |
 | M5+ | Custom apps | Not started |
 
 Two more projects were agreed on 2026-10-25 (see Next steps): a Home Assistant connection with plugins, and overlays (M4).
@@ -51,7 +51,7 @@ In suggested order. Each new piece of work starts with a design (`docs/superpowe
    - The home service talks to a Home Assistant server; install one locally for testing.
    - "Plugins" are panels inside CustomWebOS, starting with a whole-house lights panel.
    - The dock's Up direction is reserved for a control row.
-4. **Overlays (M4):** the doorbell camera feed over Netflix. The least certain part on webOS 4.4, so start with a small on-device spike of whether a video overlay over another app is possible.
+4. **Overlays (M4):** the doorbell camera feed over Netflix. Spike done ([tv-log](tv-log.md#overlay-spike-m4-2026-102829)): a `floating` window with an MJPEG picture stays over Netflix, Live TV and HDMI; real video in it fights the foreground app for the one video decoder. Design next.
 
 ## Small open items
 
