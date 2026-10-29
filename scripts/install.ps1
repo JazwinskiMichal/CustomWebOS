@@ -3,8 +3,9 @@
   Install the CustomWebOS home .ipk onto the TV.
 
 .DESCRIPTION
-  Picks the most recent org.jazwinski.customwebos.home*.ipk from dist/ and
-  installs it one of two ways:
+  Picks the most recent org.jazwinski.customwebos.home*.ipk from dist/, and
+  the most recent org.jazwinski.customwebos.doorbell*.ipk if there is one
+  (the doorbell box), and installs them one of two ways:
 
   -Device <name>   ares-install -d <name> <ipk>. ares-install handles
                    upgrade in place; no pre-uninstall step.
@@ -74,44 +75,52 @@ if (-not $ipk) {
     throw "no org.jazwinski.customwebos.home*.ipk in dist/; run scripts/package.ps1 first"
 }
 
-if ($PSCmdlet.ParameterSetName -eq 'Ares') {
-    $cmd = "ares-install -d $Device `"$($ipk.FullName)`""
+$doorbellIpk = Get-ChildItem -LiteralPath $distDir -Filter 'org.jazwinski.customwebos.doorbell*.ipk' -ErrorAction SilentlyContinue |
+    Sort-Object LastWriteTime -Descending | Select-Object -First 1
+if (-not $doorbellIpk) { Write-Warning "no org.jazwinski.customwebos.doorbell*.ipk in dist/; installing CustomWebOS Home only" }
+$ipks = @($ipk) + @($doorbellIpk | Where-Object { $_ })
 
+if ($PSCmdlet.ParameterSetName -eq 'Ares') {
     if (-not $PSCmdlet.ShouldProcess($Device, 'ares-install')) {
-        Write-Output "would run: $cmd"
+        foreach ($p in $ipks) { Write-Output "would run: ares-install -d $Device `"$($p.FullName)`"" }
         Write-Output "device: $Device"
-        Write-Output "ipk: $($ipk.FullName)"
+        foreach ($p in $ipks) { Write-Output "ipk: $($p.FullName)" }
         exit 0
     }
 
-    Write-Output "running: $cmd"
-    & ares-install -d $Device $ipk.FullName
-    if ($LASTEXITCODE -ne 0) {
-        throw "ares-install exited with code $LASTEXITCODE"
+    foreach ($p in $ipks) {
+        Write-Output "running: ares-install -d $Device `"$($p.FullName)`""
+        & ares-install -d $Device $p.FullName
+        if ($LASTEXITCODE -ne 0) {
+            throw "ares-install exited with code $LASTEXITCODE"
+        }
     }
     exit 0
 }
 
-$remoteIpk = "/tmp/$($ipk.Name)"
 # The service's process title is exactly its id (column 8 of ps -ef); match
 # that rather than pkill -f, which would also match this ssh session's shell.
 # No double quotes in $remote: Windows PowerShell strips them when passing
 # arguments to native commands.
 $serviceRe = '^org\.jazwinski\.customwebos\.home\.service$'
-$remote    = "ApplicationInstallerUtility -c install -t developer -p $remoteIpk -f /etc/palm/appinstalld/opkg.conf; rc=`$?; rm -f $remoteIpk; " +
-             "for p in `$(ps -ef | awk '`$8 ~ /$serviceRe/ {print `$2}'); do kill `$p; done; "
+# One install per .ipk; rc keeps the first failure.
+$remote    = ''
+foreach ($p in $ipks) {
+    $remoteIpk = "/tmp/$($p.Name)"
+    $remote += "ApplicationInstallerUtility -c install -t developer -p $remoteIpk -f /etc/palm/appinstalld/opkg.conf; "
+    $remote += if ($p -eq $ipk) { "rc=`$?; rm -f $remoteIpk; " } else { "r=`$?; rm -f $remoteIpk; [ `$r -eq 0 ] || [ `$rc -ne 0 ] || rc=`$r; " }
+}
+$remote   += "for p in `$(ps -ef | awk '`$8 ~ /$serviceRe/ {print `$2}'); do kill `$p; done; "
 if ($Reboot) { $remote += "[ `$rc -eq 0 ] && reboot; " }
 $remote   += "exit `$rc"
-$scpArgs   = @('-P', "$Port", '-i', $KeyPath, $ipk.FullName, "root@${TvHost}:$remoteIpk")
 $sshArgs   = @('-p', "$Port", '-i', $KeyPath, "root@$TvHost", $remote)
-$scpCmd    = "scp -P $Port -i `"$KeyPath`" `"$($ipk.FullName)`" root@${TvHost}:$remoteIpk"
 $sshCmd    = "ssh -p $Port -i `"$KeyPath`" root@$TvHost `"$remote`""
 
 if (-not $PSCmdlet.ShouldProcess("root@$TvHost", 'install over ssh')) {
-    Write-Output "would run: $scpCmd"
+    foreach ($p in $ipks) { Write-Output "would run: scp -P $Port -i `"$KeyPath`" `"$($p.FullName)`" root@${TvHost}:/tmp/$($p.Name)" }
     Write-Output "would run: $sshCmd"
     Write-Output "host: $TvHost"
-    Write-Output "ipk: $($ipk.FullName)"
+    foreach ($p in $ipks) { Write-Output "ipk: $($p.FullName)" }
     exit 0
 }
 
@@ -119,10 +128,12 @@ if (-not (Test-Path -LiteralPath $KeyPath)) {
     throw "SSH key not found at: $KeyPath"
 }
 
-Write-Output "running: $scpCmd"
-& scp @scpArgs
-if ($LASTEXITCODE -ne 0) {
-    throw "scp exited with code $LASTEXITCODE"
+foreach ($p in $ipks) {
+    Write-Output "running: scp -P $Port -i `"$KeyPath`" `"$($p.FullName)`" root@${TvHost}:/tmp/$($p.Name)"
+    & scp -P "$Port" -i $KeyPath $p.FullName "root@${TvHost}:/tmp/$($p.Name)"
+    if ($LASTEXITCODE -ne 0) {
+        throw "scp exited with code $LASTEXITCODE"
+    }
 }
 
 Write-Output "running: $sshCmd"

@@ -184,7 +184,7 @@ test('shell files that run on the TV are LF-only', () => {
 })
 
 test('PowerShell scripts get -WhatIf from SupportsShouldProcess, not a hand-rolled switch', () => {
-  for (const f of ['package.ps1', 'install.ps1', 'register-service.ps1', 'remoteview.ps1', 'inputhook-patch.ps1']) {
+  for (const f of ['package.ps1', 'install.ps1', 'register-service.ps1', 'remoteview.ps1', 'inputhook-patch.ps1', 'doorbell.ps1']) {
     const src = fs.readFileSync(path.join(SCRIPTS, f), 'utf8')
     assert.match(src, /\[CmdletBinding\([^)]*SupportsShouldProcess/, f)
     assert.doesNotMatch(src, /\[switch\]\$WhatIf/, f)
@@ -296,4 +296,59 @@ test('register-service.sh grants the doorbell box (<appId>-*) the service group 
   assert.deepEqual(role.allowedNames, ['org.jazwinski.customwebos.doorbell-*'])
   const client = written('/var/luna-service2-dev/client-permissions.d/org.jazwinski.customwebos.doorbell.app.json')
   assert.deepEqual(client, { 'org.jazwinski.customwebos.doorbell-*': ['public', SVC + '.group'] })
+})
+
+// Doorbell (M4): a second app, packaged and installed next to home.
+test('package.ps1 -WhatIf also packages the doorbell box', { skip: !PS && 'no PowerShell' }, () => {
+  const r = ps('package.ps1', ['-WhatIf'])
+  assert.equal(r.status, 0, r.stderr)
+  assert.match(r.stdout, /would run: ares-package "[^"]*dist[\\/]stage[\\/]doorbell" -o /)
+})
+
+test('install.ps1 -TvHost -WhatIf installs the doorbell .ipk too', { skip: !PS && 'no PowerShell' }, () => {
+  const createdDist = !fs.existsSync(DIST)
+  fs.mkdirSync(DIST, { recursive: true })
+  const stubs = ['org.jazwinski.customwebos.home_9.9.9-test_all.ipk', 'org.jazwinski.customwebos.doorbell_9.9.9-test_all.ipk'].map((n) => path.join(DIST, n))
+  for (const s of stubs) fs.writeFileSync(s, 'stub')
+  try {
+    const r = ps('install.ps1', ['-TvHost', '192.0.2.1', '-WhatIf'])
+    assert.equal(r.status, 0, r.stderr)
+    assert.match(r.stdout, /scp .*doorbell_9\.9\.9-test_all\.ipk" root@192\.0\.2\.1:\/tmp\//)
+    const ssh = r.stdout.split(/\r?\n/).find((l) => l.startsWith('would run: ssh'))
+    assert.equal(ssh.split('ApplicationInstallerUtility -c install -t developer').length - 1, 2)
+    assert.match(ssh, /\/tmp\/org\.jazwinski\.customwebos\.doorbell_9\.9\.9-test_all\.ipk/)
+  } finally {
+    for (const s of stubs) fs.rmSync(s)
+    if (createdDist) fs.rmSync(DIST, { recursive: true })
+  }
+})
+
+test('doorbell.ps1 -Ring -WhatIf launches the box over ssh', { skip: !PS && 'no PowerShell' }, () => {
+  const r = ps('doorbell.ps1', ['-TvHost', '192.0.2.1', '-Ring', '-WhatIf'])
+  assert.equal(r.status, 0, r.stderr)
+  assert.match(r.stdout, /ssh -p 22022 /)
+  assert.match(r.stdout, /luna-send -n 1 luna:\/\/com\.webos\.applicationManager\/launch/)
+  assert.match(r.stdout, /org\.jazwinski\.customwebos\.doorbell/)
+  assert.match(r.stdout, /< \/dev\/null/)
+})
+
+test('doorbell.ps1 -Configure checks the settings before sending them', { skip: !PS && 'no PowerShell' }, () => {
+  const dir = fs.mkdtempSync(path.join(require('node:os').tmpdir(), 'cwo-doorbell-'))
+  const bad = path.join(dir, 'bad.json')
+  const good = path.join(dir, 'good.json')
+  fs.writeFileSync(bad, JSON.stringify({ cameraMode: 'mjpeg' }))
+  fs.writeFileSync(good, JSON.stringify({ cameraUrl: 'http://192.0.2.9:8099/mjpeg', cameraMode: 'mjpeg', doorUrl: 'http://192.0.2.9:8099/door' }))
+  try {
+    const r = ps('doorbell.ps1', ['-TvHost', '192.0.2.1', '-Configure', '-ConfigPath', bad, '-WhatIf'])
+    assert.notEqual(r.status, 0)
+    assert.match(r.stdout + r.stderr, /cameraUrl/)
+    const mode = ps('doorbell.ps1', ['-TvHost', '192.0.2.1', '-Configure', '-ConfigPath', bad.replace('bad', 'mode'), '-WhatIf'])
+    assert.notEqual(mode.status, 0)
+    const ok = ps('doorbell.ps1', ['-TvHost', '192.0.2.1', '-Configure', '-ConfigPath', good, '-WhatIf'])
+    assert.equal(ok.status, 0, ok.stderr)
+    assert.match(ok.stdout, /mkdir -p \/var\/lib\/customwebos/)
+    assert.match(ok.stdout, /\/var\/lib\/customwebos\/doorbell\.json/)
+  } finally {
+    fs.rmSync(dir, { recursive: true })
+  }
 })

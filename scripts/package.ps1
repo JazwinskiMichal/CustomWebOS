@@ -7,7 +7,9 @@
   daemon (from scripts/build-native.ps1: bin/remoteview, its two capture
   backends, libjpeg.so.8 and its licence) into dist/stage/, then calls:
       ares-package dist/stage/home dist/stage/<service> -o dist/
-  Prints the resulting .ipk filename on stdout when the real run completes.
+  then packages the doorbell box (doorbell/, its own app id) the same way:
+      ares-package dist/stage/doorbell -o dist/
+  Prints the resulting .ipk filenames on stdout when the real run completes.
 
 .PARAMETER WhatIf
   Dry-run. Prints the exact ares-package command that would run and exits 0
@@ -27,6 +29,7 @@ $ErrorActionPreference = 'Stop'
 $scriptDir  = Split-Path -Parent $MyInvocation.MyCommand.Path
 $repoRoot   = Split-Path -Parent $scriptDir
 $homeDir    = Join-Path $repoRoot 'home'
+$doorbellDir = Join-Path $repoRoot 'doorbell'
 $serviceDir = Join-Path $repoRoot 'services/org.jazwinski.customwebos.home.service'
 $distDir    = Join-Path $repoRoot 'dist'
 $appinfo    = Join-Path $homeDir 'appinfo.json'
@@ -55,6 +58,8 @@ if (Test-Path -LiteralPath $serviceDir) {
 }
 
 $cmd = "ares-package " + (($sources | ForEach-Object { '"' + $_ + '"' }) -join ' ') + " -o `"$distDir`""
+$stageDoorbell = Join-Path $stageDir 'doorbell'
+$doorbellCmd = "ares-package `"$stageDoorbell`" -o `"$distDir`""
 
 if (-not $PSCmdlet.ShouldProcess($distDir, 'ares-package')) {
     Write-Output "would stage: $homeDir to $stageHome"
@@ -63,6 +68,8 @@ if (-not $PSCmdlet.ShouldProcess($distDir, 'ares-package')) {
         foreach ($f in $nativeFiles) { Write-Output "would stage: $(Join-Path $nativeDir $f) to $(Join-Path $stageService "bin/$f")" }
     }
     Write-Output "would run: $cmd"
+    Write-Output "would stage: $doorbellDir to $stageDoorbell"
+    Write-Output "would run: $doorbellCmd"
     foreach ($s in $sources) { Write-Output "source: $s" }
     Write-Output "output: $distDir"
     exit 0
@@ -82,6 +89,7 @@ if ($stageService) {
 if (Test-Path -LiteralPath $stageDir) { Remove-Item -LiteralPath $stageDir -Recurse -Force }
 New-Item -ItemType Directory -Path $stageDir | Out-Null
 Copy-Item -LiteralPath $homeDir -Destination $stageHome -Recurse
+Copy-Item -LiteralPath $doorbellDir -Destination $stageDoorbell -Recurse
 if ($stageService) {
     Copy-Item -LiteralPath $serviceDir -Destination $stageService -Recurse
     $stageBin = Join-Path $stageService 'bin'
@@ -94,6 +102,13 @@ Write-Output "running: $cmd"
 if ($LASTEXITCODE -ne 0) {
     throw "ares-package exited with code $LASTEXITCODE"
 }
-$built = Get-ChildItem -LiteralPath $distDir -Filter '*.ipk' |
-    Sort-Object LastWriteTime -Descending | Select-Object -First 1
-if ($built) { Write-Output $built.FullName }
+Write-Output "running: $doorbellCmd"
+& ares-package $stageDoorbell -o $distDir
+if ($LASTEXITCODE -ne 0) {
+    throw "ares-package (doorbell) exited with code $LASTEXITCODE"
+}
+foreach ($id in @('home', 'doorbell')) {
+    $built = Get-ChildItem -LiteralPath $distDir -Filter "org.jazwinski.customwebos.$id*.ipk" |
+        Sort-Object LastWriteTime -Descending | Select-Object -First 1
+    if ($built) { Write-Output $built.FullName }
+}
