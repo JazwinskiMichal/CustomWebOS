@@ -26,6 +26,7 @@ How to work on CustomWebOS from a machine (Windows is the one in use). Rules for
 | Measure | `scripts/perf.ps1 -TvHost <tv-ip> -Action right -Steps 9` | Add `-View all -Action down` for All apps, `-Theme light\|dark` to force the day or night look (it stays until the app is next closed). Prints first paint, frame times and per-keypress cost. The bar: p95 frame < 33 ms. Past numbers are in tv-log.md. |
 | Wallpapers | `scripts/wallpapers.ps1 [-DayTint "#rrggbb pct"] [-NightTint ...]` | Re-renders the day/night JPEGs and their glass from GNOME's Morphogenesis SVGs in Docker into `home/assets/wallpapers/`. Only needed to change the crop or retune the glass tint. |
 | No-signal slideshow | `scripts/nosignal.ps1 -TvHost <tv-ip> [-Remove]` | Installs the watcher `init.d/customwebos-nosignal`: an HDMI input that loses its picture is covered with the USB stick's photos. Log: `/tmp/nosignal.log` on the TV. |
+| Doorbell | `scripts/doorbell.ps1 -TvHost <tv-ip> -Configure\|-Ring` | `-Configure` sends `.local/doorbell.json` to the TV; `-Ring` opens the box. `node dev/fake-camera.mjs [port] [--webcam "<name>"]` is a camera (wallpapers or a PC webcam) and door on port 8099. Preview: http://127.0.0.1:4795/doorbell/ (`?mock=door\|doorfail\|nocamera\|deadcamera`). |
 | Boot hook | `scripts/autostart.ps1 -TvHost <tv-ip> [-Remove]` | Stops LG Input Hook's root config server once its remap is active (it no longer opens CustomWebOS). See home-button.md. |
 | Remote view | `scripts/remoteview.ps1 -TvHost <tv-ip> [-SetPassword] [-Pair] [-Remove]` | After installing the `.ipk` (with `-Reboot`): the default installs the boot hook `init.d/customwebos-remoteview`; `-SetPassword` asks for the VNC password (only the first 8 characters count), saves it to `.local/remoteview/password.txt` and stores it on the TV; `-Pair` pairs with the TV's second-screen API (accept the prompt on the TV); `-Remove` deletes the hook and stops the daemon. The daemon's log is `/tmp/remoteview.log` on the TV. |
 | Service registration | `scripts/register-service.ps1 -TvHost <tv-ip> [-Unregister]` | Once per TV (setup.md §4.3b); not needed for upgrades. |
@@ -43,10 +44,11 @@ Use TightVNC: `tvnviewer.exe <tv-ip>::5900` (two colons mean a port number). Tig
   - `config.js`: Home apps and the location for sunrise/sunset (day/night look), edited by hand.
   - `style.css`: Chromium 53, no Grid, gap or backdrop-filter.
   - `assets/`: the day/night wallpapers and their glass images, logos and font, each with its source records.
-- `services/org.jazwinski.customwebos.home.service/`: a Node 0.12 luna service. The web app can't call `applicationManager` itself, so this service lists and launches apps for it (`listApps`, `launch`, `perfReport`). `handlers.js` holds the testable logic.
+- `doorbell/`: the doorbell box, a second web app (floating, transparent), **ES5 only**.
+- `services/org.jazwinski.customwebos.home.service/`: a Node 0.12 luna service. The web apps can't call `applicationManager` itself, so this service lists and launches apps for them (`listApps`, `launch`, `perfReport`), and reads the doorbell settings and sends the door request (`doorbellConfig`, `openDoor`; not public). `handlers.js` holds the testable logic.
 - `scripts/`: PowerShell first. Each `.ps1` that reaches the TV has `-WhatIf`. `autostart.sh`, `remoteview.sh` and `register-service.sh` run on the TV.
 - `native/remoteview/`: the remote view daemon in C (GPL-2.0, own licence), built by `scripts/build-native.ps1`.
-- `dev/`: the mock bridge and fixtures for the preview. `scripts/dev-server.mjs` serves them.
+- `dev/`: the mock bridge and fixtures for the preview (`scripts/dev-server.mjs` serves them), and `fake-camera.mjs`.
 - `test/`: Node tests; never shipped. `browser-tests/` holds Playwright tests (kept out of `test/` so `node --test` doesn't pick them up).
 
 ## How work is done here

@@ -61,6 +61,13 @@ Lasting facts and rules for the target TV. Read this before touching it. The evi
 - **Capture buffers are uncached memory.** Converting straight out of `DILE_VT`/libgm buffers is 10–15× slower than copying them out with `memcpy` first. Captured frames come out as bytes R,G,B,A.
 - **`libjpeg.so.8` isn't on the TV** (only `libjpeg.so.62`). Native code built with the buildroot toolchain must ship its own copy.
 
+## Overlays
+
+- **Only `"defaultWindowType":"floating"` (+ `"transparent":true`) stays in front** of Netflix, Live TV and HDMI. `overlay` windows close by themselves within seconds to minutes. A floating window takes the remote's keys until it closes; a source change closes it.
+- **The TV decodes one video at a time:** a `<video>` in an overlay blacks out the app underneath, or stays black itself. Overlays show pictures (MJPEG `<img>`, JPEG snapshots), not video.
+- **A floating app needs `"noSplashOnLaunch": true`,** or a relaunch can leave webOS's loading picture on screen instead of the page. LG's own floating app (`com.webos.app.systemmusic`) also sets `"handlesRelaunch": true` and `"visible": false`. SAM caches `appinfo.json`: changing it needs a reboot; `main.js` changes don't.
+- **With the Magic Remote's pointer showing, OK is a mouse click,** not keyCode 13 (keyCodes 1536/1537 mark the pointer appearing and hiding). Handle both.
+
 ## Remote view (VNC)
 
 - **Where it lives:** `<service dir>/bin/remoteview` (service dir = `/media/developer/apps/usr/palm/services/org.jazwinski.customwebos.home.service/`), with its capture backends and `libjpeg.so.8` beside it; the binary finds them through RPATH `$ORIGIN`. `ares-package` on Windows drops exec bits, so the boot hook runs `chmod 755` on it.

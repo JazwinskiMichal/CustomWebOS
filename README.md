@@ -46,6 +46,29 @@ When the HDMI input on screen loses its picture (the PS5 is switched off, or goe
 - **Power-off:** covering the input stops LG's own no-signal timer, so if LG's no-signal auto power-off is on, the slideshow turns the TV off after 15 min itself. LG's screensaver may also come on over it.
 - **Install or remove:** `scripts/nosignal.ps1 -TvHost <tv-ip>` installs the boot hook (`-Remove` deletes it); it runs from the next boot. Its log on the TV is `/tmp/nosignal.log`.
 
+### Doorbell overlay (proof of concept)
+
+A ring opens a camera box in the bottom-right corner over whatever is on screen: Netflix, YouTube, Live TV, HDMI inputs or CustomWebOS. What's underneath keeps playing. There's no doorbell hardware yet: for now you ring from the PC, and the camera can be any MJPEG stream or JPEG snapshot URL.
+
+- **Keys while it's open:**
+
+  | Box | OK | Back |
+  |---|---|---|
+  | in the corner | enlarge and centre it | close it |
+  | enlarged | open the door (asks once: "OK again to open the door") | back to the corner |
+
+  With the Magic Remote's pointer showing, clicking the box works like OK. It never closes by itself; while it's open it has the remote's keys, and they go back to the app underneath when it closes.
+- **Settings:** write `.local/doorbell.json` (never committed), then `scripts/doorbell.ps1 -TvHost <tv-ip> -Configure` sends it to the TV:
+
+  ```json
+  {"cameraUrl": "http://<camera>/mjpeg", "cameraMode": "mjpeg", "doorUrl": "http://<home-assistant>/api/webhook/<id>"}
+  ```
+
+  `cameraMode` is `mjpeg` (smooth) or `snapshot` (a JPEG URL, refreshed 5 times a second). `doorUrl` is optional: OK-OK sends it an empty POST; without it the box only says "Door opened (test)". Only real video is out: the TV decodes one video at a time, so an HLS or H.264 camera would black out Netflix or the box.
+- **Ring:** `scripts/doorbell.ps1 -TvHost <tv-ip> -Ring`. Home Assistant can do the same later through its LG webOS integration (`webostv.command`, `system.launcher/launch` with `id: org.jazwinski.customwebos.doorbell`); not tried yet.
+- **No camera handy?** `node dev/fake-camera.mjs` serves the wallpapers as a camera on port 8099 (`/mjpeg`, `/frame.jpg`, and `POST /door`, which logs "door opened"); `--webcam "<name>"` streams a PC webcam instead.
+- **Install:** `scripts/package.ps1` and `scripts/install.ps1` handle the box with CustomWebOS; after its first install, run `scripts/register-service.ps1 -TvHost <tv-ip>` again and reboot.
+
 ### Remote view (VNC)
 
 See and control the TV from a PC on your home network: the home screen, Live TV, Netflix and HDMI inputs. 960×540 at about 12 fps; it costs nothing while no one is connected, and the TV shows a short notice when someone connects.

@@ -291,6 +291,18 @@ Throwaway apps (since removed) with a transparent page and a 640×400 box in the
 - **Switching source** (launching `com.webos.app.hdmi1`) closes the floating window.
 - **Fallback:** `luna://com.webos.notification/createAlert` with buttons `[{"label":"Show","onclick":"luna://com.webos.applicationManager/launch","params":{"id":…}},{"label":"Dismiss"}]` shows over HDMI, and Show opened the box. Over VNC, moving the mouse switches the TV to pointer mode and Show loses its key focus; Enter (OK) without moving the mouse works.
 
+## Doorbell overlay on the TV (M4, 2026-10-29)
+
+Doorbell 0.1.0 → 0.1.2 and CustomWebOS 0.7.5, with the owner's PC-LM1E webcam as the camera.
+
+- **Camera:** VLC's DirectShow capture hung on the PC-LM1E (stuck in `CapturePin::ReceiveConnection` at its only reported format, 1920×1080 YUY2 5 fps). `dev/fake-camera.mjs --webcam` grabs it with Playwright's Chromium instead and serves MJPEG at 640×360, 5 fps.
+- **First ring:** the box opened (floating), read its settings through the home service (the new bus role works) and pulled `/mjpeg`.
+- **OK did nothing at first:** with the pointer showing, OK arrives as a click (event log: `mousedown/click` at the pointer, keyCodes 1536/1537 for pointer shown/hidden; `keydown 13` only without the pointer). A click on the box now counts as OK.
+- **Owner's changes:** no timers (the box stays until Back), and Back on the enlarged box returns to the corner, a second Back closes; the hints name Back.
+- **The box "didn't load" twice after a relaunch:** the TV reported it visible and the page ran, but the screen showed webOS's loading picture. Fixed with `noSplashOnLaunch` (+ `handlesRelaunch`, `visible:false`), as LG's floating music app has; needed a reboot (SAM caches appinfo).
+- **One unexplained close:** at 15:48:35 the door request went out and the box was hidden 0.5 s later; LG's screensaver had come up at 15:46:49 over the radio app underneath. Not seen again.
+- **Results (owner):** over CustomWebOS, Netflix (kept playing) and Live TV: picture, OK → enlarged, OK → "Door opened" (the PC logged each `POST /door`), Back → corner, Back → closed, keys back to the app underneath. Over the no-signal slideshow the box opened too; HDMI with a picture wasn't repeated (the owner: it worked in the spike).
+
 ## No-signal slideshow spike (M3, 2026-10-27)
 
 With the owner switching the PS5 on and off on HDMI 1:
