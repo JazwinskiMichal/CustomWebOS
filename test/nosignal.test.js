@@ -167,3 +167,40 @@ test('no power-off when the cover ended or changed, or LG\'s auto-off is off', s
   assert.equal(offDue('812', '812', 'off'), 'no')
   assert.equal(offDue('812', '812', ''), 'no')
 })
+
+// Photos from the NAS: -ConfigureNas turns .local/slideshow-nas.json into an
+// NFS v3 fstab line on the TV (no credentials: the NAS allows the TV's IP, read-only).
+function nasConfig(obj) {
+  const dir = require('node:fs').mkdtempSync(path.join(require('node:os').tmpdir(), 'cwo-nas-'))
+  const f = path.join(dir, 'nas.json')
+  require('node:fs').writeFileSync(f, JSON.stringify(obj))
+  return f
+}
+const NAS_LINE = '192.168.88.235:/CustomWebOS_Slideshow /tmp/customwebos-nas nfs ro,vers=3,nolock,soft,timeo=30,retrans=2,addr=192.168.88.235 0 0'
+
+test('nosignal.ps1 -ConfigureNas -WhatIf shows the NFS fstab line and where it goes', { skip: !PS && 'no PowerShell' }, () => {
+  const r = ps(['-TvHost', '192.0.2.1', '-ConfigureNas', '-NasConfigPath', nasConfig({ share: '//192.168.88.235/CustomWebOS_Slideshow', username: 'x', password: 'y' }), '-WhatIf'])
+  assert.equal(r.status, 0, r.stderr)
+  assert.ok(r.stdout.includes(NAS_LINE), r.stdout)
+  assert.match(r.stdout, /\/var\/lib\/customwebos\/nas\.fstab\.tmp && chmod 600 .* && mv /)
+  assert.doesNotMatch(r.stdout, /password|username/)
+})
+
+test('-ConfigureNas also takes an NFS path as it is', { skip: !PS && 'no PowerShell' }, () => {
+  const r = ps(['-TvHost', '192.0.2.1', '-ConfigureNas', '-NasConfigPath', nasConfig({ share: '192.168.88.235:/CustomWebOS_Slideshow' }), '-WhatIf'])
+  assert.equal(r.status, 0, r.stderr)
+  assert.ok(r.stdout.includes(NAS_LINE), r.stdout)
+})
+
+test('-ConfigureNas refuses a settings file without a share', { skip: !PS && 'no PowerShell' }, () => {
+  const r = ps(['-TvHost', '192.0.2.1', '-ConfigureNas', '-NasConfigPath', nasConfig({ username: 'x' }), '-WhatIf'])
+  assert.notEqual(r.status, 0)
+  assert.match(r.stdout + r.stderr, /share/)
+})
+
+test('nosignal.ps1 -RemoveNas -WhatIf unmounts and deletes the NAS settings', { skip: !PS && 'no PowerShell' }, () => {
+  const r = ps(['-TvHost', '192.0.2.1', '-RemoveNas', '-WhatIf'])
+  assert.equal(r.status, 0, r.stderr)
+  assert.match(r.stdout, /umount -l \/tmp\/customwebos-nas/)
+  assert.match(r.stdout, /rm -f \/var\/lib\/customwebos\/nas\.fstab/)
+})
