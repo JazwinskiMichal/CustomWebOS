@@ -41,6 +41,13 @@ Michał wants the no-signal slideshow to show photos from a shared folder on his
 - **Settings file on the TV**, root-only, outside the app's folder so installs keep it (like `/var/lib/customwebos/doorbell.json`); written by a PowerShell script from `.local/` (`-Configure`, `-WhatIf`), which also offers a `-Remove`.
 - **NAS before stick:** the source decision is made where `listPhotos` answers, so the watcher's "cover only when there are photos" rule stays as it is.
 
+## Changed by the first TV test: NFS, not SMB (2026-10-30)
+
+The TV's kernel CIFS knows only SMB1 (`Unknown vers= option specified: 3.0/2.1/2.0`), and the NAS refuses SMB1 (`cifs_mount failed w/return code = -95`), rightly. Michał switched on **NFS v2/v3** on the NAS (the kernel has `CONFIG_NFS_V2/V3`, no v4) and gave the share NFS access for **192.168.88.244, read-only, root squashed**. `mount -t nfs -o ro,vers=3,nolock,soft,timeo=30,retrans=2,addr=192.168.88.235 192.168.88.235:/CustomWebOS_Slideshow …` mounts in 0.05 s. So:
+
+- **No credentials:** access is limited by the NAS to the TV's address, read-only. The read-only NAS account and the password in `.local/` are no longer used (Michał may delete them).
+- Everything else in this design stands: NAS first, no mixing, mount only for a show, the 5 s cap, fresh per show, the same limits. Where the text below says SMB, CIFS, credentials or account, read NFS and "none".
+
 ## Decided after the builder check (Michał)
 
 - **The share:** `\\192.168.88.235\CustomWebOS_Slideshow` (its own top-level share, created 2026-10-29; no subfolder). The account name and password live only in `.local/` and on the TV.

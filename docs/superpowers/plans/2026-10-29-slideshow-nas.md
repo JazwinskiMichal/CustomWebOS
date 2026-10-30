@@ -4,7 +4,9 @@
 
 **Goal:** The no-signal slideshow shows photos from `\\192.168.88.235\CustomWebOS_Slideshow` when that share has photos, else the USB stick's, else LG's screen.
 
-**Architecture:** The PC script turns `.local/slideshow-nas.json` into a root-only fstab line on the TV. When the watcher is about to cover a dark input it mounts the share read-only (kernel CIFS, `mount -T <fstab>`, so the password never appears on a command line) at a fixed mount point that the app reaches through `<app dir>/nas`; the home service's `listPhotos` answers `nas/…` paths when the mount has photos, otherwise `usb/…` as today. The watcher unmounts when the show ends, so each show lists the folder fresh and nothing touches the NAS while HDMI has a picture.
+> **Changed by Task 1 (2026-10-30): NFS v3, not CIFS.** The TV's kernel speaks only SMB1, which the NAS refuses; the NAS now exports the share over NFS v3 to the TV's IP, read-only, no credentials (spec, "Changed by the first TV test"). Read the CIFS details below as NFS: fstab type `nfs`, options as in Global Constraints, no password to escape or hide.
+
+**Architecture:** The PC script turns `.local/slideshow-nas.json` into a root-only fstab line on the TV. When the watcher is about to cover a dark input it mounts the share read-only (kernel NFS v3, `mount -T <fstab>`) at a fixed mount point that the app reaches through `<app dir>/nas`; the home service's `listPhotos` answers `nas/…` paths when the mount has photos, otherwise `usb/…` as today. The watcher unmounts when the show ends, so each show lists the folder fresh and nothing touches the NAS while HDMI has a picture.
 
 **Tech Stack:** POSIX sh (BusyBox + util-linux `mount` on the TV), Node 0.12 service (ES5), PowerShell scripts, `node --test`.
 
@@ -12,9 +14,9 @@
 
 ## Global Constraints
 
-- Settings on the TV: `/var/lib/customwebos/nas.fstab`, mode 600, one fstab line; PC source `.local/slideshow-nas.json` = `{"share": "//192.168.88.235/CustomWebOS_Slideshow", "username": "...", "password": "...", "vers": "3.0" (optional)}`. Never in git, chat, logs or a command line.
+- Settings on the TV: `/var/lib/customwebos/nas.fstab`, mode 600, one fstab line; PC source `.local/slideshow-nas.json` with `"share"` as `//host/share` (converted to `host:/share`) or `host:/path`; other keys are ignored.
 - Mount point `/tmp/customwebos-nas`; app link `<app dir>/nas` → it; photo paths `nas/<path>`.
-- Mount options: `ro,username=…,password=…,ip=<host>,vers=<vers>,sec=ntlmssp,iocharset=utf8,soft,noserverino,nounix,file_mode=0444,dir_mode=0555`.
+- Mount options: `ro,vers=3,nolock,soft,timeo=30,retrans=2,addr=<host>` (type `nfs`).
 - Delay cap: mount + liveness check ≤ 5 s (`timeout -t 5`), on top of the 5 s settle; past it, that show falls back to the stick.
 - NAS first, no mixing: any NAS photo → only NAS photos; empty, unmounted or failed → the stick's; none → LG's screen.
 - Limits as for the stick: 2000 photos, 20 MB per file, 8 levels.
