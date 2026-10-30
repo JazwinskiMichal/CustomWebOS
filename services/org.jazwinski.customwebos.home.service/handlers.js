@@ -9,6 +9,9 @@ var PERF_FILE = '/tmp/customwebos-perf.json';
 // app can't read it with file:// (sandbox), so the no-signal hook links
 // <app dir>/usb to it and the app loads "usb/<path below USB_ROOT>".
 var USB_ROOT = '/tmp/usb';
+// The no-signal watcher mounts the NAS share here for a show (NFS v3,
+// read-only) and links <app dir>/nas to it; empty when not mounted.
+var NAS_ROOT = '/tmp/customwebos-nas';
 var MAX_PHOTOS = 2000;
 // ponytail: a byte cap stands in for a pixel cap (the TV's browser decodes an
 // <img> at full size); read the JPEG/PNG header if big-but-small files bite.
@@ -141,11 +144,18 @@ function createHandlers(call, writeFile, opts) {
         });
     }
 
-    // The photos on all USB sticks, for the no-signal slideshow; [] if none.
+    // The photos for the no-signal slideshow: the NAS share's if it has any,
+    // else all USB sticks'; never mixed; [] if none.
     function listPhotos(message) {
-        var files = photoFiles(walkTree(opts.fs || require('fs'), opts.usbRoot || USB_ROOT, 8, MAX_PHOTO_BYTES));
+        var fsLike = opts.fs || require('fs');
+        var prefix = 'nas/';
+        var files = photoFiles(walkTree(fsLike, opts.nasRoot || NAS_ROOT, 8, MAX_PHOTO_BYTES));
+        if (!files.length) {
+            prefix = 'usb/';
+            files = photoFiles(walkTree(fsLike, opts.usbRoot || USB_ROOT, 8, MAX_PHOTO_BYTES));
+        }
         var photos = [];
-        for (var i = 0; i < files.length; i++) photos.push('usb/' + files[i]);
+        for (var i = 0; i < files.length; i++) photos.push(prefix + files[i]);
         message.respond({ returnValue: true, photos: photos });
     }
 
@@ -205,6 +215,7 @@ module.exports = {
     APP_MANAGER: APP_MANAGER,
     PERF_FILE: PERF_FILE,
     USB_ROOT: USB_ROOT,
+    NAS_ROOT: NAS_ROOT,
     MAX_PHOTO_BYTES: MAX_PHOTO_BYTES,
     DOORBELL_FILE: DOORBELL_FILE,
     photoFiles: photoFiles,

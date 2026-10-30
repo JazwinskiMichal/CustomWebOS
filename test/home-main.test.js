@@ -498,3 +498,8 @@ test('splitHomeApps names Home tiles from config, All apps keeps the TV\'s names
   assert.deepEqual(r.home.map((a) => a.title), ['PS5', 'Radio Internetowe', 'Netflix'])
   assert.deepEqual(r.all.map((a) => a.title).sort(), ['HDMI 1', 'Netflix', 'Radio Internetowe - myTuner'])
 })
+
+test('photoUrl encodes each path segment (a # or % in a file name would break the photo)', () => {
+  assert.equal(main.photoUrl('nas/Wakacje 2024/łódź #1.jpg'), 'nas/Wakacje%202024/%C5%82%C3%B3d%C5%BA%20%231.jpg')
+  assert.equal(main.photoUrl('usb/sda/sda1/100%.png'), 'usb/sda/sda1/100%25.png')
+})

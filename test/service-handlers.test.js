@@ -308,3 +308,31 @@ test('openDoor refuses a doorUrl that isn\'t http or https instead of crashing t
     assert.deepEqual(msg.responses, [{ returnValue: false, errorText: 'doorUrl must start with http:// or https://' }], doorUrl)
   }
 })
+
+// Slideshow from the NAS (NFS mount at NAS_ROOT): NAS first, no mixing.
+function photosFrom(tree) {
+  const h = createHandlers(() => {}, () => {}, { fs: fakeFs(tree), usbRoot: '/usb', nasRoot: '/nas' })
+  const msg = fakeMessage({})
+  h.listPhotos(msg)
+  return msg.responses[0].photos
+}
+
+test('NAS_ROOT is where the watcher mounts the share', () => {
+  const { NAS_ROOT } = require('../services/org.jazwinski.customwebos.home.service/handlers.js')
+  assert.equal(NAS_ROOT, '/tmp/customwebos-nas')
+})
+
+test('listPhotos uses only the NAS when it has photos', () => {
+  assert.deepEqual(photosFrom({ nas: { 'a.jpg': 1e6 }, usb: { 'b.jpg': 1e6 } }), ['nas/a.jpg'])
+})
+
+test('listPhotos falls back to the stick when the NAS folder is empty or missing', () => {
+  assert.deepEqual(photosFrom({ nas: {}, usb: { 'b.jpg': 1e6 } }), ['usb/b.jpg'])
+  assert.deepEqual(photosFrom({ usb: { 'b.jpg': 1e6 } }), ['usb/b.jpg'])
+  assert.deepEqual(photosFrom({ nas: { 'notes.txt': 10 }, usb: { 'b.jpg': 1e6 } }), ['usb/b.jpg'])
+})
+
+test('listPhotos applies the stick\'s limits to the NAS', () => {
+  const { MAX_PHOTO_BYTES } = require('../services/org.jazwinski.customwebos.home.service/handlers.js')
+  assert.deepEqual(photosFrom({ nas: { 'ok.jpg': 1e6, 'huge.jpg': MAX_PHOTO_BYTES + 1 } }), ['nas/ok.jpg'])
+})

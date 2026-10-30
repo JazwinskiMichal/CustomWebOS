@@ -248,6 +248,14 @@ var APP_LOGOS = {
 };
 APP_LOGOS[ALL_APPS_ID] = 'apps';
 
+// A photo path from listPhotos ("nas/…" or "usb/…") as a URL relative to the
+// app: each segment encoded, so a # or % in a file name can't break it.
+function photoUrl(path) {
+  var parts = String(path).split('/');
+  for (var i = 0; i < parts.length; i++) parts[i] = encodeURIComponent(parts[i]);
+  return parts.join('/');
+}
+
 function logoFor(id) {
   return APP_LOGOS.hasOwnProperty(id) ? 'assets/icons/' + APP_LOGOS[id] + '.svg' : null;
 }
@@ -1035,7 +1043,7 @@ function mountUI(doc) {
     var n = s.photos.length;
     s.idx = ((i % n) + n) % n;
     s.cur = 1 - s.cur;
-    s.imgs[s.cur].src = s.photos[s.idx];
+    s.imgs[s.cur].src = photoUrl(s.photos[s.idx]);
     s.imgs[s.cur].className = 'on';
     s.imgs[1 - s.cur].className = '';
     clearTimeout(s.timer);
@@ -1163,6 +1171,7 @@ if (typeof module !== 'undefined' && module.exports) {
     failureView: failureView,
     APP_LOGOS: APP_LOGOS,
     logoFor: logoFor,
+    photoUrl: photoUrl,
     perfParams: perfParams
   };
 }
