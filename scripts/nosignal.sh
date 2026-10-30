@@ -24,8 +24,12 @@
 # on, the watcher turns the TV off itself (owner's choice). It never opens or
 # switches inputs except by launching the HDMI app back (tv-notes).
 #
-# It also links <CustomWebOS dir>/usb to /tmp/usb: the app can't read the
-# stick with file://, only through its own folder.
+# It also links <CustomWebOS dir>/usb to /tmp/usb and <CustomWebOS dir>/nas to
+# the NAS mount point: the app can't read either with file://, only through
+# its own folder. With a NAS share set up (nosignal.ps1 -ConfigureNas), each
+# cover mounts it first (NFS v3, read-only, 5 s at most) and the show uses its
+# photos if it has any, else the stick's; the end of the show unmounts it.
+# Design: docs/superpowers/specs/2026-10-29-slideshow-nas-design.md.
 #
 # Log: /tmp/nosignal.log (256 KB, one rotation).
 # Undo: rm /var/lib/webosbrew/init.d/customwebos-nosignal && reboot
@@ -36,6 +40,11 @@
 APP_ID=org.jazwinski.customwebos.home
 APP_DIR=${APP_DIR:-/media/developer/apps/usr/palm/applications/$APP_ID}
 USB_ROOT=${USB_ROOT:-/tmp/usb}
+# The NAS share (nosignal.ps1 -ConfigureNas): an NFS v3 fstab line, mounted
+# read-only for a show and unmounted after; the home service lists it first.
+NAS_FSTAB=${NAS_FSTAB:-/var/lib/customwebos/nas.fstab}
+NAS_MNT=${NAS_MNT:-/tmp/customwebos-nas}
+MOUNTS=${MOUNTS:-/proc/mounts}
 STATE=${STATE:-/tmp/nosignal}
 LOG=${LOG:-/tmp/nosignal.log}
 SETTLE_S=5
@@ -103,6 +112,35 @@ say() {
     echo "$(date '+%F %T') nosignal: $*" >> "$LOG"
 }
 
+nas_mounted() {
+    grep -q " $NAS_MNT " "$MOUNTS" 2>/dev/null
+}
+
+# Mounts the NAS share for a show, within the 5 s cap. A mount left from an
+# earlier show that no longer answers (the NAS rebooted) is dropped first, so
+# listPhotos can't hang on it. The log never carries mount's output: it names
+# the server and could carry options.
+nas_up() {
+    [ -e "$NAS_FSTAB" ] || return 0
+    if nas_mounted; then
+        timeout -t 3 ls "$NAS_MNT" > /dev/null 2>&1 && return 0
+        umount -l "$NAS_MNT" 2>/dev/null
+        say "NAS mount stopped answering: mounting again"
+    fi
+    mkdir -p "$NAS_MNT"
+    if timeout -t 5 mount -T "$NAS_FSTAB" "$NAS_MNT" > /dev/null 2>&1; then
+        say "NAS mounted"
+    else
+        say "NAS not reachable: using the stick"
+    fi
+}
+
+# After a show: nothing touches the NAS while HDMI has a picture.
+nas_down() {
+    nas_mounted && umount -l "$NAS_MNT" 2>/dev/null
+    return 0
+}
+
 # One-shot luna call; prints the reply on one line without spaces.
 ask() {
     luna-send -n 1 "$1" "$2" < /dev/null 2>/dev/null | tr -d ' \n'
@@ -135,7 +173,8 @@ check() {
             ;;
         cover)
             rm -f "$STATE/lost-$cur"
-            if ask "$HOME_SERVICE/listPhotos" '{}' | grep -q '"usb/'; then
+            nas_up
+            if ask "$HOME_SERVICE/listPhotos" '{}' | grep -qE '"(usb|nas)/'; then
                 n=${cur#HDMI_}
                 # Brought back while running, CustomWebOS would first show its
                 # last frame (Home); a fresh launch shows the black layer.
@@ -147,16 +186,19 @@ check() {
                 (sleep "$OFF_S"; echo "off $id" >&3) &
                 say "$cur covered with the slideshow"
             else
-                say "$cur has no picture but the stick has no photos: LG's screen stays"
+                nas_down
+                say "$cur has no picture but neither the NAS nor the stick has photos: LG's screen stays"
             fi
             ;;
         uncover)
             rm -f "$STATE/covering" "$STATE/cover-id" "$STATE"/lost-*
+            nas_down
             luna-send -n 1 "$AM/launch" "{\"id\":\"com.webos.app.hdmi${cur#HDMI_}\"}" < /dev/null > /dev/null 2>&1
             say "$cur has its picture back; input relaunched"
             ;;
         clear)
             rm -f "$STATE/covering" "$STATE/cover-id" "$STATE"/lost-*
+            nas_down
             say "slideshow left ($cur, $fg in front)"
             ;;
         none)
@@ -186,6 +228,8 @@ main() {
     mkdir -p "$STATE"
     rm -f "$STATE"/*
     [ -d "$APP_DIR" ] && ln -sfn "$USB_ROOT" "$APP_DIR/usb"
+    mkdir -p "$NAS_MNT"
+    [ -d "$APP_DIR" ] && ln -sfn "$NAS_MNT" "$APP_DIR/nas"
     mkfifo "$STATE/events"
     exec 3<> "$STATE/events"
     # Our process ids (main, the three loops and their luna-send), so
@@ -206,8 +250,10 @@ main() {
 case "$1" in
     --decide) shift; decide "$@" ;;
     --off-due) shift; off_due "$@" ;;
+    --nas-up) nas_up ;;
+    --nas-down) nas_down ;;
     --foreground) main ;;
     "") main < /dev/null > /dev/null 2>&1 & ;;
-    *) echo "usage: $0 [--foreground | --decide … | --off-due …]" >&2; exit 2 ;;
+    *) echo "usage: $0 [--foreground | --decide … | --off-due … | --nas-up | --nas-down]" >&2; exit 2 ;;
 esac
 exit 0

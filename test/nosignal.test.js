@@ -204,3 +204,76 @@ test('nosignal.ps1 -RemoveNas -WhatIf unmounts and deletes the NAS settings', { 
   assert.match(r.stdout, /umount -l \/tmp\/customwebos-nas/)
   assert.match(r.stdout, /rm -f \/var\/lib\/customwebos\/nas\.fstab/)
 })
+
+// nas_up / nas_down (via --nas-up / --nas-down) with stub mount, umount,
+// timeout and ls that append their arguments to calls.log.
+function nasRun(hook, { fstab = true, mounted = false, lsFails = false, mountFails = false } = {}) {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'cwo-nas-'))
+  const calls = path.join(dir, 'calls.log')
+  const stub = (name, body) => fs.writeFileSync(path.join(dir, name), '#!/bin/sh\necho "' + name + ' $*" >> "' + calls.replace(/\\/g, '/') + '"\n' + body, { mode: 0o755 })
+  stub('timeout', 'shift 2\nexec "$@"\n')
+  stub('mount', mountFails ? 'echo "mount: access denied by server while mounting 192.168.88.235:/x" >&2\nexit 32\n' : 'exit 0\n')
+  stub('umount', 'exit 0\n')
+  stub('ls', lsFails ? 'exit 1\n' : 'exit 0\n')
+  const fstabPath = path.join(dir, 'nas.fstab')
+  if (fstab) fs.writeFileSync(fstabPath, '192.168.88.235:/x /tmp/customwebos-nas nfs ro 0 0\n')
+  const mnt = path.join(dir, 'mnt')
+  const mounts = path.join(dir, 'mounts')
+  fs.writeFileSync(mounts, mounted ? '192.168.88.235:/x ' + mnt.replace(/\\/g, '/') + ' nfs ro 0 0\n' : '')
+  const log = path.join(dir, 'log')
+  const r = spawnSync(SH, [SCRIPT, hook], {
+    encoding: 'utf8',
+    env: Object.assign({}, process.env, {
+      PATH: dir + path.delimiter + process.env.PATH,
+      NAS_FSTAB: fstabPath.replace(/\\/g, '/'), NAS_MNT: mnt.replace(/\\/g, '/'), MOUNTS: mounts, LOG: log,
+    }),
+  })
+  assert.equal(r.status, 0, r.stderr)
+  const read = (f) => (fs.existsSync(f) ? fs.readFileSync(f, 'utf8') : '')
+  return { calls: read(calls), log: read(log), fstab: fstabPath.replace(/\\/g, '/'), mnt: mnt.replace(/\\/g, '/') }
+}
+
+test('no nas.fstab: no mount is tried', skip, () => {
+  assert.equal(nasRun('--nas-up', { fstab: false }).calls, '')
+})
+
+test('nas_up mounts with the fstab, inside a 5 s limit', skip, () => {
+  const r = nasRun('--nas-up')
+  assert.ok(r.calls.includes('timeout -t 5 mount -T ' + r.fstab + ' ' + r.mnt), r.calls)
+  assert.match(r.log, /NAS mounted/)
+})
+
+test('a stale mount is dropped and mounted again', skip, () => {
+  const r = nasRun('--nas-up', { mounted: true, lsFails: true })
+  const umount = r.calls.indexOf('umount -l ' + r.mnt)
+  const mount = r.calls.indexOf('mount -T')
+  assert.ok(umount >= 0 && mount > umount, r.calls)
+})
+
+test('a live mount is kept as it is', skip, () => {
+  const r = nasRun('--nas-up', { mounted: true })
+  assert.doesNotMatch(r.calls, /umount|mount -T/)
+})
+
+test('a failed mount is logged without the server\'s details', skip, () => {
+  const r = nasRun('--nas-up', { mountFails: true })
+  assert.match(r.log, /NAS not reachable: using the stick/)
+  assert.doesNotMatch(r.log, /192\.168|access denied|password/)
+})
+
+test('nas_down unmounts only a mounted share', skip, () => {
+  assert.match(nasRun('--nas-down', { mounted: true }).calls, /umount -l /)
+  assert.equal(nasRun('--nas-down').calls, '')
+})
+
+test('the cover accepts NAS or stick photos, and the show\'s end unmounts', () => {
+  const src = fs.readFileSync(SCRIPT, 'utf8')
+  assert.match(src, /grep -qE '"\(usb\|nas\)\/'/)
+  const cover = src.slice(src.indexOf('        cover)'), src.indexOf('        uncover)'))
+  assert.ok(cover.indexOf('nas_up') >= 0 && cover.indexOf('nas_up') < cover.indexOf('listPhotos'), 'nas_up before listPhotos')
+  for (const branch of ['        uncover)', '        clear)']) {
+    const body = src.slice(src.indexOf(branch), src.indexOf(';;', src.indexOf(branch)))
+    assert.match(body, /nas_down/, branch)
+  }
+  assert.match(src, /ln -sfn "\$NAS_MNT" "\$APP_DIR\/nas"/)
+})
