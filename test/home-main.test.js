@@ -480,6 +480,43 @@ test('slideshowParams accepts the four HDMI inputs from launch params or the pre
   assert.equal(main.slideshowParams('{}', ''), null)
 })
 
+// The slideshow's round outlives a show: a new show continues it.
+const noShuffle = () => 0.999999 // Fisher-Yates with j = i: order kept
+
+test('resumeRound continues a saved round where it stopped', () => {
+  const saved = { order: ['c', 'a', 'b', 'd'], next: 2 }
+  assert.deepEqual(main.resumeRound(saved, ['a', 'b', 'c', 'd'], noShuffle), { order: ['c', 'a', 'b', 'd'], start: 2, fresh: false })
+})
+
+test('resumeRound drops photos gone from the share and adds new ones after the saved ones', () => {
+  const saved = { order: ['c', 'gone', 'a', 'b'], next: 3 } // c, gone, a shown
+  const r = main.resumeRound(saved, ['a', 'b', 'c', 'new1', 'new2'], noShuffle)
+  assert.deepEqual(r.order, ['c', 'a', 'b', 'new1', 'new2'])
+  assert.equal(r.start, 2, 'still at b')
+  assert.equal(r.fresh, true, 'the order changed: save it')
+})
+
+test('resumeRound starts a new shuffled round when none is saved, it is finished, or nothing of it is left', () => {
+  const photos = ['a', 'b', 'c']
+  for (const saved of [null, { order: ['a', 'b', 'c'], next: 3 }, { order: ['x', 'y'], next: 0 }, { order: 'junk', next: 'x' }]) {
+    const r = main.resumeRound(saved, photos, noShuffle)
+    assert.deepEqual([r.order.slice().sort(), r.start, r.fresh], [photos, 0, true], JSON.stringify(saved))
+  }
+})
+
+test('loadRound and the two savers round-trip, and never throw', () => {
+  const st = fakeStorage()
+  assert.equal(main.loadRound(st), null)
+  assert.equal(main.saveRoundOrder(st, ['b', 'a']), true)
+  assert.equal(main.saveRoundNext(st, 1), true)
+  assert.deepEqual(main.loadRound(st), { order: ['b', 'a'], next: 1 })
+  assert.equal(main.loadRound(fakeStorage({ [main.ROUND_ORDER_KEY]: '{bad', [main.ROUND_NEXT_KEY]: '1' })), null)
+  const throwing = { getItem: () => { throw new Error('denied') }, setItem: () => { throw new Error('quota') } }
+  assert.equal(main.loadRound(throwing), null)
+  assert.equal(main.saveRoundOrder(throwing, ['a']), false)
+  assert.equal(main.saveRoundNext(null, 1), false)
+})
+
 test('shuffle returns a permutation, driven by the given random source', () => {
   const list = ['a', 'b', 'c', 'd', 'e']
   let seed = 1

@@ -924,6 +924,37 @@ test('photos change every 30 s; arrows step; Back keeps the show', async () => {
   } finally { await page.close() }
 })
 
+test('stepping right shows every photo once before any comes back', async () => {
+  const page = await openSlideshow()
+  try {
+    const seen = [await shownAfter(page, null, 1000)]
+    for (let i = 0; i < 3; i++) {
+      // quick presses (the next photo may still be preloading) and slow ones
+      await page.clock.runFor(i === 1 ? 5000 : 200)
+      await page.keyboard.press('ArrowRight')
+      seen.push(await shownAfter(page, seen[seen.length - 1], 1000))
+    }
+    assert.equal(new Set(seen.slice(0, 3)).size, 3, seen.join(' '))
+    assert.equal(seen[3], seen[0], 'the round wraps to the first')
+  } finally { await page.close() }
+})
+
+test('a new show continues the round: it starts with a photo not shown yet', async () => {
+  const page = await openSlideshow()
+  try {
+    const a = await shownAfter(page, null, 1000)
+    await page.keyboard.press('ArrowRight')
+    const b = await shownAfter(page, a, 1000)
+    // The watcher closes the app and launches it again for the next show.
+    await page.reload()
+    const c = await shownAfter(page, null, 1000)
+    assert.ok(![a, b].includes(c), `${c} again after ${a}, ${b}`)
+    await page.reload()
+    // c was the round's last: the next show starts a new round (any photo).
+    assert.match(await shownAfter(page, null, 1000), /^usb\//)
+  } finally { await page.close() }
+})
+
 test('a photo still loading leaves the shown one up; repeated presses meanwhile step only once', async () => {
   const page = await openSlideshow()
   try {

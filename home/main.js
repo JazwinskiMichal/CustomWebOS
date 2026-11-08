@@ -467,6 +467,76 @@ function shuffle(list, rand) {
   return out;
 }
 
+// The slideshow's round (its shuffled order, and the next photo to show)
+// outlives a show: the watcher starts a new show each time the HDMI picture
+// drops, and reshuffling then would bring back photos just seen. The order
+// is saved once per round, the position (small) at each photo.
+var ROUND_ORDER_KEY = 'customwebos.slideshow.order.v1';
+var ROUND_NEXT_KEY = 'customwebos.slideshow.next.v1';
+
+// {order, next} as saved, or null if there is none or it's unreadable.
+function loadRound(storage) {
+  try {
+    var order = JSON.parse(storage.getItem(ROUND_ORDER_KEY));
+    var next = parseInt(storage.getItem(ROUND_NEXT_KEY), 10);
+    if (Object.prototype.toString.call(order) !== '[object Array]' || isNaN(next)) return null;
+    return { order: order, next: next };
+  } catch (e) {
+    return null;
+  }
+}
+
+function saveRoundOrder(storage, order) {
+  try {
+    storage.setItem(ROUND_ORDER_KEY, JSON.stringify(order));
+    return true;
+  } catch (e) {
+    return false;
+  }
+}
+
+function saveRoundNext(storage, next) {
+  try {
+    storage.setItem(ROUND_NEXT_KEY, String(next));
+    return true;
+  } catch (e) {
+    return false;
+  }
+}
+
+// Where a new show starts, given the saved round and the photos there are
+// now: the saved order without photos that are gone, then new photos
+// (shuffled), from the first one not yet shown. A finished, missing or
+// emptied round gives a new shuffle from the start. fresh: the order
+// differs from the saved one and needs saving.
+function resumeRound(saved, photos, rand) {
+  var order = [];
+  var start = 0;
+  var have = {};
+  var known = {};
+  var i;
+  for (i = 0; i < photos.length; i++) have[photos[i]] = true;
+  if (saved && Object.prototype.toString.call(saved.order) === '[object Array]' && typeof saved.next === 'number') {
+    for (i = 0; i < saved.order.length; i++) {
+      var p = saved.order[i];
+      known[p] = true;
+      if (!have[p]) continue;
+      order.push(p);
+      if (i < saved.next) start++;
+    }
+  }
+  if (!order.length || start >= order.length) {
+    return { order: shuffle(photos, rand), start: 0, fresh: true };
+  }
+  var added = [];
+  for (i = 0; i < photos.length; i++) if (!known[photos[i]]) added.push(photos[i]);
+  return {
+    order: order.concat(shuffle(added, rand)),
+    start: start,
+    fresh: order.length !== saved.order.length || added.length > 0
+  };
+}
+
 // --- Browser runtime (guarded; does not execute when required from Node) ---
 
 function mountUI(doc) {
@@ -1044,8 +1114,10 @@ function mountUI(doc) {
       if (show !== s) return;
       var photos = (r && r.photos) || [];
       if (!photos.length) { endShow(true); return; }
-      s.photos = shuffle(photos, Math.random);
-      showPhoto(0);
+      var round = resumeRound(loadRound(storage), photos, Math.random);
+      s.photos = round.order;
+      if (round.fresh) saveRoundOrder(storage, round.order);
+      showPhoto(round.start);
     }, function () { if (show === s) endShow(true); });
   }
 
@@ -1111,6 +1183,7 @@ function mountUI(doc) {
     s.cur = 1 - s.cur;
     s.idx = s.want;
     s.failed = 0;
+    saveRoundNext(storage, s.idx + 1);
     s.timer = setTimeout(nextPhoto, SLIDE_MS);
     if (s.photos.length < 2) return;
     s.preload = setTimeout(function () {
@@ -1129,6 +1202,7 @@ function mountUI(doc) {
       var photos = (r && r.photos) || [];
       if (!photos.length) { endShow(true); return; }
       s.photos = shuffle(photos, Math.random);
+      saveRoundOrder(storage, s.photos);
       s.idx = -1; // an index into the old order
       showPhoto(0);
     }, function () { if (show === s) endShow(true); });
@@ -1248,6 +1322,12 @@ if (typeof module !== 'undefined' && module.exports) {
     forcedTheme: forcedTheme,
     slideshowParams: slideshowParams,
     shuffle: shuffle,
+    ROUND_ORDER_KEY: ROUND_ORDER_KEY,
+    ROUND_NEXT_KEY: ROUND_NEXT_KEY,
+    loadRound: loadRound,
+    saveRoundOrder: saveRoundOrder,
+    saveRoundNext: saveRoundNext,
+    resumeRound: resumeRound,
     SLIDE_MS: SLIDE_MS,
     FADE_MS: FADE_MS,
     msToNextMinute: msToNextMinute,
