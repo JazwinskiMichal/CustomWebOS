@@ -1,12 +1,12 @@
 # Status
 
-Where CustomWebOS stands. Last updated **2026-10-29**. Update it whenever something lands.
+Where CustomWebOS stands. Last updated **2026-11-08**. Update it whenever something lands.
 
 **Paused on 2026-10-29, at a good stopping point.** The owner's goals are met: CustomWebOS is the TV's home screen behind the Home button, a photo slideshow replaces LG's no-signal screen, remote view lets a PC see and drive the TV, and a doorbell camera box opens over anything on screen. The ideas that remain need hardware the owner doesn't have yet: a Home Assistant server with devices to control, and a doorbell camera. [If work resumes](#if-work-resumes) says where to pick up. Setting up a machine: [development.md](development.md). TV rules: [tv-notes.md](tv-notes.md).
 
 ## On the TV now
 
-- **CustomWebOS 0.7.6** is the home screen:
+- **CustomWebOS 0.7.10** is the home screen:
   - GNOME's Morphogenesis wallpaper: light by day, dark from sunset to sunrise in Warsaw, with text and glass colours to match
   - the clock and Polish date on glass like the dock
   - a frosted-glass dock: Live TV, Netflix, YouTube, PS5 (HDMI 1), Radio (myTuner), then All apps
@@ -18,7 +18,7 @@ Where CustomWebOS stands. Last updated **2026-10-29**. Update it whenever someth
 - **LG Input Hook is patched to inject into `lginput2` only** (`scripts/inputhook-patch.ps1`); unpatched, a boot that starts on an HDMI input leaves every input black after the next source switch. Re-run the script after reinstalling or updating LG Input Hook.
 - **Remote view (VNC):** connect TightVNC to `<tv>:5900` with the owner's password to see and control the TV, including live TV, Netflix and HDMI. It runs at 960×540, about 12 fps within half a CPU core and about 17 MB; idle it costs nothing. Started by the `customwebos-remoteview` boot hook; its log is `/tmp/remoteview.log`. Set up with [development.md](development.md); details in [tv-notes.md](tv-notes.md).
 - **Remote view keys:** arrows, Enter (OK), Esc/Backspace (Back), Home, typed text, and F1 = Input (LG's source picker), F2 = Mute, F3/F4 = volume down/up, Page Up/Down = channel up/down (`native/remoteview/src/keymap.c`).
-- **No-signal slideshow (M3):** when the HDMI input on screen loses its picture (e.g. the PS5 goes off) and a USB stick has photos, the `customwebos-nosignal` boot hook covers it with a full-screen slideshow of the stick's photos after 5 s (30 s per photo, ←/→ step, Back does nothing). It ends when the picture comes back (the input is relaunched) or the source changes; Home opens CustomWebOS. Without a stick or photos, LG's screen stays. If LG's no-signal auto-off is on, the watcher turns the TV off 15 min after a cover starts. Log: `/tmp/nosignal.log`.
+- **No-signal slideshow (M3):** when the HDMI input on screen loses its picture (e.g. the PS5 goes off) and there are photos, the `customwebos-nosignal` boot hook covers it with a full-screen slideshow after 5 s: the NAS share's photos (mounted for the show, `nosignal.ps1 -ConfigureNas`), else a USB stick's. 30 s per photo from when it appears, cross-faded once loaded, the next one preloaded; ←/→ step (a small spinner if a step waits over 0.3 s), Back does nothing. Photos are turned by their EXIF orientation. One shuffled round runs across shows (saved in the app's localStorage), so a photo comes back only after all have shown. It ends when the picture comes back (the input is relaunched) or the source changes; Home opens CustomWebOS. Without a stick or photos, LG's screen stays. If LG's no-signal auto-off is on, the watcher turns the TV off 15 min after a cover starts. Log: `/tmp/nosignal.log`.
 - **Doorbell overlay (M4, proof of concept):** `org.jazwinski.customwebos.doorbell` 0.1.2, a floating window. A ring (`scripts/doorbell.ps1 -Ring`) opens a camera box over Netflix, Live TV, HDMI or CustomWebOS; OK enlarges it, OK again opens the door (an empty POST to `doorUrl`), Back steps back. Settings in `/var/lib/customwebos/doorbell.json` (from `.local/doorbell.json`); the home service reads them and sends the door request. Tested on the TV with the owner's webcam through `dev/fake-camera.mjs --webcam`.
 - **Everything above has a rollback:** the Home button, power-on hook, LG Input Hook patch, remote view, slideshow watcher and doorbell box in [home-button.md](home-button.md); the home service and rooting in [setup.md](setup.md#rollback).
 
@@ -30,7 +30,7 @@ From the [overall design](superpowers/specs/2026-10-24-customwebos-design.md):
 |---|---|---|
 | M1 | Foundation: repo, setup guide, minimal home app that launches apps | Done ([plan](superpowers/plans/2026-10-24-m1-foundation.md)) |
 | M2 | Home screen depth: wallpaper, clock, good remote navigation, settings | Mostly done. Preview loop and hardening ([plan](superpowers/plans/2026-10-25-m2-preview-ui-hardening.md)), the [redesign](superpowers/plans/2026-10-25-home-redesign.md), Home button / power-on, and the day/night theme ([plan](superpowers/plans/2026-10-26-day-night-theme.md)). Open: on-TV settings (none planned yet) |
-| M3 | First background service: HDMI signal loss → photo slideshow | Done, USB stick instead of the NAS ([spec](superpowers/specs/2026-10-27-no-signal-slideshow-design.md), [plan](superpowers/plans/2026-10-27-no-signal-slideshow.md)). Follow-ups below |
+| M3 | First background service: HDMI signal loss → photo slideshow | Done: photos from the NAS (NFS v3, [spec](superpowers/specs/2026-10-29-slideshow-nas-design.md)), else a USB stick ([spec](superpowers/specs/2026-10-27-no-signal-slideshow-design.md), [plan](superpowers/plans/2026-10-27-no-signal-slideshow.md)). Follow-ups below |
 | M4 | Overlays over the foreground app (doorbell camera over Netflix) | Proof of concept done ([spec](superpowers/specs/2026-10-29-doorbell-overlay-design.md), [plan](superpowers/plans/2026-10-29-doorbell-overlay.md)); waits for doorbell hardware and Home Assistant |
 | M5+ | Custom apps (e.g. Home Assistant panels) | Not started; waits for hardware |
 
@@ -54,12 +54,11 @@ Each new piece of work starts with a design (`docs/superpowers/specs/`). Before 
    - Parked minors with reasons: the log rotates only at restart; pointer drift after using the Magic Remote mid-session; `pointer_scale` above 1.2 can drop big moves; capture-library waits have no time limit (not seen on this TV).
 2. **Day/night theme:** a forced `theme` (perf runs, checks) stays until the app is next closed; only the first switch is preloaded; a few edge cases (local 00:30, clock-change days, switching during All apps) are checked by review only, not by tests.
 3. **No-signal slideshow:**
-   - **0.7.8, built and tested in the preview, not yet on the TV** (owner's report on 2026-11-08: portrait photos sideways, → seemingly ignored, photos changing too soon after stepping). The TV's browser (Chrome 53) ignores EXIF orientation, so the home service's new `photoOrientation` reads it and the app turns the photo. A photo now fades in only once loaded (the old one stays up meanwhile), the next one is preloaded, presses during a load step once from the photo on screen, an arrow press waiting on a load shows a small spinner after 0.3 s, and the 30 s count from when a photo appears. Installing needs the service too (`install.ps1` ships both); the new method needs no re-registration (the home app has the service's group).
+   - **Open from 2026-11-08:** what restarts the home service about 40 s after some power-ons (it lost the first photo's lookup; the app now retries, see tv-notes). The retry has only run in the preview: the boot that tested 0.7.10 didn't restart the service. LG's screensaver still starts after 2 min without a key over the slideshow, and the first key only closes it.
    - Not yet checked on the TV: pulling the stick mid-show, no stick at all, the 15-min power-off itself (with LG's screensaver up), and a very large photo (40+ MP; files over 20 MB are already skipped).
    - Minor review findings, deferred (ledger): a cover forgotten by one event comes back on the next; no browser test for the stick pulled mid-show; `inputhook-patch.sh --undo` trusts an old `.orig`; the stick is walked in full before the 2000-photo cap; the watcher's one-shot luna calls have no timeout; `-Remove` leaves `<app dir>/usb`.
    - The owner saw one more brief flash once, sequence not remembered; the known ones are fixed (Home before the show, Home over a dark input's tile, stale photo on the next Home).
    - Homebrew came up in failsafe mode twice on 27 Oct, each after a cold start that followed a black-input boot. Not explained; every boot since the Input Hook patch finished cleanly.
-   - Photos from the NAS instead of the stick (the original idea), if wanted.
 4. **Doorbell box:**
    - Not checked on the TV: a ring over HDMI with a picture (the spike's box worked there), and over LG's screensaver.
    - Minor review findings, deferred (ledger): "Camera not set up" also shows when the service can't be reached; a camera dying mid-session isn't reported, and an old frame can show after a ring; the MJPEG retry reuses its URL; a non-string `cameraUrl` leaves the box blank; a door answer still in flight can land after a new ring; `-Configure` empties the TV's file before writing it; the `-Ring -WhatIf` line is printed bash-style.

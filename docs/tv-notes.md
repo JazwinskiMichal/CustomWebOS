@@ -9,6 +9,8 @@ Lasting facts and rules for the target TV. Read this before touching it. The evi
 - **Web engine:** Chromium 53 (`Chrome/53.0.2785.34`). Runtime JS stays ES5.
   - **Supported:** `-webkit-mask-image`, CSS custom properties, flexbox (prefix it).
   - **Not supported:** CSS Grid, flex `gap`, `backdrop-filter`, variable fonts (the default weight is used and bold is synthesised).
+  - **JPEG EXIF orientation is ignored** (Chrome honours it only from 81): a phone's portrait photo shows on its side. The home service's `photoOrientation` reads the tag; the slideshow turns the photo with CSS.
+  - **localStorage persists across reboots:** `/var/lib/wam/Default/Local Storage/file_<app id>_0.localstorage` (SQLite).
 - **Services:** run under Node 0.12.
 - **Locale:** `navigator.language` is `pl-PL`.
 - **Every power-on is a full boot,** with uptime starting near 0. So `/var/lib/webosbrew/init.d/` hooks run each time the TV is switched on.
@@ -54,6 +56,9 @@ Lasting facts and rules for the target TV. Read this before touching it. The evi
 - **`ares-package` minifies `main.js`;** the output stays ES5.
 - **`listLaunchPoints` lists the browser twice;** the app de-duplicates by id.
 - **The service process survives `/quit`** and keeps running old code; `install.ps1` kills it after installing.
+- **The home service can restart by itself about 40 s after power-on** (seen once in two logged boots; cause not found). A call in flight to the old instance is lost: the app gets a failure, and the next call reaches the new instance. App calls that matter retry (the app list, the slideshow's photo orientation).
+- **LG's screensaver comes on over our app** after 2 min without a key (`[TIMER]ScreenSaver:120`), including over the slideshow; the first key only closes it and doesn't reach the app.
+- **SSH from Windows PowerShell:** double quotes in `ssh` arguments are stripped, so pipe a script to `sh -s` instead; the piped text starts with a byte-order mark, so leave the script's first line blank. BusyBox `head` needs `-n N`, and its `ls` has no `--full-time` (use `-e`).
 - **Injecting input: uinput devices are ignored.** `surface-manager` reads only the input devices present at its start. Use the second-screen API instead (`ws://<tv>:3000`, one-time pairing prompt, then `getPointerInputSocket` and text `move`/`click`/`scroll`/`button` messages), as phone remote apps do. A `HOME` button sent this way opens LG's home bar (it skips LG Input Hook); launch the app with `ssap://system.launcher/launch` instead. The pointer socket ignores large single moves: send steps of at most 30 per axis. One move unit is about 2 screen pixels (`pointer_scale` 0.51).
 - **Screen capture: a leaked `DILE_VT` context lasts until reboot.** A capture process killed without releasing it (e.g. hyperion-webos under `timeout -t`, which sends SIGTERM) leaves every later `DILE_VT_Create` failing. Stop capture tools with SIGINT (`timeout -s INT -t N`), and make our own capture code release on every exit path. Block the termination signals while opening or closing a capture: a signal in between `DILE_VT_Create` and the code recording the context leaks it too.
 - **The OLED screensaver covers captures.** With an app (e.g. CustomWebOS) idle on screen, the screensaver's opaque UI layer hides the video, so a capture shows black with coloured particles. Test video capture over live TV, where it doesn't appear.
