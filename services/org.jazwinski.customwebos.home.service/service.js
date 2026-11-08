@@ -12,6 +12,9 @@
 //     -> writes /tmp/customwebos-perf.json, {returnValue: true}
 //   luna://org.jazwinski.customwebos.home.service/listPhotos
 //     -> {returnValue: true, photos: ["usb/sda/sda1/E1.jpg", ...]} (USB sticks)
+//   luna://org.jazwinski.customwebos.home.service/photoOrientation
+//     payload: {path: "nas/…" | "usb/…"}  (one of listPhotos' paths)
+//     -> {returnValue: true, orientation: 1-8} (EXIF; 1 if none)
 //   luna://org.jazwinski.customwebos.home.service/showEnded
 //     -> {returnValue: true}; tells the no-signal watcher Home ended its show
 //   luna://org.jazwinski.customwebos.home.service/doorbellConfig
@@ -43,6 +46,7 @@ service.register('listApps', handlers.listApps);
 service.register('launch', handlers.launch);
 service.register('perfReport', handlers.perfReport);
 service.register('listPhotos', handlers.listPhotos);
+service.register('photoOrientation', handlers.photoOrientation);
 service.register('showEnded', handlers.showEnded);
 service.register('doorbellConfig', handlers.doorbellConfig);
 service.register('openDoor', handlers.openDoor);

@@ -402,3 +402,50 @@ html, body {
 #slideshow img.on {
   opacity: 1;
 }
+
+/* Shown when an arrow press waits on a photo still loading (main.js
+   SPINNER_DELAY_MS). Small and low on the screen; only transform animates. */
+#slideshow .loading {
+  position: absolute;
+  left: 936px;
+  bottom: 64px;
+  width: 40px;
+  height: 40px;
+  box-sizing: border-box;
+  border: 4px solid rgba(255, 255, 255, 0.25);
+  border-top-color: rgba(255, 255, 255, 0.85);
+  border-radius: 50%;
+  z-index: 1;
+  opacity: 0;
+  visibility: hidden;
+}
+
+#slideshow .loading.on {
+  opacity: 1;
+  visibility: visible;
+  -webkit-animation: slideshow-spin 0.9s linear infinite;
+  animation: slideshow-spin 0.9s linear infinite;
+}
+
+@-webkit-keyframes slideshow-spin { to { -webkit-transform: rotate(360deg); } }
+@keyframes slideshow-spin { to { transform: rotate(360deg); } }
+
+/* EXIF orientation (main.js sets data-o; the TV's browser ignores the tag).
+   5-8 are stored on their side: the box is laid out portrait, 1080 x 1920,
+   centred, and turned around its centre to cover the screen again. */
+#slideshow img[data-o="2"] { -webkit-transform: scaleX(-1); transform: scaleX(-1); }
+#slideshow img[data-o="3"] { -webkit-transform: rotate(180deg); transform: rotate(180deg); }
+#slideshow img[data-o="4"] { -webkit-transform: scaleY(-1); transform: scaleY(-1); }
+#slideshow img[data-o="5"],
+#slideshow img[data-o="6"],
+#slideshow img[data-o="7"],
+#slideshow img[data-o="8"] {
+  left: 420px;
+  top: -420px;
+  width: 1080px;
+  height: 1920px;
+}
+#slideshow img[data-o="5"] { -webkit-transform: rotate(-90deg) scaleX(-1); transform: rotate(-90deg) scaleX(-1); }
+#slideshow img[data-o="6"] { -webkit-transform: rotate(90deg); transform: rotate(90deg); }
+#slideshow img[data-o="7"] { -webkit-transform: rotate(90deg) scaleX(-1); transform: rotate(90deg) scaleX(-1); }
+#slideshow img[data-o="8"] { -webkit-transform: rotate(-90deg); transform: rotate(-90deg); }

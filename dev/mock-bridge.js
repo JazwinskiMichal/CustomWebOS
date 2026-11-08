@@ -12,7 +12,8 @@
 // ?mock=slowlaunch listApps as ok; launch answers after 12 s
 // ?mock=few      only netflix, youtube and pl.cda are installed
 // ?mock=recoverlate  the first three listApps fail, then it answers
-// ?mock=photos   listPhotos answers three photos (other modes: none)
+// ?mock=photos   listPhotos answers three photos (other modes: none); the
+//                one named "portrait" has EXIF orientation 6 (photoOrientation)
 // ?mock=nophotos listPhotos answers no photos
 // Doorbell box (/doorbell/): ?mock=ok snapshot camera from a fixture, door
 // simulated; door (a doorUrl is set); doorfail (openDoor fails with HTTP 500);
@@ -62,8 +63,11 @@
   function answer(uri, payload) {
     if (uri === SERVICE + 'listApps') return listApps()
     if (uri === SERVICE + 'listPhotos') {
-      var photos = mode === 'photos' ? ['usb/sda/sda1/a.jpg', 'usb/sda/sda1/b.jpg', 'usb/sda/sda1/c.jpg'] : []
+      var photos = mode === 'photos' ? ['usb/sda/sda1/a.jpg', 'usb/sda/sda1/b-portrait.jpg', 'usb/sda/sda1/c.jpg'] : []
       return Promise.resolve({ returnValue: true, photos: photos })
+    }
+    if (uri === SERVICE + 'photoOrientation') {
+      return Promise.resolve({ returnValue: true, orientation: /portrait/.test(payload.path) ? 6 : 1 })
     }
     if (uri === SERVICE + 'showEnded') {
       window.__mock.showEnded++

@@ -436,6 +436,9 @@ function forcedTheme(raw, search) {
 // No-signal slideshow: one photo every SLIDE_MS, cross-faded over FADE_MS.
 var SLIDE_MS = 30000;
 var FADE_MS = 1000;
+// An arrow press on a photo not loaded yet shows a spinner after this long;
+// a preloaded or quick one never flashes it.
+var SPINNER_DELAY_MS = 300;
 var HDMI_APP = /^com\.webos\.app\.hdmi[1-4]$/;
 
 // {input} when launched to cover a dark HDMI input: launch params
@@ -1015,18 +1018,27 @@ function mountUI(doc) {
   // no photos left it hands back to the input itself.
   var show = null;
 
+  // Two layers cross-fade: layers[cur] is on screen, the other loads the
+  // next photo. idx is the photo shown (-1 before the first), want the one
+  // asked for, dir the way the last step went.
   function startShow(input) {
     endShow(false);
-    var s = { input: input, photos: [], idx: 0, timer: null, el: el('div'), imgs: [el('img'), el('img')], cur: 0, failed: 0 };
+    var s = {
+      input: input, photos: [], idx: -1, want: 0, dir: 1, timer: null, preload: null,
+      el: el('div'), layers: [], cur: 0, failed: 0, spinner: el('div'), spin: null
+    };
     show = s;
     // The black layer goes up at once, so Home never shows while the photo
     // list loads; the first photo fades in over it.
     s.el.id = 'slideshow';
     for (var i = 0; i < 2; i++) {
-      s.imgs[i].alt = '';
-      s.imgs[i].onerror = onPhotoError;
-      s.el.appendChild(s.imgs[i]);
+      var img = el('img');
+      img.alt = '';
+      s.layers.push({ img: img, src: null, loaded: false, orient: 0 });
+      s.el.appendChild(img);
     }
+    s.spinner.className = 'loading';
+    s.el.appendChild(s.spinner);
     doc.body.appendChild(s.el);
     lunaCall(SERVICE_URI + '/listPhotos', {}, function (r) {
       if (show !== s) return;
@@ -1037,17 +1049,73 @@ function mountUI(doc) {
     }, function () { if (show === s) endShow(true); });
   }
 
-  // Shows photo i in the hidden layer and fades it in; restarts the timer.
-  function showPhoto(i) {
+  // Asks for photo i. It fades in once the hidden layer has loaded it and
+  // knows its orientation; until then the shown photo stays up, and a newer
+  // ask replaces this one. The 30 s run from when it appears.
+  function showPhoto(i, dir) {
     var s = show;
     var n = s.photos.length;
-    s.idx = ((i % n) + n) % n;
-    s.cur = 1 - s.cur;
-    s.imgs[s.cur].src = photoUrl(s.photos[s.idx]);
-    s.imgs[s.cur].className = 'on';
-    s.imgs[1 - s.cur].className = '';
+    s.want = ((i % n) + n) % n;
+    s.dir = dir || 1;
     clearTimeout(s.timer);
+    clearTimeout(s.preload);
+    s.timer = null;
+    if (s.want === s.idx) {
+      s.timer = setTimeout(nextPhoto, SLIDE_MS);
+      return;
+    }
+    var layer = s.layers[1 - s.cur];
+    if (layer.src === s.photos[s.want]) reveal(s);
+    else loadLayer(s, layer, s.photos[s.want]);
+  }
+
+  // Loads src (a listPhotos path) into a hidden layer and asks the service
+  // for its EXIF orientation (the TV's browser ignores it); either answer
+  // may come first.
+  function loadLayer(s, layer, src) {
+    layer.src = src;
+    layer.loaded = false;
+    layer.orient = 0;
+    layer.img.onload = function () {
+      if (layer.src !== src) return;
+      layer.loaded = true;
+      reveal(s);
+    };
+    layer.img.onerror = function () {
+      if (layer.src === src) onPhotoError(s, layer);
+    };
+    layer.img.src = photoUrl(src);
+    lunaCall(SERVICE_URI + '/photoOrientation', { path: src }, function (r) {
+      if (layer.src !== src) return;
+      layer.orient = (r && r.orientation) || 1;
+      reveal(s);
+    }, function () {
+      if (layer.src !== src) return;
+      layer.orient = 1;
+      reveal(s);
+    });
+  }
+
+  // Fades the hidden layer in if it holds the photo asked for, ready; then,
+  // after the fade, loads the next photo into the layer just hidden, so → and
+  // the timer usually find it there.
+  function reveal(s) {
+    if (show !== s || s.want === s.idx) return;
+    var next = s.layers[1 - s.cur];
+    var prev = s.layers[s.cur];
+    if (!next.loaded || !next.orient || next.src !== s.photos[s.want]) return;
+    hideSpinner(s);
+    next.img.setAttribute('data-o', next.orient);
+    next.img.className = 'on';
+    prev.img.className = '';
+    s.cur = 1 - s.cur;
+    s.idx = s.want;
+    s.failed = 0;
     s.timer = setTimeout(nextPhoto, SLIDE_MS);
+    if (s.photos.length < 2) return;
+    s.preload = setTimeout(function () {
+      if (show === s && s.want === s.idx) loadLayer(s, prev, s.photos[(s.idx + 1) % s.photos.length]);
+    }, FADE_MS);
   }
 
   // After the last photo, re-reads the stick: photos added or removed show
@@ -1061,21 +1129,40 @@ function mountUI(doc) {
       var photos = (r && r.photos) || [];
       if (!photos.length) { endShow(true); return; }
       s.photos = shuffle(photos, Math.random);
+      s.idx = -1; // an index into the old order
       showPhoto(0);
     }, function () { if (show === s) endShow(true); });
   }
 
+  // Steps from the photo on screen, so presses while the next one loads
+  // don't pile up and skip photos never seen.
+  // The spinner says a press was heard while its photo loads; the timer's
+  // own waits stay quiet.
   function stepShow(delta) {
-    if (show && show.photos.length) showPhoto(show.idx + delta);
+    var s = show;
+    if (!s || !s.photos.length || s.idx < 0) return;
+    showPhoto(s.idx + delta, delta);
+    hideSpinner(s);
+    if (s.want === s.idx) return; // shown already
+    s.spin = setTimeout(function () {
+      if (show === s && s.want !== s.idx) s.spinner.className = 'loading on';
+    }, SPINNER_DELAY_MS);
   }
 
-  // An unreadable photo is skipped; if none can be shown, the show ends.
-  function onPhotoError() {
-    var s = show;
-    if (!s) return;
+  function hideSpinner(s) {
+    clearTimeout(s.spin);
+    s.spinner.className = 'loading';
+  }
+
+  // An unreadable photo is skipped (onwards in the last step's direction);
+  // if none can be shown, the show ends. A failed preload is just dropped.
+  function onPhotoError(s, layer) {
+    if (show !== s) return;
+    layer.src = null;
+    if (s.want === s.idx) return;
     s.failed++;
     if (s.failed >= s.photos.length) { endShow(true); return; }
-    showPhoto(s.idx + 1);
+    showPhoto(s.want + s.dir, s.dir);
   }
 
   // Removes the show; handBack relaunches the HDMI input it covered.
@@ -1084,6 +1171,8 @@ function mountUI(doc) {
     if (!s) return;
     show = null;
     clearTimeout(s.timer);
+    clearTimeout(s.preload);
+    clearTimeout(s.spin);
     if (s.el && s.el.parentNode) s.el.parentNode.removeChild(s.el);
     if (handBack) lunaCall(SERVICE_URI + '/launch', { id: s.input }, function () {}, function () {});
   }

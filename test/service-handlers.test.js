@@ -177,6 +177,61 @@ test('walkTree leaves out files bigger than maxBytes (huge photos would stall th
   assert.deepEqual(walkTree(fsLike, '/usb', 8).sort(), ['Trip/edge.jpg', 'huge.jpg', 'small.jpg'])
 })
 
+// A JPEG head: optional JFIF APP0, then an Exif APP1 whose IFD0 holds an
+// orientation tag (0x0112), in Intel (II) or Motorola (MM) byte order.
+function exifJpeg(orientation, { little = false, jfif = false } = {}) {
+  const u16 = (v) => little ? [v & 0xff, v >> 8] : [v >> 8, v & 0xff]
+  const u32 = (v) => little ? [v & 0xff, (v >> 8) & 0xff, (v >> 16) & 0xff, v >>> 24] : [v >>> 24, (v >> 16) & 0xff, (v >> 8) & 0xff, v & 0xff]
+  const tiff = [...(little ? [0x49, 0x49] : [0x4d, 0x4d]), ...u16(42), ...u32(8),
+    ...u16(2),
+    ...u16(0x010f), ...u16(2), ...u32(4), 0x4c, 0x47, 0x45, 0,   // Make "LGE"
+    ...u16(0x0112), ...u16(3), ...u32(1), ...u16(orientation), 0, 0,
+    ...u32(0)]
+  const app1 = [0x45, 0x78, 0x69, 0x66, 0, 0, ...tiff]
+  const app0 = [0xff, 0xe0, 0, 16, 0x4a, 0x46, 0x49, 0x46, 0, 1, 1, 0, 0, 1, 0, 1, 0, 0]
+  return Buffer.from([0xff, 0xd8, ...(jfif ? app0 : []), 0xff, 0xe1, (app1.length + 2) >> 8, (app1.length + 2) & 0xff, ...app1, 0xff, 0xda, 0, 2])
+}
+
+test('jpegOrientation reads the EXIF orientation in either byte order, after a JFIF header too', () => {
+  const { jpegOrientation } = require('../services/org.jazwinski.customwebos.home.service/handlers.js')
+  assert.equal(jpegOrientation(exifJpeg(6)), 6)
+  assert.equal(jpegOrientation(exifJpeg(8, { little: true })), 8)
+  assert.equal(jpegOrientation(exifJpeg(3, { little: true, jfif: true })), 3)
+})
+
+test('jpegOrientation is 1 without EXIF, for PNGs, cut-off heads and nonsense values', () => {
+  const { jpegOrientation } = require('../services/org.jazwinski.customwebos.home.service/handlers.js')
+  assert.equal(jpegOrientation(Buffer.from([0xff, 0xd8, 0xff, 0xda, 0, 2])), 1)
+  assert.equal(jpegOrientation(Buffer.from('\x89PNG\r\n\x1a\n', 'binary')), 1)
+  assert.equal(jpegOrientation(exifJpeg(6).subarray(0, 30)), 1)
+  assert.equal(jpegOrientation(exifJpeg(9)), 1)
+  assert.equal(jpegOrientation(Buffer.alloc(0)), 1)
+})
+
+test('photoOrientation reads a stick photo\'s head; paths outside usb/ are refused', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'cwo-usb-'))
+  fs.mkdirSync(path.join(root, 'sda', 'sda1'), { recursive: true })
+  fs.writeFileSync(path.join(root, 'sda', 'sda1', 'portrait.jpg'), exifJpeg(6))
+  const h = createHandlers(() => {}, () => {}, { fs, usbRoot: root })
+  const ask = (p) => { const m = fakeMessage({ path: p }); h.photoOrientation(m); return m.responses[0] }
+  assert.deepEqual(ask('usb/sda/sda1/portrait.jpg'), { returnValue: true, orientation: 6 })
+  assert.deepEqual(ask('usb/sda/sda1/missing.jpg'), { returnValue: true, orientation: 1 })
+  assert.equal(ask('usb/../../etc/passwd').returnValue, false)
+  assert.equal(ask('nas/../etc/passwd').returnValue, false)
+  assert.equal(ask('/etc/passwd').returnValue, false)
+  assert.equal(ask(undefined).returnValue, false)
+})
+
+test('photoOrientation reads NAS photos too (listPhotos\' nas/ paths)', () => {
+  const nas = fs.mkdtempSync(path.join(os.tmpdir(), 'cwo-nas-'))
+  fs.mkdirSync(path.join(nas, 'Wakacje'), { recursive: true })
+  fs.writeFileSync(path.join(nas, 'Wakacje', 'portrait.jpg'), exifJpeg(8, { little: true }))
+  const h = createHandlers(() => {}, () => {}, { fs, nasRoot: nas, usbRoot: path.join(nas, 'nope') })
+  const m = fakeMessage({ path: 'nas/Wakacje/portrait.jpg' })
+  h.photoOrientation(m)
+  assert.deepEqual(m.responses, [{ returnValue: true, orientation: 8 }])
+})
+
 test('listPhotos skips photos over MAX_PHOTO_BYTES', () => {
   const { MAX_PHOTO_BYTES } = require('../services/org.jazwinski.customwebos.home.service/handlers.js')
   assert.equal(MAX_PHOTO_BYTES, 20 * 1024 * 1024)

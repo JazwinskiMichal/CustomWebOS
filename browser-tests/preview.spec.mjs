@@ -825,9 +825,17 @@ test('before the script picks a mode the page is already dark, not white', async
 // No-signal slideshow (launched with {"slideshow":{"input":…}}; ?slideshow= in the preview).
 const PIXEL_JPG = Buffer.from('/9j/4AAQSkZJRgABAQEASABIAAD/2wBDAP//////////////////////////////////////////////////////////////////////////////////////wgALCAABAAEBAREA/8QAFBABAAAAAAAAAAAAAAAAAAAAAP/aAAgBAQABPxA=', 'base64')
 
+// page.photos.hold = true keeps the stick's photos loading (as a big photo
+// does on the TV) until page.photos.release().
 async function openSlideshow(mock = 'photos') {
   const page = await browser.newPage({ viewport: { width: 1920, height: 1080 } })
-  await page.route('**/usb/**', (r) => r.fulfill({ status: 200, contentType: 'image/jpeg', body: PIXEL_JPG }))
+  const held = []
+  page.photos = { hold: false, release: () => { page.photos.hold = false; while (held.length) held.shift()() } }
+  await page.route('**/usb/**', (r) => {
+    const answer = () => r.fulfill({ status: 200, contentType: 'image/jpeg', body: PIXEL_JPG })
+    if (page.photos.hold) held.push(answer)
+    else answer()
+  })
   await page.clock.install()
   await page.goto(server.url + '?mock=' + mock + '&theme=dark&slideshow=com.webos.app.hdmi1')
   return page
@@ -838,6 +846,16 @@ const shownPhoto = (page) => page.evaluate(() => {
   const on = s && s.querySelector('img.on')
   return on ? on.getAttribute('src') : null
 })
+
+// Runs the paused clock for ms, then waits for a photo other than `from`.
+async function shownAfter(page, from, ms) {
+  await page.clock.runFor(ms)
+  await page.waitForFunction((f) => {
+    const on = document.querySelector('#slideshow img.on')
+    return on && on.getAttribute('src') !== f
+  }, from)
+  return shownPhoto(page)
+}
 
 test('the slideshow covers the screen with a photo from the stick, no clock or dock', async () => {
   const page = await openSlideshow()
@@ -892,18 +910,134 @@ test('Home hidden without a show stays alive (instant Home)', async () => {
 test('photos change every 30 s; arrows step; Back keeps the show', async () => {
   const page = await openSlideshow()
   try {
-    await page.clock.runFor(1000)
-    await page.waitForFunction(() => document.querySelector('#slideshow img.on'))
-    const first = await shownPhoto(page)
-    await page.clock.runFor(30000)
-    const second = await shownPhoto(page)
-    assert.notEqual(second, first)
+    const first = await shownAfter(page, null, 1000)
+    const second = await shownAfter(page, first, 30000)
     await page.keyboard.press('ArrowLeft')
-    assert.equal(await shownPhoto(page), first)
+    assert.equal(await shownAfter(page, second, 1000), first)
     await page.keyboard.press('ArrowRight')
-    assert.equal(await shownPhoto(page), second)
+    assert.equal(await shownAfter(page, first, 1000), second)
     await page.keyboard.press('Escape')
     await page.keyboard.press('Backspace')
+    await page.clock.runFor(1000)
+    assert.equal(await page.locator('#slideshow').isVisible(), true)
+    assert.equal(await shownPhoto(page), second)
+  } finally { await page.close() }
+})
+
+test('a photo still loading leaves the shown one up; repeated presses meanwhile step only once', async () => {
+  const page = await openSlideshow()
+  try {
+    const first = await shownAfter(page, null, 1000)
+    page.photos.hold = true
+    await page.keyboard.press('ArrowRight')
+    await page.keyboard.press('ArrowRight')
+    await page.clock.runFor(2000)
+    // Not faded to black or half-drawn: the old photo stays until the new one is in.
+    assert.equal(await shownPhoto(page), first)
+    assert.equal(await page.locator('#slideshow img.on').count(), 1)
+    page.photos.release()
+    // One step, not two: Left from it is `first` again.
+    const second = await shownAfter(page, first, 1000)
+    await page.keyboard.press('ArrowLeft')
+    assert.equal(await shownAfter(page, second, 1000), first)
+  } finally { await page.close() }
+})
+
+const spinnerShown = (page) => page.locator('#slideshow .loading').evaluate((e) => getComputedStyle(e).opacity === '1')
+
+test('an arrow press on a photo still loading shows a spinner until it appears', async () => {
+  const page = await openSlideshow()
+  try {
+    const first = await shownAfter(page, null, 1000)
+    page.photos.hold = true
+    await page.keyboard.press('ArrowLeft') // not the preloaded one
+    await page.clock.runFor(100)
+    assert.equal(await spinnerShown(page), false, 'not for a quick load')
+    await page.clock.runFor(1000)
+    assert.equal(await spinnerShown(page), true)
+    page.photos.release()
+    await shownAfter(page, first, 0)
+    assert.equal(await spinnerShown(page), false)
+  } finally { await page.close() }
+})
+
+test('no spinner when the timer waits for a photo, or the arrow finds it preloaded', async () => {
+  const page = await openSlideshow()
+  try {
+    const first = await shownAfter(page, null, 1000)
+    page.photos.hold = true
+    await page.clock.runFor(31000)
+    assert.equal(await spinnerShown(page), false)
+    page.photos.release()
+    const second = await shownAfter(page, first, 0)
+    await page.clock.runFor(2000) // the next one preloads
+    await page.keyboard.press('ArrowRight')
+    await page.clock.runFor(1000)
+    assert.equal(await spinnerShown(page), false)
+    await shownAfter(page, second, 0)
+  } finally { await page.close() }
+})
+
+test('the 30 s count starts when a photo appears, not when it was asked for', async () => {
+  const page = await openSlideshow()
+  try {
+    const first = await shownAfter(page, null, 1000)
+    page.photos.hold = true
+    await page.clock.runFor(30000)
+    assert.equal(await shownPhoto(page), first)
+    await page.clock.runFor(20000) // the next photo takes 20 s to load
+    page.photos.release()
+    const second = await shownAfter(page, first, 0)
+    await page.clock.runFor(29000)
+    assert.equal(await shownPhoto(page), second, 'shown for its full 30 s')
+    assert.notEqual(await shownAfter(page, second, 2000), second)
+  } finally { await page.close() }
+})
+
+test('after a manual step the photo still gets its full 30 s', async () => {
+  const page = await openSlideshow()
+  try {
+    const first = await shownAfter(page, null, 1000)
+    await page.clock.runFor(25000)
+    await page.keyboard.press('ArrowRight')
+    const second = await shownAfter(page, first, 1000)
+    await page.clock.runFor(28000)
+    assert.equal(await shownPhoto(page), second)
+    assert.notEqual(await shownAfter(page, second, 2000), second)
+  } finally { await page.close() }
+})
+
+test('a portrait photo (EXIF orientation 6) is turned upright and fills the screen\'s height', async () => {
+  const page = await openSlideshow()
+  try {
+    let shown = await shownAfter(page, null, 1000)
+    for (let i = 0; i < 3 && !/portrait/.test(shown); i++) {
+      await page.keyboard.press('ArrowRight')
+      shown = await shownAfter(page, shown, 1000)
+    }
+    assert.match(shown, /portrait/)
+    const on = page.locator('#slideshow img.on')
+    const m = (await on.evaluate((e) => getComputedStyle(e).transform)).match(/-?[\d.e-]+/g).map((v) => Math.round(Number(v)))
+    assert.deepEqual(m, [0, 1, -1, 0, 0, 0], 'rotated 90° clockwise')
+    const box = await on.boundingBox()
+    assert.deepEqual([box.x, box.y, box.width, box.height].map(Math.round), [0, 0, 1920, 1080])
+    await page.keyboard.press('ArrowRight')
+    await shownAfter(page, shown, 1000)
+    assert.equal(await page.locator('#slideshow img.on').evaluate((e) => getComputedStyle(e).transform), 'none')
+  } finally { await page.close() }
+})
+
+test('an unreadable photo is skipped, by the timer and by the arrows', async () => {
+  const page = await openSlideshow()
+  try {
+    await page.route('**/usb/sda/sda1/a.jpg', (r) => r.fulfill({ status: 404, body: '' }))
+    const seen = new Set([await shownAfter(page, null, 1000)])
+    seen.add(await shownAfter(page, [...seen][0], 30000))
+    await page.keyboard.press('ArrowLeft')
+    seen.add(await shownAfter(page, [...seen][1], 1000))
+    await page.keyboard.press('ArrowRight')
+    seen.add(await shownAfter(page, [...seen][0], 1000))
+    assert.deepEqual([...seen].sort(), ['usb/sda/sda1/b-portrait.jpg', 'usb/sda/sda1/c.jpg'])
     assert.equal(await page.locator('#slideshow').isVisible(), true)
   } finally { await page.close() }
 })

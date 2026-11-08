@@ -19,6 +19,10 @@ var MAX_PHOTO_BYTES = 20 * 1024 * 1024;
 // The no-signal watcher's state (scripts/nosignal.sh).
 var NOSIGNAL_DIR = '/tmp/nosignal';
 var PHOTO_EXT = /\.(jpe?g|png)$/i;
+// The TV's browser (Chrome 53) ignores EXIF orientation, so the app turns
+// photos itself. The tag sits in the Exif segment near the file's start; a
+// segment is at most 64 KB.
+var PHOTO_HEAD_BYTES = 64 * 1024;
 // The doorbell box's settings (scripts/doorbell.ps1 -Configure writes them):
 // {cameraUrl, cameraMode: "mjpeg"|"snapshot", doorUrl?}. Outside the app's
 // folder so installs keep it.
@@ -68,6 +72,39 @@ function photoFiles(paths) {
     }
     out.sort();
     return out.slice(0, MAX_PHOTOS);
+}
+
+// The EXIF orientation (1-8) in a JPEG's head; 1 when there is none, the
+// file isn't a JPEG, or the head is cut off or malformed.
+function jpegOrientation(buf) {
+    try {
+        if (buf[0] !== 0xff || buf[1] !== 0xd8) return 1;
+        var p = 2;
+        while (p + 4 <= buf.length && buf[p] === 0xff) {
+            var marker = buf[p + 1];
+            if (marker === 0xda || marker === 0xd9) return 1; // image data: no EXIF before it
+            var len = buf.readUInt16BE(p + 2);
+            // APP1 starting "Exif\0\0" (XMP is APP1 too, with another header)
+            if (marker === 0xe1 && buf.toString('binary', p + 4, p + 10) === 'Exif\0\0') {
+                var t = p + 10;
+                var le = buf.toString('binary', t, t + 2) === 'II';
+                var u16 = function (o) { return le ? buf.readUInt16LE(t + o) : buf.readUInt16BE(t + o); };
+                var u32 = function (o) { return le ? buf.readUInt32LE(t + o) : buf.readUInt32BE(t + o); };
+                var ifd = u32(4);
+                var count = u16(ifd);
+                for (var i = 0; i < count; i++) {
+                    var entry = ifd + 2 + 12 * i;
+                    if (u16(entry) === 0x0112) {
+                        var o = u16(entry + 8);
+                        return o >= 1 && o <= 8 ? o : 1;
+                    }
+                }
+                return 1;
+            }
+            p += 2 + len;
+        }
+    } catch (e) { /* cut off mid-segment */ }
+    return 1;
 }
 
 // Every file below root, as paths relative to it, at most maxDepth folders
@@ -159,6 +196,35 @@ function createHandlers(call, writeFile, opts) {
         message.respond({ returnValue: true, photos: photos });
     }
 
+    // A slideshow photo's EXIF orientation, from the first 64 KB of the
+    // file; path is one of listPhotos' "nas/…" or "usb/…" paths. 1 if
+    // unreadable.
+    function photoOrientation(message) {
+        var p = message.payload && message.payload.path;
+        var root = null;
+        if (typeof p === 'string' && !/(^|\/)\.\.(\/|$)/.test(p)) {
+            if (p.indexOf('nas/') === 0) root = opts.nasRoot || NAS_ROOT;
+            else if (p.indexOf('usb/') === 0) root = opts.usbRoot || USB_ROOT;
+        }
+        if (!root) {
+            message.respond({ returnValue: false, errorText: 'path must be a nas/ or usb/ photo' });
+            return;
+        }
+        var fsLike = opts.fs || require('fs');
+        var orientation = 1;
+        var fd = null;
+        try {
+            fd = fsLike.openSync(root + p.slice(3), 'r');
+            var buf = Buffer.alloc ? Buffer.alloc(PHOTO_HEAD_BYTES) : new Buffer(PHOTO_HEAD_BYTES);
+            var n = fsLike.readSync(fd, buf, 0, PHOTO_HEAD_BYTES, 0);
+            orientation = jpegOrientation(buf.slice(0, n));
+        } catch (e) { /* missing or unreadable: shown as stored */ }
+        if (fd !== null) {
+            try { fsLike.closeSync(fd); } catch (e) { /* already gone */ }
+        }
+        message.respond({ returnValue: true, orientation: orientation });
+    }
+
     // Home ended a slideshow while CustomWebOS stays in front: the watcher
     // can't see that, so the app tells it here. Without its cover files it
     // drops the 15-min power-off and won't relaunch the input over Home.
@@ -206,8 +272,8 @@ function createHandlers(call, writeFile, opts) {
     }
 
     return {
-        listApps: listApps, launch: launch, perfReport: perfReport, listPhotos: listPhotos, showEnded: showEnded,
-        doorbellConfig: doorbellConfig, openDoor: openDoor
+        listApps: listApps, launch: launch, perfReport: perfReport, listPhotos: listPhotos, photoOrientation: photoOrientation,
+        showEnded: showEnded, doorbellConfig: doorbellConfig, openDoor: openDoor
     };
 }
 
@@ -219,6 +285,7 @@ module.exports = {
     MAX_PHOTO_BYTES: MAX_PHOTO_BYTES,
     DOORBELL_FILE: DOORBELL_FILE,
     photoFiles: photoFiles,
+    jpegOrientation: jpegOrientation,
     walkTree: walkTree,
     createHandlers: createHandlers
 };
