@@ -14,6 +14,8 @@
 // ?mock=recoverlate  the first three listApps fail, then it answers
 // ?mock=photos   listPhotos answers three photos (other modes: none); the
 //                one named "portrait" has EXIF orientation 6 (photoOrientation)
+// ?mock=photosflaky like photos, but each photo's first photoOrientation
+//                fails (the service restarting under it, as at power-on)
 // ?mock=nophotos listPhotos answers no photos
 // Doorbell box (/doorbell/): ?mock=ok snapshot camera from a fixture, door
 // simulated; door (a doorUrl is set); doorfail (openDoor fails with HTTP 500);
@@ -23,7 +25,7 @@
 (function () {
   var mode = (/[?&]mock=(\w+)/.exec(window.location.search) || [])[1] || 'ok'
   var SERVICE = 'luna://org.jazwinski.customwebos.home.service/'
-  window.__mock = { mode: mode, launches: [], listAppsAnswered: 0, perfReports: [], showEnded: 0, openDoor: 0, openDoorPayloads: [] }
+  window.__mock = { mode: mode, launches: [], listAppsAnswered: 0, perfReports: [], showEnded: 0, openDoor: 0, openDoorPayloads: [], orientationAsked: {} }
   var params = (/[?&]params=([^&]*)/.exec(window.location.search) || [])[1]
   if (params) window.PalmSystem = { launchParams: decodeURIComponent(params) }
   if (window.location.pathname.indexOf('/doorbell/') === 0) {
@@ -63,10 +65,15 @@
   function answer(uri, payload) {
     if (uri === SERVICE + 'listApps') return listApps()
     if (uri === SERVICE + 'listPhotos') {
-      var photos = mode === 'photos' ? ['usb/sda/sda1/a.jpg', 'usb/sda/sda1/b-portrait.jpg', 'usb/sda/sda1/c.jpg'] : []
+      var photos = mode === 'photos' || mode === 'photosflaky' ? ['usb/sda/sda1/a.jpg', 'usb/sda/sda1/b-portrait.jpg', 'usb/sda/sda1/c.jpg'] : []
       return Promise.resolve({ returnValue: true, photos: photos })
     }
     if (uri === SERVICE + 'photoOrientation') {
+      var asked = window.__mock.orientationAsked
+      asked[payload.path] = (asked[payload.path] || 0) + 1
+      if (mode === 'photosflaky' && asked[payload.path] === 1) {
+        return Promise.resolve({ returnValue: false, errorText: 'mock: service restarting' })
+      }
       return Promise.resolve({ returnValue: true, orientation: /portrait/.test(payload.path) ? 6 : 1 })
     }
     if (uri === SERVICE + 'showEnded') {

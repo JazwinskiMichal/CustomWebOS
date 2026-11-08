@@ -939,6 +939,23 @@ test('stepping right shows every photo once before any comes back', async () => 
   } finally { await page.close() }
 })
 
+test('a failed orientation lookup is retried, so a portrait photo still comes up upright', async () => {
+  // On the TV the home service restarts once ~40 s after power-on, and the
+  // first photo's lookup was lost: that photo showed on its side.
+  const page = await openSlideshow('photosflaky')
+  try {
+    let shown = await shownAfter(page, null, 3000)
+    for (let i = 0; i < 3 && !/portrait/.test(shown); i++) {
+      await page.keyboard.press('ArrowRight')
+      shown = await shownAfter(page, shown, 3000)
+    }
+    assert.match(shown, /portrait/)
+    const m = (await page.locator('#slideshow img.on').evaluate((e) => getComputedStyle(e).transform)).match(/-?[\d.e-]+/g)
+    assert.deepEqual(m && m.map((v) => Math.round(Number(v))), [0, 1, -1, 0, 0, 0])
+    assert.ok(await page.evaluate(() => window.__mock.orientationAsked['usb/sda/sda1/b-portrait.jpg'] >= 2))
+  } finally { await page.close() }
+})
+
 test('a new show continues the round: it starts with a photo not shown yet', async () => {
   const page = await openSlideshow()
   try {

@@ -439,6 +439,9 @@ var FADE_MS = 1000;
 // An arrow press on a photo not loaded yet shows a spinner after this long;
 // a preloaded or quick one never flashes it.
 var SPINNER_DELAY_MS = 300;
+// A photo's orientation lookup: tries, and the wait between them.
+var ORIENT_TRIES = 3;
+var ORIENT_RETRY_MS = 500;
 var HDMI_APP = /^com\.webos\.app\.hdmi[1-4]$/;
 
 // {input} when launched to cover a dark HDMI input: launch params
@@ -1157,12 +1160,26 @@ function mountUI(doc) {
       if (layer.src === src) onPhotoError(s, layer);
     };
     layer.img.src = photoUrl(src);
+    askOrientation(s, layer, src, 0);
+  }
+
+  // A failed lookup is retried: on the TV the home service restarts once
+  // about 40 s after power-on, and a call in flight is lost (the first photo
+  // of the boot-time show came up on its side). After the last try the photo
+  // is shown as stored rather than holding up the show.
+  function askOrientation(s, layer, src, tries) {
     lunaCall(SERVICE_URI + '/photoOrientation', { path: src }, function (r) {
       if (layer.src !== src) return;
       layer.orient = (r && r.orientation) || 1;
       reveal(s);
     }, function () {
-      if (layer.src !== src) return;
+      if (layer.src !== src || show !== s) return;
+      if (tries + 1 < ORIENT_TRIES) {
+        setTimeout(function () {
+          if (layer.src === src && show === s) askOrientation(s, layer, src, tries + 1);
+        }, ORIENT_RETRY_MS);
+        return;
+      }
       layer.orient = 1;
       reveal(s);
     });
