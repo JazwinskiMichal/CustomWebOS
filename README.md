@@ -39,9 +39,12 @@ A CleanFrame-style home screen: a clock and Polish date on glass, a frosted-glas
 
 When the HDMI input on screen loses its picture (the PS5 is switched off, or goes to rest after it has sent a picture since the TV started), a full-screen slideshow of your photos replaces LG's "No signal" screen.
 
-- **Photos:** put `.jpg`, `.jpeg` or `.png` files on a USB stick, in any folders (up to 8 levels deep), and plug it into the TV. Files over 20 MB are skipped. Without a stick or photos, LG's own screen stays.
+- **Photos:** `.jpg`, `.jpeg` or `.png` files, in any folders (up to 8 levels deep), from a NAS share or a USB stick. If the NAS share has photos, the show uses only those; otherwise the stick's. Files over 20 MB are skipped. With no photos anywhere, LG's own screen stays.
+- **From a NAS:** share a folder over NFS v2/v3, read-only, to the TV's IP. The TV's kernel speaks only SMB1 (which NASes refuse) and no NFS v4. Put `{"share": "//<nas>/<share>"}` (or `"<nas>:/<path>"`) in `.local/slideshow-nas.json`, then `scripts/nosignal.ps1 -TvHost <tv-ip> -ConfigureNas`; `-RemoveNas` goes back to the stick only. The share is mounted for each show and unmounted after, so photos added to it show up at the next show.
 - **When it starts:** 5 s after the input on screen goes dark. It covers any HDMI input, and only when that input is in front; Live TV and apps are never covered.
-- **During the show:** a new photo every 30 s, in random order; **←/→** step through them. **Back** does nothing. **Home** opens CustomWebOS.
+- **During the show:** a new photo every 30 s, counted from when it appears; each one cross-fades in once it has loaded, and the next is loaded ahead. **←/→** step through them; if a step has to wait, a small spinner shows. **Back** does nothing. **Home** opens CustomWebOS.
+- **Order:** random, in rounds: every photo shows once before any comes back, and the round carries on across shows and power-offs, so a new show starts with a photo you haven't seen yet.
+- **Portrait photos** are turned upright from their EXIF orientation (the TV's browser ignores it).
 - **When it ends:** the device's picture comes back (the input reappears by itself), or you change the source with **Input**. Picking the dark input again (e.g. from the dock) brings the slideshow back after 5 s.
 - **Power-off:** covering the input stops LG's own no-signal timer, so if LG's no-signal auto power-off is on, the slideshow turns the TV off after 15 min itself. LG's screensaver may also come on over it.
 - **Install or remove:** `scripts/nosignal.ps1 -TvHost <tv-ip>` installs the boot hook (`-Remove` deletes it); it runs from the next boot. Its log on the TV is `/tmp/nosignal.log`.
@@ -92,7 +95,7 @@ See and control the TV from a PC on your home network: the home screen, Live TV,
 
 ## Status
 
-The project is **paused since 2026-10-29**: everything under Features works on the TV, and the next ideas (Home Assistant panels, a real doorbell) wait for hardware. **Start at [docs/status.md](docs/status.md)** for the current state and where to pick up, and [docs/README.md](docs/README.md) for the map of all docs. The [design doc](docs/superpowers/specs/2026-10-24-customwebos-design.md) holds the overall vision and milestones.
+The project is **paused since 2026-10-29**, apart from slideshow work on 2026-11-08 (photos from the NAS and the fixes above, CustomWebOS 0.7.10). Everything under Features works on the TV, and the next ideas (Home Assistant panels, a real doorbell, an on-TV settings screen) wait for hardware or their own design. **Start at [docs/status.md](docs/status.md)** for the current state and where to pick up, and [docs/README.md](docs/README.md) for the map of all docs. The [design doc](docs/superpowers/specs/2026-10-24-customwebos-design.md) holds the overall vision and milestones.
 
 ## Setting it up
 

@@ -2,7 +2,7 @@
 
 Where CustomWebOS stands. Last updated **2026-11-08**. Update it whenever something lands.
 
-**Paused on 2026-10-29, at a good stopping point.** The owner's goals are met: CustomWebOS is the TV's home screen behind the Home button, a photo slideshow replaces LG's no-signal screen, remote view lets a PC see and drive the TV, and a doorbell camera box opens over anything on screen. The ideas that remain need hardware the owner doesn't have yet: a Home Assistant server with devices to control, and a doorbell camera. [If work resumes](#if-work-resumes) says where to pick up. Setting up a machine: [development.md](development.md). TV rules: [tv-notes.md](tv-notes.md).
+**Paused on 2026-10-29, at a good stopping point;** the slideshow got photos from the NAS (29–30 Oct) and fixes on 2026-11-08 (0.7.10). The owner's goals are met: CustomWebOS is the TV's home screen behind the Home button, a photo slideshow replaces LG's no-signal screen, remote view lets a PC see and drive the TV, and a doorbell camera box opens over anything on screen. The ideas that remain need hardware the owner doesn't have yet: a Home Assistant server with devices to control, and a doorbell camera. [If work resumes](#if-work-resumes) says where to pick up. Setting up a machine: [development.md](development.md). TV rules: [tv-notes.md](tv-notes.md).
 
 ## On the TV now
 
